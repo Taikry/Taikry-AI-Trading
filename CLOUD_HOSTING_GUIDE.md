@@ -1,9 +1,11 @@
 # 🚀 24/7 Free Cloud Hosting & Telegram Automated Setup Guide
+
 ## ការណែនាំអំពីការដាក់ឱ្យដំណើរការលើ Cloud ដោយឥតគិតថ្លៃ (100% Free) 24 ម៉ោងលើ 24 ម៉ោង
 
 Follow this comprehensive guide to host your **TAIKRY AI MARKET INTELLIGENCE PRO** platform online in the cloud **100% FREE** without keeping your computer turned on.
 
 Once deployed:
+
 1. 🌐 **Live Web Dashboard:** Access your institutional terminal from anywhere on your smartphone or PC via public HTTPS link (`https://your-app.onrender.com/dashboard/`).
 2. 📱 **Telegram Mini App:** Open the live interactive terminal directly inside Telegram.
 3. ⚡ **24/7 Autonomous Signals:** Continuous scanning for XAUUSD, Forex, and Crypto with real-time Telegram channel & Make.com webhook dispatching.
@@ -29,6 +31,7 @@ Once deployed:
 ### Step 1: Push Code to GitHub
 
 1. If you haven't already, initialize git and push this project folder to your GitHub account (public or private):
+
    ```bash
    git init
    git add .
@@ -70,9 +73,11 @@ Scroll down to the **"Environment Variables"** section and click **"Add Environm
 1. Click the blue **"Create Web Service"** button.
 2. Render will build the Docker container and deploy in ~2 minutes.
 3. Once finished, you will see a green **"Live"** badge and your live public HTTPS link:
-   ```
+
+   ```text
    https://taikry-ai-market.onrender.com
    ```
+
 4. Clicking this link immediately opens the **Institutional Web Dashboard**!
 
 ### Step 5: Keep It Awake 24/7 (Prevent Render Sleep — 100% Free)
@@ -112,10 +117,12 @@ Koyeb offers a free nano container that **does not sleep**, making it an outstan
 2. Click **"New Space"** &rarr; Set Space SDK to **"Docker"** &rarr; Space Hardware to **"CPU Basic · 2 vCPU · 16 GB RAM · Free"**.
 3. In **Settings** &rarr; **Variables and secrets**, add your API keys (`GROQ_API_KEY`, `TELEGRAM_BOT_TOKEN`, etc.).
 4. Push this repository to your Space git repository:
+
    ```bash
    git remote add space https://huggingface.co/spaces/YOUR_USERNAME/SPACE_NAME
    git push space main
    ```
+
 5. Hugging Face builds the Docker container and runs it 24/7 with zero sleeping.
 
 ---
@@ -125,20 +132,25 @@ Koyeb offers a free nano container that **does not sleep**, making it an outstan
 Once your cloud service is live with an HTTPS link (e.g. `https://taikry-ai-market.onrender.com`):
 
 ### 1. Add Telegram Mini App Menu Button
+
 1. Open Telegram and search for [`@BotFather`](https://t.me/BotFather).
 2. Send `/setmenubutton` &rarr; Select your bot.
 3. Enter the Web App URL:
-   ```
+
+   ```text
    https://taikry-ai-market.onrender.com/dashboard/
    ```
+
 4. Enter the button title: `📈 Trade Cockpit`
 5. Now, any user who opens your bot will see a button at the bottom left that opens the live interactive dashboard right inside Telegram!
 
 ### 2. Verify 24/7 Channel Broadcasts
+
 1. Ensure your bot is an **Admin** in your Telegram Channel or VIP Group.
 2. In your cloud environment variables, make sure `TELEGRAM_CHAT_ID` matches your channel username (e.g. `@taikry_vip_signals`) or numeric ID (e.g. `-1001987654321`).
 3. Check your Render or Koyeb logs; you will see:
-   ```
+
+   ```text
    [24/7 MONITOR] Completed cycle: XAUUSD, BTCUSDT, EURUSD...
    [TELEGRAM] Broadcasted signal with R:R and Khmer institutional breakdown
    ```
@@ -147,9 +159,9 @@ Once your cloud service is live with an HTTPS link (e.g. `https://taikry-ai-mark
 
 ## 🛠️ Verification & Troubleshooting Checklist
 
-- [ ] **Port Binding:** Our [Dockerfile](file:///d:/test%20post%20webhook/Dockerfile) uses `uvicorn taikry.api.app:app --host 0.0.0.0 --port ${PORT:-8000}`, automatically adapting to any port assigned by Render, Koyeb, or Cloud Run.
-- [ ] **Root Domain Redirect:** Visiting `https://your-domain.com/` automatically redirects to `/dashboard/`.
-- [ ] **Health & Ping Endpoints:** 
-  - Health check: `GET /health`
-  - Keep-alive ping: `GET /ping`
-- [ ] **Zero Inline Styles & Full Linter Compliance:** All HTML and CSS strictly adhere to modern web validation standards.
+* [ ] **Port Binding:** Our [Dockerfile](file:///d:/test%20post%20webhook/Dockerfile) uses `uvicorn taikry.api.app:app --host 0.0.0.0 --port ${PORT:-8000}`, automatically adapting to any port assigned by Render, Koyeb, or Cloud Run.
+* [ ] **Root Domain Redirect:** Visiting `https://your-domain.com/` automatically redirects to `/dashboard/`.
+* [ ] **Health & Ping Endpoints:**
+  * Health check: `GET /health`
+  * Keep-alive ping: `GET /ping`
+* [ ] **Zero Inline Styles & Full Linter Compliance:** All HTML and CSS strictly adhere to modern web validation standards.

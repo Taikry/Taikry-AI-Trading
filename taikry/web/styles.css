@@ -1890,7 +1890,6 @@ body.theme-solar-gold {
   flex: 1;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
 }
 
 .cockpit-tabs-group::-webkit-scrollbar {
@@ -7288,7 +7287,6 @@ html, body {
     max-width: 100% !important;
     flex: 1;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     padding: 8px;
   }
 
@@ -7305,7 +7303,6 @@ html, body {
     flex: 1;
     border: none;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   body.mobile-view-watchlist .terminal-center-canvas,
@@ -7322,7 +7319,6 @@ html, body {
     flex: 1;
     border: none;
     overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   body.mobile-view-ai .terminal-center-canvas,
@@ -7354,13 +7350,11 @@ html, body {
     padding: 6px 8px !important;
     max-height: 240px !important;
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
   }
 
   .cockpit-widget-card.cockpit-size-small .cockpit-subpane {
     max-height: 180px !important;
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
   }
 
   .cockpit-widget-card.cockpit-size-small .history-item-row {
@@ -7436,13 +7430,11 @@ html, body {
     padding: 10px 12px !important;
     max-height: calc(75vh - 50px) !important;
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
   }
 
   .cockpit-widget-card.cockpit-size-big .cockpit-subpane {
     max-height: calc(75vh - 170px) !important;
     overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
   }
 
   /* COLLAPSED / MINIMIZED MODE */
@@ -7642,6 +7634,7 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
   z-index: 10000 !important;
   margin: 0 !important;
   background: rgba(11, 21, 17, 0.94) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
   backdrop-filter: blur(16px) !important;
 }
 
