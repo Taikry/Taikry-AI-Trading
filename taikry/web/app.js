@@ -385,30 +385,27 @@ function onWatchlistSearch(val) {
   renderWatchlist();
 }
 
+window.lastKnownMarketData = window.lastKnownMarketData || {};
+
 function initTickerRibbon() {
   const track = document.getElementById("ticker-ribbon-track");
   if (!track) return;
 
-  const changeMap = {
-    "XAUUSD": "+0.88%", "XAGUSD": "+1.12%", "EURUSD": "-0.23%",
-    "GBPUSD": "-0.11%", "USDJPY": "+0.35%", "AUDUSD": "+0.18%",
-    "USDCAD": "-0.15%", "USDCHF": "+0.08%", "NZDUSD": "+0.22%",
-    "EURJPY": "+0.14%", "GBPJPY": "+0.28%", "BTCUSDT": "+0.20%",
-    "ETHUSDT": "+0.58%", "SOLUSDT": "+2.40%", "BNBUSDT": "+0.45%",
-    "XRPUSDT": "-0.75%", "DOGEUSDT": "+1.15%", "ADAUSDT": "+0.15%",
-    "AVAXUSDT": "+1.80%", "LINKUSDT": "+0.95%", "SUIUSDT": "+3.10%"
-  };
-
   const buildItems = () => WATCHLIST.map(item => {
-    const chg = changeMap[item.symbol] || "+0.25%";
-    const isUp = !chg.startsWith("-");
+    const live = (window.lastKnownMarketData && window.lastKnownMarketData[item.symbol]) || null;
+    const isCrypto = item.symbol.includes("USDT") || item.symbol.includes("BTC");
+    const isForex = !isCrypto && !item.symbol.includes("XAU") && !item.symbol.includes("XAG");
+    const p = live ? (isForex ? Number(live.price).toFixed(4) : (Number(live.price) > 100 ? `$${Number(live.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${Number(live.price)}`)) : "---";
+    const c24 = live && live.change_24h !== undefined ? Number(live.change_24h) : null;
+    const chg = c24 !== null ? (c24 > 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
+    const isUp = c24 === null || c24 >= 0;
     const activeCls = item.symbol === currentSymbol ? "active" : "";
     return `
       <div class="ticker-item ${activeCls}" data-ribbon-sym="${item.symbol}" onclick="selectSymbol('${item.symbol}', '${item.tv}')" title="Click to view ${item.name} (${item.symbol})">
         <span class="ticker-item-icon">${getAssetRealLogoHTML(item.symbol)}</span>
         <span class="ticker-item-sym">${item.symbol}</span>
-        <span class="ticker-item-price" data-price-sym="${item.symbol}">---</span>
-        <span class="ticker-item-chg ${isUp ? 'chg-up' : 'chg-down'}">${chg}</span>
+        <span class="ticker-item-price" data-price-sym="${item.symbol}">${p}</span>
+        <span class="ticker-item-chg ${isUp ? 'chg-up' : 'chg-down'}" data-chg-sym="${item.symbol}">${chg}</span>
       </div>
     `;
   }).join("");
@@ -431,31 +428,18 @@ function renderWatchlist() {
     filtered = filtered.filter(item => item.symbol.includes(q) || item.name.toUpperCase().includes(q));
   }
 
-  const changeMap = {
-    "XAUUSD": "+0.88%",
-    "XAGUSD": "+1.12%",
-    "EURUSD": "-0.23%",
-    "GBPUSD": "-0.11%",
-    "USDJPY": "+0.35%",
-    "BTCUSDT": "+0.20%",
-    "ETHUSDT": "+0.58%",
-    "SOLUSDT": "+2.40%",
-    "BNBUSDT": "+0.45%",
-    "XRPUSDT": "-0.75%",
-    "DOGEUSDT": "+1.15%",
-    "ADAUSDT": "+0.15%",
-    "AVAXUSDT": "+1.80%",
-    "LINKUSDT": "+0.95%",
-    "SUIUSDT": "+3.10%"
-  };
-
   filtered.forEach(item => {
     const el = document.createElement("div");
     el.className = `watchlist-item ${item.symbol === currentSymbol ? "active" : ""}`;
     el.onclick = () => selectSymbol(item.symbol, item.tv);
 
-    const chg = changeMap[item.symbol] || "+0.15%";
-    const isUp = !chg.startsWith("-");
+    const live = (window.lastKnownMarketData && window.lastKnownMarketData[item.symbol]) || null;
+    const isCrypto = item.symbol.includes("USDT") || item.symbol.includes("BTC");
+    const isForex = !isCrypto && !item.symbol.includes("XAU") && !item.symbol.includes("XAG");
+    const p = live ? (isForex ? Number(live.price).toFixed(4) : (Number(live.price) > 100 ? `$${Number(live.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${Number(live.price)}`)) : "---";
+    const c24 = live && live.change_24h !== undefined ? Number(live.change_24h) : null;
+    const chg = c24 !== null ? (c24 > 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
+    const isUp = c24 === null || c24 >= 0;
 
     el.innerHTML = `
       <div class="wl-item-left">
@@ -466,8 +450,8 @@ function renderWatchlist() {
         </div>
       </div>
       <div class="wl-item-right">
-        <div class="wl-price-val" id="price-${item.symbol}">---</div>
-        <div class="wl-change-val ${isUp ? 'badge-up' : 'badge-down'}">${chg}</div>
+        <div class="wl-price-val" id="price-${item.symbol}">${p}</div>
+        <div class="wl-change-val ${isUp ? 'badge-up' : 'badge-down'}" data-watch-chg-sym="${item.symbol}">${chg}</div>
       </div>
     `;
     container.appendChild(el);
@@ -1914,16 +1898,18 @@ async function pollRealtimePrices() {
         if (window.taikryChart && window.taikryChart.currentEngineMode === "native") {
           window.taikryChart.updateRealtimeTick(p, activeData.volume || 0, activeData.timestamp);
         }
+
+        const ovPrice = document.getElementById("ov-active-price");
+        if (ovPrice) ovPrice.innerText = formatted;
+        const ovChg = document.getElementById("ov-active-change");
+        if (ovChg) {
+          const c = activeData.change_24h !== undefined ? Number(activeData.change_24h) : 0.0;
+          ovChg.innerText = `24h Change: ${c >= 0 ? '+' : ''}${c.toFixed(2)}%`;
+          ovChg.className = `section-kpi-sub ${c >= 0 ? 'text-green' : 'text-red'}`;
+        }
       }
 
-      if (prices["BTCUSDT"]) {
-        const btcEl = document.getElementById("top-btc-24h");
-        if (btcEl) btcEl.innerText = "+0.20%";
-      }
-      if (prices["ETHUSDT"]) {
-        const ethEl = document.getElementById("top-eth-24h");
-        if (ethEl) ethEl.innerText = "+0.58%";
-      }
+      window.lastKnownMarketData = prices;
 
       Object.keys(prices).forEach(sym => {
         const pInfo = prices[sym];
@@ -1932,24 +1918,46 @@ async function pollRealtimePrices() {
         const isCrypto = sym.includes("USDT") || sym.includes("BTC");
         const isForex = !isCrypto && !sym.includes("XAU") && !sym.includes("XAG");
         const fmtPrice = isForex ? newPrice.toFixed(4) : (newPrice > 100 ? `$${newPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${newPrice}`);
+        const c24 = pInfo.change_24h !== undefined ? Number(pInfo.change_24h) : null;
+        const chgText = c24 !== null ? (c24 > 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
+        const isUp = c24 === null || c24 >= 0;
+
+        if (sym === "BTCUSDT") {
+          const btcEl = document.getElementById("top-btc-24h");
+          if (btcEl) btcEl.innerText = chgText;
+        }
+        if (sym === "ETHUSDT") {
+          const ethEl = document.getElementById("top-eth-24h");
+          if (ethEl) ethEl.innerText = chgText;
+        }
 
         const watchEl = document.getElementById(`price-${sym}`);
         if (watchEl) {
           watchEl.innerText = fmtPrice;
           if (pInfo.direction === "up") {
-            watchEl.style.color = "#10b981";
+            watchEl.style.color = "var(--zyrox-primary, #00D99A)";
           } else if (pInfo.direction === "down") {
-            watchEl.style.color = "#ef4444";
+            watchEl.style.color = "var(--zyrox-danger, #FF647C)";
           }
         }
+
+        document.querySelectorAll(`[data-watch-chg-sym="${sym}"]`).forEach(el => {
+          el.innerText = chgText;
+          el.className = `wl-change-val ${isUp ? 'badge-up' : 'badge-down'}`;
+        });
+
+        document.querySelectorAll(`[data-chg-sym="${sym}"]`).forEach(el => {
+          el.innerText = chgText;
+          el.className = `ticker-item-chg ${isUp ? 'chg-up' : 'chg-down'}`;
+        });
 
         const el = document.getElementById(`modal-p-${sym}`);
         if (el) {
           el.innerText = fmtPrice;
           if (pInfo.direction === "up") {
-            el.style.color = "#10b981";
+            el.style.color = "var(--zyrox-primary, #00D99A)";
           } else if (pInfo.direction === "down") {
-            el.style.color = "#ef4444";
+            el.style.color = "var(--zyrox-danger, #FF647C)";
           }
         }
 
@@ -2617,8 +2625,44 @@ function switchNavPane(paneName) {
   const btn = document.getElementById(`btn-nav-${paneName}`);
   if (btn) btn.classList.add("active");
 
-  if (paneName === "terminal") {
+  if (paneName === "terminal" || paneName === "charts") {
     activeMainTab = "signals";
+    if (window.taikryChart && window.taikryChart.handleResize) {
+      window.taikryChart.handleResize();
+    }
+    return;
+  }
+
+  if (paneName === "analysis") {
+    activeMainTab = "signals";
+    if (window.innerWidth <= 900) {
+      switchMobileView("cockpit");
+    } else {
+      const cp = document.getElementById("terminal-ai-sidebar");
+      if (cp && cp.classList.contains("collapsed")) {
+        cp.classList.remove("collapsed");
+      }
+      const chatTab = document.getElementById("ai-tab-chat");
+      if (chatTab) switchAiSidebarTab("chat", chatTab);
+    }
+    return;
+  }
+
+  if (paneName === "watchlist") {
+    const wl = document.getElementById("terminal-watchlist");
+    if (wl && wl.classList.contains("collapsed")) {
+      wl.classList.remove("collapsed");
+    }
+    if (window.innerWidth <= 900) {
+      switchMobileView("watchlist");
+    }
+    return;
+  }
+
+  if (paneName === "calendar") {
+    const cal = document.getElementById("tab-pane-macro-drawer");
+    if (cal) cal.classList.remove("tab-pane-hidden");
+    fetchMacroEvents(false);
     return;
   }
 
@@ -2628,13 +2672,686 @@ function switchNavPane(paneName) {
     target.classList.remove("tab-pane-hidden");
   }
 
-  if (paneName === "debate") {
+  if (paneName === "overview") {
+    loadOverviewData();
+  } else if (paneName === "markets") {
+    loadMarketsData();
+  } else if (paneName === "signals") {
+    loadSignalsCenterData();
+  } else if (paneName === "history") {
+    loadSignalsHistoryData();
+  } else if (paneName === "analytics") {
+    loadPerformanceAnalyticsData();
+  } else if (paneName === "telegram") {
+    loadTelegramStatusData();
+  } else if (paneName === "mt5") {
+    loadMT5BridgeData();
+  } else if (paneName === "settings") {
+    loadSettingsData();
+  } else if (paneName === "admin") {
+    loadAdminData();
+  } else if (paneName === "debate") {
     fetchAgentsDebate(currentSymbol);
   } else if (paneName === "training") {
     fetchSelfTrainingData();
   } else if (paneName === "autofix") {
     fetchAutoFixAlerts();
   }
+}
+
+/* ==========================================================================
+   1. OVERVIEW DATA LOADER
+   ========================================================================== */
+async function loadOverviewData() {
+  try {
+    // 1. Bridge & feed status
+    const bridgeRes = await fetch(`${API_BASE}/api/v1/bridge/status`);
+    if (bridgeRes.ok) {
+      const bData = await bridgeRes.json();
+      const provEl = document.getElementById("ov-feed-provider");
+      const latEl = document.getElementById("ov-feed-latency");
+      if (bData.status === "CONNECTED") {
+        if (provEl) {
+          provEl.innerText = `${bData.broker || "Exness"} MT5 (Live)`;
+          provEl.className = "section-kpi-val text-green";
+        }
+        if (latEl) latEl.innerText = `Ping: ${bData.terminal_ping_ms || 12}ms · Fresh`;
+      } else {
+        if (provEl) {
+          provEl.innerText = "Yahoo / Binance (Fallback)";
+          provEl.className = "section-kpi-val text-gold";
+        }
+        if (latEl) latEl.innerText = "MT5 Standby · Awaiting Bridge";
+      }
+    }
+
+    // 2. Active symbol price
+    const pRes = await fetch(`${API_BASE}/api/v1/prices/realtime?symbols=XAUUSD,BTCUSDT,EURUSD,GBPUSD,USDJPY,SOLUSDT`);
+    if (pRes.ok) {
+      const pData = await pRes.json();
+      const gold = pData.prices && pData.prices["XAUUSD"];
+      if (gold) {
+        const ap = document.getElementById("ov-active-price");
+        if (ap) ap.innerText = `$${Number(gold.price).toFixed(2)}`;
+        const achg = document.getElementById("ov-active-change");
+        if (achg) {
+          const c = gold.change_24h || 0.0;
+          achg.innerText = `24h Change: ${c >= 0 ? '+' : ''}${c.toFixed(2)}%`;
+          achg.className = `section-kpi-sub ${c >= 0 ? 'text-green' : 'text-red'}`;
+        }
+      }
+
+      // Quick tape table
+      const quickBody = document.getElementById("ov-markets-quick-body");
+      if (quickBody && pData.prices) {
+        const keys = ["XAUUSD", "BTCUSDT", "EURUSD", "GBPUSD", "USDJPY", "SOLUSDT"];
+        quickBody.innerHTML = keys.map(k => {
+          const it = pData.prices[k];
+          if (!it) return "";
+          const isForex = k.includes("USD") && !k.includes("XAU") && !k.includes("USDT") && !k.includes("BTC");
+          const pFmt = isForex ? Number(it.price).toFixed(4) : (Number(it.price) > 100 ? `$${Number(it.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${Number(it.price)}`);
+          const c24 = it.change_24h !== undefined ? Number(it.change_24h) : 0.0;
+          return `
+            <tr>
+              <td><b>${k}</b></td>
+              <td>${pFmt}</td>
+              <td class="${c24 >= 0 ? 'text-green' : 'text-red'}"><b>${c24 >= 0 ? '+' : ''}${c24.toFixed(2)}%</b></td>
+              <td><span class="provider-pill">${it.provider || it.source}</span></td>
+              <td><button class="btn btn-outline btn-xs" onclick="selectSymbol('${k}', 'OANDA:${k}'); switchNavPane('charts');">Chart</button></td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+
+    // 3. Performance metrics
+    const perfRes = await fetch(`${API_BASE}/api/v1/signals/performance`);
+    if (perfRes.ok) {
+      const perf = await perfRes.json();
+      const wrEl = document.getElementById("ov-winrate");
+      const pfEl = document.getElementById("ov-profit-factor");
+      const sigEl = document.getElementById("ov-active-signals");
+      if (wrEl) wrEl.innerText = perf.win_rate_percent !== null ? `${perf.win_rate_percent}%` : "--";
+      if (pfEl) pfEl.innerText = `Profit Factor: ${perf.profit_factor !== null ? perf.profit_factor : "--"}`;
+      if (sigEl) sigEl.innerText = perf.total_active_signals !== undefined ? perf.total_active_signals : "0";
+    }
+
+    // 4. Active qualified setup spotlight
+    const sigRes = await fetch(`${API_BASE}/api/v1/xauusd/signals?status=ACTIVE,CANDIDATE&limit=1`);
+    const spotContainer = document.getElementById("ov-setup-card-content");
+    const spotBadge = document.getElementById("ov-setup-status-badge");
+    if (sigRes.ok) {
+      const sigData = await sigRes.json();
+      const sigs = sigData.signals || [];
+      if (sigs.length > 0) {
+        const s = sigs[0];
+        if (spotBadge) {
+          spotBadge.innerText = s.status || "ACTIVE";
+          spotBadge.className = `provider-pill ${s.status === 'ACTIVE' ? 'pill-green' : 'pill-gold'}`;
+        }
+        if (spotContainer) {
+          const sideColor = s.direction === "BUY" ? "text-green" : "text-red";
+          spotContainer.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span style="font-size:16px; font-weight:700;">${s.symbol} · <span class="${sideColor}">${s.direction}</span></span>
+              <span class="provider-pill">${s.execution_mode || "PAPER"}</span>
+            </div>
+            <div class="health-list">
+              <div class="health-row"><span>Entry Zone:</span> <b>$${Number(s.entry_zone_min).toFixed(2)} – $${Number(s.entry_zone_max).toFixed(2)}</b></div>
+              <div class="health-row"><span>Stop Loss (SL):</span> <b class="text-red">$${Number(s.stop_loss).toFixed(2)}</b></div>
+              <div class="health-row"><span>Take Profit 1:</span> <b class="text-green">$${Number(s.take_profit_1).toFixed(2)}</b></div>
+              <div class="health-row"><span>Risk-to-Reward:</span> <b class="text-gold">1:${Number(s.risk_reward_ratio).toFixed(1)}</b></div>
+            </div>
+            <div style="margin-top:14px; display:flex; gap:8px;">
+              <button class="btn btn-gold btn-sm" onclick="switchNavPane('signals')">View in Signal Center</button>
+              <button class="btn btn-outline btn-sm" onclick="selectSymbol('${s.symbol}', 'OANDA:${s.symbol}'); switchNavPane('charts');">Open Chart</button>
+            </div>
+          `;
+        }
+      } else {
+        if (spotBadge) spotBadge.innerText = "WAIT / NO TRADE";
+        if (spotContainer) {
+          spotContainer.innerHTML = `
+            <div class="text-muted text-sm" style="padding:16px 0;">
+              No qualified setups meet the strict institutional risk filter (R:R ≥ 1:2.0) at this moment.
+              System is continuously scanning order blocks and liquidity sweeps.
+            </div>
+            <button class="btn btn-gold btn-sm" onclick="triggerScan()">⚡ Run Market Scan</button>
+          `;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("loadOverviewData error:", err);
+  }
+}
+
+/* ==========================================================================
+   2. LIVE MARKETS DATA LOADER & TABLE
+   ========================================================================== */
+let currentMarketsFilter = "ALL";
+let currentMarketsSearch = "";
+
+function filterMarketsTable(cat, btn) {
+  currentMarketsFilter = cat;
+  document.querySelectorAll("#tab-pane-markets .section-filter-btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  renderMarketsTable();
+}
+
+function onMarketsTableSearch(val) {
+  currentMarketsSearch = val || "";
+  renderMarketsTable();
+}
+
+async function loadMarketsData() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/prices/realtime`);
+    if (res.ok) {
+      const data = await res.json();
+      window.lastKnownMarketData = data.prices || {};
+    }
+  } catch (e) {
+    console.warn("loadMarketsData error:", e);
+  }
+  renderMarketsTable();
+}
+
+function renderMarketsTable() {
+  const tbody = document.getElementById("markets-full-table-body");
+  if (!tbody) return;
+
+  let filtered = currentMarketsFilter === "ALL"
+    ? WATCHLIST
+    : WATCHLIST.filter(item => item.category === currentMarketsFilter || (currentMarketsFilter === "COMMODITIES" && item.category === "COMMODITIES"));
+
+  if (currentMarketsSearch.trim()) {
+    const q = currentMarketsSearch.trim().toUpperCase();
+    filtered = filtered.filter(item => item.symbol.includes(q) || item.name.toUpperCase().includes(q));
+  }
+
+  const prices = window.lastKnownMarketData || {};
+
+  tbody.innerHTML = filtered.map(item => {
+    const pInfo = prices[item.symbol] || null;
+    const isCrypto = item.symbol.includes("USDT") || item.symbol.includes("BTC");
+    const isForex = !isCrypto && !item.symbol.includes("XAU") && !item.symbol.includes("XAG");
+    const p = pInfo ? Number(pInfo.price) : null;
+    const fmtPrice = p !== null ? (isForex ? p.toFixed(4) : (p > 100 ? `$${p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${p}`)) : "---";
+    const bid = pInfo && pInfo.bid ? (isForex ? Number(pInfo.bid).toFixed(4) : `$${Number(pInfo.bid).toFixed(2)}`) : "---";
+    const ask = pInfo && pInfo.ask ? (isForex ? Number(pInfo.ask).toFixed(4) : `$${Number(pInfo.ask).toFixed(2)}`) : "---";
+    const spread = pInfo && pInfo.spread !== undefined ? `${pInfo.spread} pts` : "---";
+    const c24 = pInfo && pInfo.change_24h !== undefined ? Number(pInfo.change_24h) : 0.0;
+    const chgText = pInfo ? (c24 >= 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
+    const source = pInfo ? (pInfo.provider || pInfo.source) : "Awaiting data";
+    const isLive = pInfo && pInfo.source === "EXNESS_MT5";
+    const statusPill = isLive ? `<span class="badge-active">MT5 LIVE</span>` : `<span class="provider-pill">${pInfo ? 'FALLBACK' : 'OFFLINE'}</span>`;
+
+    return `
+      <tr>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            ${getAssetRealLogoHTML(item.symbol)}
+            <b>${item.symbol}</b>
+          </div>
+        </td>
+        <td><span class="text-secondary">${item.name}</span> <span class="provider-pill" style="margin-left:4px;">${item.category}</span></td>
+        <td>${bid}</td>
+        <td>${ask}</td>
+        <td><span class="text-muted">${spread}</span></td>
+        <td class="${c24 >= 0 ? 'text-green' : 'text-red'}"><b>${chgText}</b></td>
+        <td><span class="provider-pill">${source}</span></td>
+        <td>${statusPill}</td>
+        <td>
+          <button class="btn btn-outline btn-xs" onclick="selectSymbol('${item.symbol}', '${item.tv}'); switchNavPane('charts');">📈 Chart</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+/* ==========================================================================
+   5. SIGNAL CENTER DATA LOADER & DISPATCH
+   ========================================================================== */
+async function loadSignalsCenterData() {
+  const container = document.getElementById("signals-center-container");
+  if (!container) return;
+  container.innerHTML = `<div class="registry-telemetry-loading">Querying active signals from PostgreSQL ledger...</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/xauusd/signals?status=ACTIVE,CANDIDATE&limit=10`);
+    if (!res.ok) throw new Error("Failed to fetch active signals");
+    const data = await res.json();
+    const sigs = data.signals || [];
+
+    if (sigs.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state-card" style="grid-column: 1 / -1; text-align:center; padding: 40px 20px;">
+          <div style="font-size:32px; margin-bottom:12px;">🛡️</div>
+          <div style="font-size:16px; font-weight:700; color:var(--zyrox-text);">No Qualified Active Signals</div>
+          <div style="color:var(--zyrox-text-secondary); max-width:480px; margin:8px auto 20px auto; font-size:13px; line-height:1.6;">
+            The quantitative engine enforces strict R:R ≥ 1:2.0, multi-timeframe liquidity sweep confirmation, and MT5 feed alignment before issuing any signal.
+          </div>
+          <button class="btn btn-gold btn-sm" onclick="triggerGenerateSignalAction()">⚡ Run Signal Generator Now</button>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = sigs.map(s => {
+      const isBuy = s.direction === "BUY";
+      const sideCls = isBuy ? "side-buy" : "side-sell";
+      const createdStr = s.created_at ? new Date(s.created_at).toLocaleString() : "Just now";
+      return `
+        <div class="signal-card ${sideCls}">
+          <div class="signal-card-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${getAssetRealLogoHTML(s.symbol)}
+              <span style="font-weight:700; font-size:16px;">${s.symbol}</span>
+              <span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${s.direction}</span>
+            </div>
+            <span class="provider-pill">${s.status}</span>
+          </div>
+
+          <div class="signal-card-body">
+            <div class="sig-level-row">
+              <span class="sig-lvl-label">Entry Range:</span>
+              <span class="sig-lvl-val">$${Number(s.entry_zone_min).toFixed(2)} – $${Number(s.entry_zone_max).toFixed(2)}</span>
+            </div>
+            <div class="sig-level-row">
+              <span class="sig-lvl-label">Stop Loss (SL):</span>
+              <span class="sig-lvl-val text-red">$${Number(s.stop_loss).toFixed(2)}</span>
+            </div>
+            <div class="sig-level-row">
+              <span class="sig-lvl-label">Take Profit 1:</span>
+              <span class="sig-lvl-val text-green">$${Number(s.take_profit_1).toFixed(2)}</span>
+            </div>
+            <div class="sig-level-row">
+              <span class="sig-lvl-label">Risk-to-Reward:</span>
+              <span class="sig-lvl-val text-gold">1:${Number(s.risk_reward_ratio).toFixed(1)}</span>
+            </div>
+            <div class="sig-level-row">
+              <span class="sig-lvl-label">Setup Confidence:</span>
+              <span class="sig-lvl-val text-cyan">${Math.round((s.setup_score || s.confidence || 0.8) * 100)}%</span>
+            </div>
+            <div class="sig-level-row">
+              <span class="sig-lvl-label">Mode / Source:</span>
+              <span class="sig-lvl-val text-muted">${s.execution_mode || 'PAPER'} · ${s.data_source || 'DATABASE'}</span>
+            </div>
+          </div>
+
+          <div class="signal-card-footer">
+            <span class="text-muted" style="font-size:11px;">${createdStr}</span>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-outline btn-xs" onclick="selectSymbol('${s.symbol}', 'OANDA:${s.symbol}'); switchNavPane('charts');">📈 Chart</button>
+              <button class="btn btn-gold btn-xs" onclick="sendTelegramTestSignalAction()">✈ Dispatch</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (err) {
+    container.innerHTML = `<div class="error-banner">Failed to load signals: ${err.message}</div>`;
+  }
+}
+
+async function triggerGenerateSignalAction() {
+  const btn = event?.currentTarget;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = "⏳ Generating...";
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/xauusd/signals/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: currentSymbol, timeframe: currentTimeframe })
+    });
+    const data = await res.json();
+    if (data.status === "ACTIVE" || data.status === "CANDIDATE") {
+      alert(`✅ New Qualified Signal Generated!\nDirection: ${data.direction}\nEntry: $${data.entry_zone_min} - $${data.entry_zone_max}\nSL: $${data.stop_loss}\nTP1: $${data.take_profit_1}`);
+    } else {
+      alert(`🛡️ Evaluation Result: ${data.status || 'WAIT / NO TRADE'}\nReason: ${data.reason || data.invalidation_condition || 'Strict institutional R:R and multi-agent gating maintained.'}`);
+    }
+    loadSignalsCenterData();
+    loadSignalsHistoryData();
+  } catch (err) {
+    alert(`❌ Signal generation error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = "⚡ Scan & Generate Signal";
+    }
+  }
+}
+
+/* ==========================================================================
+   6. SIGNAL HISTORY DATA LOADER & FILTER
+   ========================================================================== */
+let currentHistoryFilter = "ALL";
+
+function filterSignalsHistory(filter, btn) {
+  currentHistoryFilter = filter;
+  document.querySelectorAll("#tab-pane-history .section-filter-btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  loadSignalsHistoryData();
+}
+
+async function loadSignalsHistoryData() {
+  const tbody = document.getElementById("signals-history-table-body");
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted">Querying PostgreSQL historical audit trail...</td></tr>`;
+
+  try {
+    const url = currentHistoryFilter === "ALL" 
+      ? `${API_BASE}/api/v1/xauusd/signals?limit=50`
+      : `${API_BASE}/api/v1/xauusd/signals?status=${currentHistoryFilter}&limit=50`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to query signal ledger");
+    const data = await res.json();
+    const sigs = data.signals || [];
+
+    if (sigs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted" style="padding:24px;">No historical records found for filter '${currentHistoryFilter}'.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = sigs.map(s => {
+      const isBuy = s.direction === "BUY";
+      const statusPill = s.status === "TP_HIT" 
+        ? `<span class="badge-active" style="background:rgba(0,217,154,0.15); color:var(--zyrox-primary);">TP HIT</span>`
+        : (s.status === "SL_HIT" 
+          ? `<span class="badge-expired" style="background:rgba(255,100,124,0.15); color:var(--zyrox-danger);">SL HIT</span>`
+          : `<span class="provider-pill">${s.status}</span>`);
+
+      const rReturn = s.outcome_r !== undefined && s.outcome_r !== null 
+        ? (Number(s.outcome_r) > 0 ? `+${Number(s.outcome_r).toFixed(1)}R` : `${Number(s.outcome_r).toFixed(1)}R`) 
+        : (s.status === "TP_HIT" ? `+${Number(s.risk_reward_ratio || 2.0).toFixed(1)}R` : (s.status === "SL_HIT" ? "-1.0R" : "--"));
+
+      const rCls = rReturn.startsWith("+") ? "text-green" : (rReturn.startsWith("-") ? "text-red" : "text-muted");
+      const dt = s.created_at ? new Date(s.created_at).toLocaleString() : "N/A";
+
+      return `
+        <tr>
+          <td><code style="color:var(--zyrox-primary);">${s.id || s.signal_id || '--'}</code></td>
+          <td><b>${s.symbol}</b></td>
+          <td><span class="${isBuy ? 'text-green' : 'text-red'} font-bold">${s.direction}</span></td>
+          <td>$${Number(s.entry_zone_min).toFixed(2)} – $${Number(s.entry_zone_max).toFixed(2)}</td>
+          <td class="text-red">$${Number(s.stop_loss).toFixed(2)}</td>
+          <td class="text-green">$${Number(s.take_profit_1).toFixed(2)}</td>
+          <td class="${rCls} font-bold">${rReturn}</td>
+          <td>${statusPill}</td>
+          <td><span class="text-secondary" style="font-size:11px;">${dt}</span></td>
+          <td><span class="provider-pill">${s.execution_mode || 'PAPER'}</span></td>
+          <td>
+            <button class="btn btn-outline btn-xs" onclick="selectSymbol('${s.symbol}', 'OANDA:${s.symbol}'); switchNavPane('charts');">Chart</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red" style="padding:20px;">Error loading history: ${err.message}</td></tr>`;
+  }
+}
+
+/* ==========================================================================
+   7. PERFORMANCE ANALYTICS DATA LOADER
+   ========================================================================== */
+let currentAnalyticsDataset = "ALL";
+
+function switchAnalyticsDataset(dataset, btn) {
+  currentAnalyticsDataset = dataset;
+  document.querySelectorAll("#tab-pane-analytics .section-filter-btn").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  loadPerformanceAnalyticsData();
+}
+
+async function loadPerformanceAnalyticsData() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/signals/performance?dataset=${currentAnalyticsDataset}`);
+    if (!res.ok) throw new Error("Failed to fetch performance statistics");
+    const data = await res.json();
+
+    const setVal = (id, val, cls) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.innerText = (val !== null && val !== undefined) ? val : "--";
+        if (cls) el.className = cls;
+      }
+    };
+
+    setVal("stat-total-signals", data.total_signals);
+    setVal("stat-closed-trades", `Closed: ${data.total_closed || 0} · Active: ${data.total_active_signals || 0}`);
+    setVal("stat-win-rate", data.win_rate_percent !== null ? `${data.win_rate_percent}%` : "--", "section-kpi-val text-green");
+    setVal("stat-win-loss-count", `Wins: ${data.total_wins || 0} · Losses: ${data.total_losses || 0}`);
+    setVal("stat-profit-factor", data.profit_factor !== null ? data.profit_factor : "--", "section-kpi-val text-gold");
+    setVal("stat-expectancy-r", data.expectancy_r !== null ? `${data.expectancy_r > 0 ? '+' : ''}${data.expectancy_r} R` : "--", "section-kpi-val text-cyan");
+    setVal("stat-max-drawdown", data.max_drawdown_percent !== null ? `${data.max_drawdown_percent}%` : "--", "section-kpi-val text-red");
+
+    setVal("stat-tp1-rate", data.tp1_hit_rate !== null ? `${data.tp1_hit_rate}%` : "--", "val-green");
+    setVal("stat-tp2-rate", data.tp2_hit_rate !== null ? `${data.tp2_hit_rate}%` : "--", "val-green");
+    setVal("stat-tp3-rate", data.tp3_hit_rate !== null ? `${data.tp3_hit_rate}%` : "--", "val-green");
+    setVal("stat-avg-win", data.avg_win_r !== null ? `+${data.avg_win_r} R` : "--", "val-gold");
+    setVal("stat-avg-loss", data.avg_loss_r !== null ? `-${data.avg_loss_r} R` : "--", "val-red");
+
+    // Populate strategy breakdown table
+    const breakdownBody = document.getElementById("analytics-breakdown-body");
+    if (breakdownBody) {
+      const rows = data.breakdown || [
+        { symbol: "XAUUSD", tf: "M15", version: "ZYROX-SMC-v2.1", count: data.total_signals || 0, winrate: data.win_rate_percent, pf: data.profit_factor, r: data.expectancy_r, status: "ACTIVE" },
+        { symbol: "EURUSD", tf: "H1", version: "ZYROX-ICT-v1.4", count: 0, winrate: null, pf: null, r: null, status: "AWAITING_DATA" },
+        { symbol: "BTCUSDT", tf: "M15", version: "ZYROX-CRYPTO-v2.0", count: 0, winrate: null, pf: null, r: null, status: "AWAITING_DATA" }
+      ];
+
+      breakdownBody.innerHTML = rows.map(r => `
+        <tr>
+          <td><b>${r.symbol}</b></td>
+          <td><span class="provider-pill">${r.tf}</span></td>
+          <td><code style="color:var(--zyrox-text-secondary);">${r.version}</code></td>
+          <td>${r.count}</td>
+          <td class="text-green">${r.winrate !== null ? `${r.winrate}%` : '--'}</td>
+          <td class="text-gold">${r.pf !== null ? r.pf : '--'}</td>
+          <td class="text-cyan">${r.r !== null ? `${r.r} R` : '--'}</td>
+          <td><span class="provider-pill">${r.status}</span></td>
+        </tr>
+      `).join("");
+    }
+  } catch (err) {
+    console.warn("loadPerformanceAnalyticsData error:", err);
+  }
+}
+
+/* ==========================================================================
+   10. TELEGRAM STATUS & TEST DISPATCH
+   ========================================================================== */
+async function loadTelegramStatusData() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/telegram/status`);
+    if (res.ok) {
+      const data = await res.json();
+      const statusEl = document.getElementById("tg-bot-status");
+      const userEl = document.getElementById("tg-bot-username");
+      const chatEl = document.getElementById("tg-chat-id");
+      const healthEl = document.getElementById("tg-delivery-health");
+
+      if (data.connected) {
+        if (statusEl) {
+          statusEl.innerText = "CONNECTED (Online)";
+          statusEl.className = "section-kpi-val text-green";
+        }
+        if (userEl) userEl.innerText = `Bot: @${data.bot_username || "TaikryTradingBot"}`;
+        if (chatEl) chatEl.innerText = data.chat_id || "-1004341134868";
+        if (healthEl) healthEl.innerText = "100% OK · Operational";
+      } else {
+        if (statusEl) {
+          statusEl.innerText = "STANDBY (Configured)";
+          statusEl.className = "section-kpi-val text-gold";
+        }
+        if (userEl) userEl.innerText = `Bot: @${data.bot_username || "TaikryTradingBot"}`;
+        if (chatEl) chatEl.innerText = data.chat_id || "Configured via ENV";
+      }
+    }
+  } catch (err) {
+    console.warn("loadTelegramStatusData error:", err);
+  }
+}
+
+async function sendTelegramTestSignalAction() {
+  const btn = event?.currentTarget;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = "⏳ Dispatching...";
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/telegram/send-test-signal`, { method: "POST" });
+    const data = await res.json();
+    if (data.status === "SUCCESS") {
+      alert("✅ Test Signal successfully dispatched to Telegram channel via official Bot API!");
+    } else {
+      alert(`⚠️ Telegram dispatch result: ${data.message || JSON.stringify(data)}`);
+    }
+    loadTelegramStatusData();
+  } catch (err) {
+    alert(`❌ Telegram dispatch error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = "✉ Send Test Signal to Telegram";
+    }
+  }
+}
+
+/* ==========================================================================
+   11. MT5 BRIDGE DATA LOADER
+   ========================================================================== */
+async function loadMT5BridgeData() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/bridge/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const heroState = document.getElementById("mt5-hero-state");
+    const heroDesc = document.getElementById("mt5-hero-desc");
+    const brokerEl = document.getElementById("mt5-broker-name");
+    const serverEl = document.getElementById("mt5-server-name");
+    const ageEl = document.getElementById("mt5-feed-age");
+    const topDot = document.getElementById("top-bridge-dot");
+    const topLabel = document.getElementById("top-bridge-label");
+
+    if (data.status === "CONNECTED") {
+      if (heroState) {
+        heroState.innerText = "CONNECTED";
+        heroState.className = "section-kpi-val text-green";
+      }
+      if (heroDesc) heroDesc.innerText = `Active Feed · ${data.active_symbols?.length || 1} Symbols Streaming`;
+      if (topDot) topDot.className = "bridge-status-dot bridge-connected";
+      if (topLabel) topLabel.innerText = "MT5: LIVE";
+    } else if (data.status === "STALE") {
+      if (heroState) {
+        heroState.innerText = "FEED STALE";
+        heroState.className = "section-kpi-val text-gold";
+      }
+      if (heroDesc) heroDesc.innerText = "No ticks in last 30s. Market closed or paused.";
+      if (topDot) topDot.className = "bridge-status-dot bridge-stale";
+      if (topLabel) topLabel.innerText = "MT5: STALE";
+    } else {
+      if (heroState) {
+        heroState.innerText = "STANDBY";
+        heroState.className = "section-kpi-val text-muted";
+      }
+      if (heroDesc) heroDesc.innerText = "Awaiting Windows Bridge client connection.";
+      if (topDot) topDot.className = "bridge-status-dot bridge-disconnected";
+      if (topLabel) topLabel.innerText = "MT5: STANDBY";
+    }
+
+    if (brokerEl) brokerEl.innerText = data.broker || "Exness";
+    if (serverEl) serverEl.innerText = data.server || "Exness-Real";
+    if (ageEl) ageEl.innerText = data.seconds_since_last_activity !== null && data.seconds_since_last_activity !== undefined ? `${data.seconds_since_last_activity}s ago` : "--";
+  } catch (err) {
+    console.warn("loadMT5BridgeData error:", err);
+  }
+}
+
+function testBridgeStatus() {
+  loadMT5BridgeData();
+}
+
+/* ==========================================================================
+   12. SETTINGS LOADER & PERSISTENCE
+   ========================================================================== */
+function loadSettingsData() {
+  const sym = localStorage.getItem("zyrox_default_symbol") || "XAUUSD";
+  const tf = localStorage.getItem("zyrox_default_timeframe") || "15";
+  const rr = localStorage.getItem("zyrox_risk_floor") || "2.0";
+  const cap = localStorage.getItem("zyrox_risk_cap") || "0.5";
+  const lang = localStorage.getItem("zyrox_lang") || (isKhmer ? "kh" : "en");
+  const den = localStorage.getItem("zyrox_density") || "dense";
+
+  const setSelect = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  };
+
+  setSelect("setting-default-symbol", sym);
+  setSelect("setting-default-timeframe", tf);
+  setSelect("setting-risk-floor", rr);
+  setSelect("setting-risk-cap", cap);
+  setSelect("setting-language", lang);
+  setSelect("setting-density", den);
+}
+
+function saveSettingsData() {
+  const sym = document.getElementById("setting-default-symbol")?.value || "XAUUSD";
+  const tf = document.getElementById("setting-default-timeframe")?.value || "15";
+  const rr = document.getElementById("setting-risk-floor")?.value || "2.0";
+  const cap = document.getElementById("setting-risk-cap")?.value || "0.5";
+  const lang = document.getElementById("setting-language")?.value || "en";
+  const den = document.getElementById("setting-density")?.value || "dense";
+
+  localStorage.setItem("zyrox_default_symbol", sym);
+  localStorage.setItem("zyrox_default_timeframe", tf);
+  localStorage.setItem("zyrox_risk_floor", rr);
+  localStorage.setItem("zyrox_risk_cap", cap);
+  localStorage.setItem("zyrox_lang", lang);
+  localStorage.setItem("zyrox_density", den);
+
+  if (lang === "kh" && !isKhmer) toggleLanguage();
+  if (lang === "en" && isKhmer) toggleLanguage();
+
+  if (den === "dense") {
+    document.body.classList.add("density-dense");
+  } else {
+    document.body.classList.remove("density-dense");
+  }
+
+  alert("✅ Terminal preferences saved to local profile!");
+}
+
+function onSettingLanguageChange(val) {
+  if (val === "kh" && !isKhmer) toggleLanguage();
+  if (val === "en" && isKhmer) toggleLanguage();
+}
+
+/* ==========================================================================
+   13. ADMIN CONSOLE LOADER
+   ========================================================================== */
+function loadAdminData() {
+  loadVipStats().then(() => {
+    const act = document.getElementById("vip-kpi-active")?.textContent || "0";
+    const exp = document.getElementById("vip-kpi-expiring")?.textContent || "0";
+    const rev = document.getElementById("vip-kpi-revenue")?.textContent || "$0";
+
+    const aAct = document.getElementById("admin-kpi-active");
+    const aExp = document.getElementById("admin-kpi-expiring");
+    const aRev = document.getElementById("admin-kpi-revenue");
+
+    if (aAct) aAct.textContent = act;
+    if (aExp) aExp.textContent = exp;
+    if (aRev) aRev.textContent = rev;
+  });
+  loadVipSubscribers();
 }
 
 function toggleMacroDrawer() {

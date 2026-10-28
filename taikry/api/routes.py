@@ -330,9 +330,30 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
             else:
                 prov_display = cfg.get("provider_display", src)
 
+            from taikry.data.mt5_receiver import mt5_receiver
+            mt5_p, mt5_src, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(sym)
+            if mt5_fresh and mt5_tick:
+                bid = float(mt5_tick.get("bid", p_formatted))
+                ask = float(mt5_tick.get("ask", p_formatted))
+                spread = float(mt5_tick.get("spread", 0.0))
+            else:
+                cfg_spread = float(cfg.get("spread_points", 20 if "XAU" in sym else 12))
+                spread_val = (cfg_spread * 0.01) if "XAU" in sym else (cfg_spread * 0.0001)
+                bid = round(p_formatted - (spread_val / 2.0), decimals)
+                ask = round(p_formatted + (spread_val / 2.0), decimals)
+                spread = cfg_spread
+
+            session_open = cached[1].get("session_open", p_formatted) if cached else p_formatted
+            change_24h = round(((p_formatted - session_open) / session_open) * 100.0, 2) if session_open > 0 else 0.0
+
             p_data = {
                 "symbol": sym,
                 "price": p_formatted,
+                "bid": bid,
+                "ask": ask,
+                "spread": spread,
+                "change_24h": change_24h,
+                "session_open": session_open,
                 "direction": direction,
                 "source": src,
                 "quote_type": cfg.get("quote_type", "SPOT_MID"),
@@ -349,9 +370,16 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
                 return sym, cached[1]
             cfg = get_symbol_config(sym)
             fallback_price = REFERENCE_BASE_PRICES.get(sym, 4043.90 if sym == "XAUUSD" and XAUUSD_PRICE_REFERENCE == "SPOT" else (4060.80 if sym == "XAUUSD" else 100.0))
+            cfg_spread = float(cfg.get("spread_points", 20 if "XAU" in sym else 12))
+            spread_val = (cfg_spread * 0.01) if "XAU" in sym else (cfg_spread * 0.0001)
             fallback_data = {
                 "symbol": sym,
                 "price": fallback_price,
+                "bid": round(fallback_price - (spread_val / 2.0), 2),
+                "ask": round(fallback_price + (spread_val / 2.0), 2),
+                "spread": cfg_spread,
+                "change_24h": 0.0,
+                "session_open": fallback_price,
                 "direction": "flat",
                 "source": "DEMO_SYNTHETIC",
                 "quote_type": cfg.get("quote_type", "SPOT_MID"),

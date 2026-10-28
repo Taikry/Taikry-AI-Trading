@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" fill="none" role="img" aria-label="ZYROX AI Hero Animation">
+  <defs>
+    <!-- Background Vignette -->
+    <radialGradient id="heroVignette" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#0B1511"/>
+      <stop offset="55%" stop-color="#060B09"/>
+      <stop offset="100%" stop-color="#030605"/>
+    </radialGradient>
+
+    <!-- Emerald Flare Sweep Gradient -->
+    <linearGradient id="heroSweepGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00D99A" stop-opacity="0.2"/>
+      <stop offset="35%" stop-color="#00D99A" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#16E6AB" stop-opacity="1"/>
+      <stop offset="65%" stop-color="#00D99A" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#00D99A" stop-opacity="0.2"/>
+      <animate attributeName="x1" values="-100%;100%" dur="6s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="0%;200%" dur="6s" repeatCount="indefinite"/>
+    </linearGradient>
+
+    <!-- Metallic Text Shimmer -->
+    <linearGradient id="heroTextShimmer" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#EAFFF5"/>
+      <stop offset="40%" stop-color="#EAFFF5"/>
+      <stop offset="50%" stop-color="#16E6AB"/>
+      <stop offset="60%" stop-color="#EAFFF5"/>
+      <stop offset="100%" stop-color="#EAFFF5"/>
+      <animate attributeName="x1" values="-150%;150%" dur="6s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="-50%;250%" dur="6s" repeatCount="indefinite"/>
+    </linearGradient>
+
+    <!-- Hero Deep Aura -->
+    <filter id="heroAura" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="24" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+
+    <style>
+      @keyframes heroShieldPulse {
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(0, 217, 154, 0.3)); }
+        50% { transform: scale(1.025); filter: drop-shadow(0 0 32px rgba(22, 230, 171, 0.7)); }
+      }
+      @keyframes heroCorePulse {
+        0%, 100% { opacity: 0.8; r: 12px; }
+        50% { opacity: 1; r: 16px; }
+      }
+      @keyframes gridFade {
+        0%, 100% { opacity: 0.15; }
+        50% { opacity: 0.28; }
+      }
+      .hero-shield-anim {
+        transform-origin: 400px 170px;
+        animation: heroShieldPulse 6s ease-in-out infinite;
+      }
+      .hero-core-anim {
+        animation: heroCorePulse 6s ease-in-out infinite;
+      }
+      .hero-bg-grid {
+        animation: gridFade 6s ease-in-out infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .hero-shield-anim, .hero-core-anim, .hero-bg-grid {
+          animation: none !important;
+        }
+      }
+    </style>
+  </defs>
+
+  <!-- Deep Terminal Canvas Background -->
+  <rect width="800" height="450" fill="url(#heroVignette)"/>
+
+  <!-- Institutional Market Coordinate Grid Overlay -->
+  <g class="hero-bg-grid" stroke="#20372C" stroke-width="0.8">
+    <line x1="80" y1="0" x2="80" y2="450"/>
+    <line x1="240" y1="0" x2="240" y2="450"/>
+    <line x1="400" y1="0" x2="400" y2="450"/>
+    <line x1="560" y1="0" x2="560" y2="450"/>
+    <line x1="720" y1="0" x2="720" y2="450"/>
+    <line x1="0" y1="90" x2="800" y2="90"/>
+    <line x1="0" y1="180" x2="800" y2="180"/>
+    <line x1="0" y1="270" x2="800" y2="270"/>
+    <line x1="0" y1="360" x2="800" y2="360"/>
+  </g>
+
+  <!-- Central Ambient Emerald Halo -->
+  <circle cx="400" cy="170" r="140" fill="#00D99A" fill-opacity="0.08" filter="url(#heroAura)"/>
+
+  <!-- Central Shield Monogram (Centered at x=400, y=170) -->
+  <g class="hero-shield-anim">
+    <!-- Outer Beveled Shield (160x180) -->
+    <polygon points="400,65 490,115 490,225 400,275 310,225 310,115" fill="#0B1511" stroke="#20372C" stroke-width="3"/>
+    <polygon points="400,78 476,121 476,219 400,262 324,219 324,121" fill="none" stroke="#00D99A" stroke-opacity="0.25" stroke-width="1.8"/>
+
+    <!-- Dynamic Z Monogram -->
+    <path d="M346 125 H454 L346 215 H454" fill="none" stroke="url(#heroSweepGrad)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" filter="url(#heroAura)"/>
+    <path d="M346 125 H454 L346 215 H454" fill="none" stroke="#EAFFF5" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.95"/>
+
+    <!-- Quantum Nexus Node -->
+    <circle cx="400" cy="170" r="28" fill="#00D99A" fill-opacity="0.2"/>
+    <circle cx="400" cy="170" r="12" fill="#16E6AB" class="hero-core-anim"/>
+    <circle cx="400" cy="170" r="5" fill="#EAFFF5"/>
+  </g>
+
+  <!-- Typography Block: ZYROX AI Wordmark -->
+  <g transform="translate(400, 340)">
+    <text x="-48" y="0" font-family="'JetBrains Mono', 'Inter', -apple-system, sans-serif" font-size="44" font-weight="900" letter-spacing="8" fill="url(#heroTextShimmer)" text-anchor="middle">
+      ZYROX
+    </text>
+
+    <!-- AI Badge -->
+    <rect x="74" y="-32" width="60" height="34" rx="6" fill="rgba(0, 217, 154, 0.12)" stroke="#00D99A" stroke-width="1.6"/>
+    <text x="104" y="-9" font-family="'JetBrains Mono', monospace" font-size="19" font-weight="800" fill="#00D99A" letter-spacing="2" text-anchor="middle">
+      AI
+    </text>
+  </g>
+
+  <!-- Tagline Rule and Accents -->
+  <line x1="280" y1="368" x2="520" y2="368" stroke="#20372C" stroke-width="1.2"/>
+  <circle cx="400" cy="368" r="3" fill="#00D99A"/>
+
+  <!-- Master Tagline -->
+  <text x="400" y="394" font-family="'Inter', -apple-system, sans-serif" font-size="13" font-weight="600" letter-spacing="4.5" fill="#87A99A" text-anchor="middle">
+    READ THE MARKET. OWN YOUR EDGE.
+  </text>
+</svg>

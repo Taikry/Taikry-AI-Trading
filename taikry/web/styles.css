@@ -4,50 +4,65 @@
    Tagline: Read the Market. Own Your Edge.
    ========================================================================== */
 :root {
-  /* ZYROX AI Strict Brand Identity Palette */
+  /* ZYROX AI Strict Brand Identity Palette (Prompt V2 Spec) */
   --zyrox-bg: #060B09;
-  --zyrox-panel: #0B1511;
-  --zyrox-panel-secondary: #0E1B15;
-  --zyrox-panel-hover: #12241C;
-  --zyrox-emerald: #00D99A;
-  --zyrox-emerald-dim: rgba(0, 217, 154, 0.12);
-  --zyrox-emerald-border: rgba(0, 217, 154, 0.28);
-  --zyrox-deep-green: #0A2A20;
+  --zyrox-surface: #0B1511;
+  --zyrox-surface-raised: #102019;
+  --zyrox-border: #20372C;
+  --zyrox-primary: #00D99A;
+  --zyrox-primary-hover: #16E6AB;
   --zyrox-text: #EAFFF5;
   --zyrox-text-secondary: #87A99A;
-  --zyrox-text-muted: #557366;
-  --zyrox-negative: #FF647C;
-  --zyrox-negative-bg: rgba(255, 100, 124, 0.12);
+  --zyrox-text-muted: #60796D;
+  --zyrox-danger: #FF647C;
   --zyrox-warning: #FFC76B;
-  --zyrox-warning-bg: rgba(255, 199, 107, 0.12);
-  --zyrox-cyan: #38EF7D;
-  --zyrox-border: rgba(0, 217, 154, 0.16);
+  --zyrox-info: #72B7FF;
+
+  /* Functional Institutional Dashboard Mappings */
+  --zyrox-panel: var(--zyrox-surface);
+  --zyrox-panel-secondary: var(--zyrox-surface-raised);
+  --zyrox-panel-hover: #152B21;
+  --zyrox-emerald: var(--zyrox-primary);
+  --zyrox-emerald-dim: rgba(0, 217, 154, 0.10);
+  --zyrox-emerald-border: var(--zyrox-border);
+  --zyrox-deep-green: #0A1C14;
+  --zyrox-negative: var(--zyrox-danger);
+  --zyrox-negative-bg: rgba(255, 100, 124, 0.10);
+  --zyrox-warning-bg: rgba(255, 199, 107, 0.10);
+  --zyrox-info-bg: rgba(114, 183, 255, 0.10);
 
   /* Dashboard Framework Mapping */
-  --bg-primary: #060B09;
-  --bg-secondary: #0B1511;
-  --bg-card: rgba(14, 27, 21, 0.90);
-  --bg-card-hover: rgba(18, 36, 28, 0.98);
+  --bg-primary: var(--zyrox-bg);
+  --bg-secondary: var(--zyrox-surface);
+  --bg-card: var(--zyrox-surface-raised);
+  --bg-card-hover: #152B21;
   
-  --gold-primary: #00D99A;
-  --gold-bright: #38EF7D;
-  --gold-gradient: linear-gradient(135deg, #00D99A 0%, #00B37E 60%, #0A2A20 100%);
-  --gold-subtle: rgba(0, 217, 154, 0.12);
-  --gold-border: rgba(0, 217, 154, 0.25);
+  --gold-primary: var(--zyrox-primary);
+  --gold-bright: var(--zyrox-primary-hover);
+  --gold-gradient: none;
+  --gold-subtle: rgba(0, 217, 154, 0.10);
+  --gold-border: var(--zyrox-border);
 
-  --accent-green: #00D99A;
-  --accent-red: #FF647C;
-  --accent-blue: #38EF7D;
-  --accent-yellow: #FFC76B;
+  --accent-green: var(--zyrox-primary);
+  --accent-red: var(--zyrox-danger);
+  --accent-blue: var(--zyrox-info);
+  --accent-yellow: var(--zyrox-warning);
 
-  --text-primary: #EAFFF5;
-  --text-secondary: #87A99A;
-  --text-muted: #557366;
+  --green-neon: var(--zyrox-primary);
+  --red-neon: var(--zyrox-danger);
+  --cyan-neon: var(--zyrox-primary-hover);
+
+  --text-primary: var(--zyrox-text);
+  --text-secondary: var(--zyrox-text-secondary);
+  --text-muted: var(--zyrox-text-muted);
 
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-khmer: 'Kantumruy Pro', 'Hanuman', 'Khmer OS Siemreap', sans-serif;
-  --border-radius: 8px;
-  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+  --border-radius: 6px;
+  --border-radius-sm: 4px;
+  --border-radius-lg: 8px;
+  --transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html {
@@ -644,18 +659,17 @@ body.khmer-mode {
 }
 
 .pulse-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--green-neon);
-  box-shadow: 0 0 8px var(--green-neon);
-  animation: pulse-animation 1.5s infinite;
+  background: var(--zyrox-primary);
+  display: inline-block;
+  animation: pulse-animation 2s ease-in-out infinite;
 }
 
 @keyframes pulse-animation {
-  0% { transform: scale(0.9); opacity: 0.7; }
-  50% { transform: scale(1.3); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.7; }
+  0%, 100% { opacity: 0.6; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
 /* OTE & Dealing Range Slider */
@@ -6265,37 +6279,32 @@ html, body {
    Architect: Heng Taikry · Telegram: 0968288832
    ========================================================================= */
 
-/* 1. Keyframes & Dynamic Micro-Animations */
-@keyframes neonBorderFlow {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+/* 1. Keyframes & Institutional Subtle Micro-Animations */
+@keyframes terminalPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 @keyframes radarSonarPing {
   0% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    box-shadow: 0 0 0 0 rgba(0, 217, 154, 0.4);
   }
   70% {
-    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 6px rgba(0, 217, 154, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 0 rgba(0, 217, 154, 0);
   }
 }
 
 @keyframes avatarAuraPulse {
-  0% {
+  0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 0 1px rgba(0, 217, 154, 0.25);
   }
   50% {
-    transform: scale(1.08);
-    box-shadow: 0 0 16px rgba(56, 189, 248, 0.8), 0 0 24px rgba(245, 158, 11, 0.4);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+    transform: scale(1.02);
+    box-shadow: 0 0 0 2px rgba(0, 217, 154, 0.4);
   }
 }
 
@@ -7707,6 +7716,261 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
     display: none;
   }
 }
+
+/* =========================================================================
+   INSTITUTIONAL TERMINAL SECTIONS DESIGN SYSTEM (Prompt V2 Spec)
+   Theme: Obsidian & Emerald Restrained Institutional Terminal
+   ========================================================================= */
+
+.brand-vector-logo {
+  width: 34px;
+  height: 34px;
+  display: block;
+  object-fit: contain;
+  transition: transform 0.2s ease, filter 0.2s ease;
+  user-select: none;
+}
+.terminal-brand:hover .brand-vector-logo {
+  transform: scale(1.05);
+  filter: drop-shadow(0 0 8px rgba(0, 217, 154, 0.45));
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-vector-logo {
+    transition: none !important;
+  }
+}
+
+
+.top-btn-svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.section-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.section-kpi-card {
+  background: var(--zyrox-surface-raised);
+  border: 1px solid var(--zyrox-border);
+  border-radius: var(--border-radius);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--zyrox-text-secondary);
+  margin-bottom: 6px;
+}
+
+.section-kpi-val {
+  font-size: 20px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--zyrox-text);
+  line-height: 1.2;
+}
+
+.section-kpi-sub {
+  font-size: 11px;
+  color: var(--zyrox-text-muted);
+  margin-top: 4px;
+}
+
+.section-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.section-card {
+  background: var(--zyrox-surface);
+  border: 1px solid var(--zyrox-border);
+  border-radius: var(--border-radius);
+  padding: 18px;
+  box-sizing: border-box;
+}
+
+.section-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--zyrox-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--zyrox-border);
+  padding-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.section-filter-btn {
+  background: var(--zyrox-surface-raised);
+  border: 1px solid var(--zyrox-border);
+  color: var(--zyrox-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.section-filter-btn:hover,
+.section-filter-btn.active {
+  background: var(--zyrox-primary);
+  color: #060B09;
+  border-color: var(--zyrox-primary);
+}
+
+.section-table-wrap {
+  background: var(--zyrox-surface);
+  border: 1px solid var(--zyrox-border);
+  border-radius: var(--border-radius);
+  overflow-x: auto;
+}
+
+.section-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.section-table th {
+  background: var(--zyrox-surface-raised);
+  color: var(--zyrox-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--zyrox-border);
+  white-space: nowrap;
+}
+
+.section-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(32, 55, 44, 0.4);
+  color: var(--zyrox-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.section-table tr:hover td {
+  background: var(--zyrox-surface-raised);
+}
+
+.section-table td.num {
+  font-family: var(--font-mono);
+}
+
+.provider-pill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(0, 217, 154, 0.12);
+  color: var(--zyrox-primary);
+  border: 1px solid rgba(0, 217, 154, 0.25);
+}
+
+.provider-pill.fallback {
+  background: rgba(255, 199, 107, 0.12);
+  color: var(--zyrox-warning);
+  border-color: rgba(255, 199, 107, 0.25);
+}
+
+.provider-pill.synthetic {
+  background: rgba(114, 183, 255, 0.12);
+  color: var(--zyrox-info);
+  border-color: rgba(114, 183, 255, 0.25);
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--zyrox-text-secondary);
+}
+
+.settings-input,
+.settings-select {
+  background: var(--zyrox-surface-raised);
+  border: 1px solid var(--zyrox-border);
+  color: var(--zyrox-text);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.settings-input:focus,
+.settings-select:focus {
+  outline: none;
+  border-color: var(--zyrox-primary);
+}
+
+.settings-help {
+  font-size: 11px;
+  color: var(--zyrox-text-muted);
+}
+
+.btn-primary-institutional {
+  background: var(--zyrox-primary);
+  color: #060B09;
+  font-weight: 700;
+  padding: 7px 16px;
+  border-radius: var(--border-radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary-institutional:hover {
+  background: var(--zyrox-primary-hover);
+}
+
+@media (max-width: 900px) {
+  .section-grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 
 
