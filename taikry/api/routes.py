@@ -2271,3 +2271,116 @@ def get_system_info_endpoint():
 
 
 
+
+
+# -----------------------------------------------------------------------------
+# ANYROUTER INFERENCE & MULTI-AGENT ORCHESTRATION ENDPOINTS
+# -----------------------------------------------------------------------------
+
+class AnyRouterRoleConfigRequest(BaseModel):
+    role: str = Field(..., description="Role: orchestrator, reasoning, fast, critic, fallback")
+    model_id: str = Field(..., description="Target model ID from discovered catalog")
+    validate_first: Optional[bool] = Field(default=False, description="Run smoke test before assigning")
+
+class AnyRouterSmokeTestRequest(BaseModel):
+    model_id: Optional[str] = Field(default=None, description="Optional specific model ID to probe")
+
+class DeepAnalysisApiRequest(BaseModel):
+    symbol: str = Field(default="XAUUSD", description="Market symbol to analyze")
+    account_equity: Optional[float] = Field(default=100000.0, description="Simulated or live account equity for risk sizing")
+    force_fresh: Optional[bool] = Field(default=False, description="Force bypass of candle cache")
+
+
+@router.get("/api/v1/anyrouter/models")
+def get_anyrouter_models(force_refresh: bool = Query(default=False)):
+    """
+    Step C — Model Discovery:
+    Retrieves /api/v1/models from AnyRouter, parses the response,
+    and returns a sanitized catalog without exposing credentials or internal tokens.
+    """
+    from taikry.ai.anyrouter_client import anyrouter_client
+    catalog = anyrouter_client.get_models(force_refresh=force_refresh)
+    return catalog.model_dump()
+
+
+@router.post("/api/v1/anyrouter/models/refresh")
+def refresh_anyrouter_models():
+    """Forces catalog refresh directly from AnyRouter gateway."""
+    from taikry.ai.anyrouter_client import anyrouter_client
+    catalog = anyrouter_client.get_models(force_refresh=True)
+    return catalog.model_dump()
+
+
+@router.post("/api/v1/anyrouter/smoke-test")
+def run_anyrouter_smoke_test(payload: AnyRouterSmokeTestRequest = AnyRouterSmokeTestRequest()):
+    """
+    Step D — Smoke Test:
+    Executes a low-token test request to verify API access, model responsiveness,
+    and latency. Redacts all sensitive data.
+    """
+    from taikry.ai.anyrouter_client import anyrouter_client
+    result = anyrouter_client.smoke_test(model_id=payload.model_id)
+    return result.model_dump()
+
+
+@router.get("/api/v1/anyrouter/roles")
+def get_anyrouter_roles():
+    """
+    Step E — Model Router:
+    Returns the current active model assignments for multi-agent roles:
+    ORCHESTRATOR_MODEL, REASONING_MODEL, FAST_MODEL, CRITIC_MODEL, FALLBACK_MODEL.
+    """
+    from taikry.ai.anyrouter_client import anyrouter_client
+    return anyrouter_client.get_role_registry()
+
+
+@router.post("/api/v1/anyrouter/roles")
+def configure_anyrouter_role(payload: AnyRouterRoleConfigRequest):
+    """
+    Step E — Model Router:
+    Assigns a discovered and verified model ID to an agent role.
+    """
+    from taikry.ai.anyrouter_client import anyrouter_client
+    success, message = anyrouter_client.configure_role(
+        role=payload.role,
+        model_id=payload.model_id,
+        validate_first=payload.validate_first
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {
+        "success": True,
+        "message": message,
+        "role_registry": anyrouter_client.get_role_registry()
+    }
+
+
+@router.get("/api/v1/anyrouter/budget")
+def get_anyrouter_budget():
+    """
+    Step H — Budget & Security Controls:
+    Returns current token spend, request counts, and budget limits.
+    """
+    from taikry.ai.anyrouter_client import budget_manager
+    return budget_manager.get_summary()
+
+
+@router.post("/api/v1/agents/deep-analysis")
+def execute_deep_multiagent_analysis(payload: DeepAnalysisApiRequest):
+    """
+    Step G — Deep-Analysis Workflow:
+    Executes the 7-Agent Institutional Deep Analysis workflow on real market data.
+    Enforces pre-flight data freshness gating, concurrent specialist evaluation,
+    deterministic 1:2.0+ R:R & 0.5% max risk gating, independent critic audit,
+    and returns a complete observable telemetry trace with bilingual synthesis.
+    """
+    from taikry.agents.orchestration_layer import multi_agent_orchestrator
+    try:
+        trace = multi_agent_orchestrator.run_deep_analysis(
+            symbol=payload.symbol,
+            account_equity=payload.account_equity or 100000.0,
+            force_fresh=payload.force_fresh or False
+        )
+        return trace.model_dump()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deep analysis failed: {str(e)}")

@@ -3299,7 +3299,10 @@ function loadSettingsData() {
   setSelect("setting-risk-floor", rr);
   setSelect("setting-risk-cap", cap);
   setSelect("setting-language", lang);
-  setSelect("setting-density", den);
+  setSelect("setting-density", den);
+  if (typeof initAnyRouterUI === "function") {
+    initAnyRouterUI();
+  }
 }
 
 function saveSettingsData() {
@@ -4556,3 +4559,297 @@ async function runVipExpirationAudit() {
   }
 }
 
+
+
+/* =============================================================================
+ * ANYROUTER INFERENCE GATEWAY & MULTI-AGENT CONTROL JAVASCRIPT
+ * ============================================================================= */
+
+async function loadAnyRouterCatalog(forceRefresh = false) {
+  try {
+    const badge = document.getElementById("anyrouter-status-badge");
+    const tbody = document.getElementById("anyrouter-models-tbody");
+    const refreshLabel = document.getElementById("anyrouter-last-refresh");
+    if (badge) badge.textContent = "Querying...";
+
+    const res = await fetch(`${API_BASE}/api/v1/anyrouter/models?force_refresh=${forceRefresh}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (badge) {
+      if (data.status === "CONNECTED") {
+        badge.textContent = `CONNECTED (${data.total_models} Models)`;
+        badge.className = "badge badge-success";
+      } else if (data.status === "UNCONFIGURED") {
+        badge.textContent = "UNCONFIGURED (Key Missing)";
+        badge.className = "badge badge-warning";
+      } else {
+        badge.textContent = data.status || "ERROR";
+        badge.className = "badge badge-danger";
+      }
+    }
+
+    if (refreshLabel && data.last_catalog_refresh_time) {
+      refreshLabel.textContent = `Refreshed: ${new Date(data.last_catalog_refresh_time).toLocaleTimeString()}`;
+    }
+
+    if (tbody) {
+      if (!data.models || data.models.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-15">${data.error_message || "No models returned from catalog."}</td></tr>`;
+      } else {
+        tbody.innerHTML = data.models.map(m => `
+          <tr>
+            <td><code class="text-gold font-mono">${escapeHtml(m.id)}</code></td>
+            <td>${escapeHtml(m.provider)}</td>
+            <td>${m.context_window ? m.context_window.toLocaleString() : "Auto"}</td>
+            <td>${(m.capabilities || []).map(c => `<span class="badge badge-xs mr-5">${escapeHtml(c)}</span>`).join("")}</td>
+            <td><span class="badge badge-xs ${m.status === 'AVAILABLE' ? 'badge-success' : 'badge-muted'}">${escapeHtml(m.status)}</span></td>
+            <td>
+              <button class="btn btn-outline btn-xs" onclick="runAnyRouterSmokeTest('${escapeHtml(m.id)}')">⚡ Probe</button>
+            </td>
+          </tr>
+        `).join("");
+      }
+    }
+
+    loadAnyRouterBudget();
+  } catch (err) {
+    console.error("Failed to load AnyRouter catalog:", err);
+    const badge = document.getElementById("anyrouter-status-badge");
+    if (badge) {
+      badge.textContent = "OFFLINE";
+      badge.className = "badge badge-danger";
+    }
+  }
+}
+
+async function refreshAnyRouterCatalog() {
+  await loadAnyRouterCatalog(true);
+}
+
+async function runAnyRouterSmokeTest(modelId = null) {
+  const resultBox = document.getElementById("anyrouter-smoke-result-box");
+  const details = document.getElementById("smoke-details");
+  const timeLabel = document.getElementById("smoke-time");
+  const title = document.getElementById("smoke-status-title");
+
+  if (resultBox) resultBox.style.display = "block";
+  if (details) details.innerHTML = `<span class="text-gold">Running low-token smoke test probe...</span>`;
+
+  try {
+    const payload = modelId ? { model_id: modelId } : {};
+    const res = await fetch(`${API_BASE}/api/v1/anyrouter/smoke-test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (timeLabel) timeLabel.textContent = new Date().toLocaleTimeString();
+
+    if (data.status === "SUCCESS") {
+      if (title) title.innerHTML = `<span class="text-green">✓ SMOKE TEST SUCCESS (HTTP ${data.http_status})</span>`;
+      if (details) {
+        details.innerHTML = `
+          <div><strong>Model Tested:</strong> <code>${escapeHtml(data.model_id)}</code></div>
+          <div><strong>Latency:</strong> ${data.latency_ms} ms | <strong>Prompt Tokens:</strong> ${data.usage ? data.usage.prompt_tokens : 0} | <strong>Completion Tokens:</strong> ${data.usage ? data.usage.completion_tokens : 0}</div>
+          <div><strong>Response Preview:</strong> <code>${escapeHtml(data.response_preview || "OK")}</code></div>
+        `;
+      }
+    } else if (data.status === "SKIPPED") {
+      if (title) title.innerHTML = `<span class="text-gold">ℹ️ SMOKE TEST SKIPPED</span>`;
+      if (details) {
+        details.innerHTML = `<div>${escapeHtml(data.error_message || "ANYROUTER_API_KEY is not configured in .env.")}</div>`;
+      }
+    } else {
+      if (title) title.innerHTML = `<span class="text-danger">✕ SMOKE TEST FAILED</span>`;
+      if (details) {
+        details.innerHTML = `
+          <div><strong>Model:</strong> <code>${escapeHtml(data.model_id)}</code></div>
+          <div><strong>Error:</strong> ${escapeHtml(data.error_message || "Unknown error")}</div>
+        `;
+      }
+    }
+
+    loadAnyRouterBudget();
+  } catch (err) {
+    if (title) title.innerHTML = `<span class="text-danger">✕ REQUEST FAILED</span>`;
+    if (details) details.textContent = err.message;
+  }
+}
+
+async function loadAnyRouterRoles() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/anyrouter/roles`);
+    if (!res.ok) return;
+    const roles = await res.json();
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val) el.value = val;
+    };
+    setVal("role-orchestrator", roles.orchestrator);
+    setVal("role-reasoning", roles.reasoning);
+    setVal("role-fast", roles.fast);
+    setVal("role-critic", roles.critic);
+    setVal("role-fallback", roles.fallback);
+  } catch (err) {
+    console.warn("Failed to load AnyRouter roles:", err);
+  }
+}
+
+async function saveAnyRouterRoles() {
+  const roles = [
+    { role: "orchestrator", id: "role-orchestrator" },
+    { role: "reasoning", id: "role-reasoning" },
+    { role: "fast", id: "role-fast" },
+    { role: "critic", id: "role-critic" },
+    { role: "fallback", id: "role-fallback" }
+  ];
+
+  let successCount = 0;
+  for (const item of roles) {
+    const el = document.getElementById(item.id);
+    const modelId = el ? el.value.trim() : "";
+    if (!modelId) continue;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/anyrouter/roles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: item.role, model_id: modelId })
+      });
+      if (res.ok) successCount++;
+    } catch (e) {
+      console.error(`Failed to assign role ${item.role}:`, e);
+    }
+  }
+  alert(`✓ Updated ${successCount} multi-agent role assignments.`);
+}
+
+async function loadAnyRouterBudget() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/anyrouter/budget`);
+    if (!res.ok) return;
+    const b = await res.json();
+    const badge = document.getElementById("anyrouter-budget-badge");
+    if (badge) {
+      badge.textContent = `Spent: $${b.estimated_spend_usd.toFixed(3)} / Limit: $${b.spend_limit_usd.toFixed(2)}`;
+      badge.className = b.budget_exceeded ? "badge badge-danger" : "badge badge-outline";
+    }
+  } catch (err) {
+    console.debug("Budget fetch failed:", err);
+  }
+}
+
+async function triggerDeepMultiAgentAnalysis() {
+  const symEl = document.getElementById("deep-analysis-symbol");
+  const symbol = symEl ? symEl.value : "XAUUSD";
+
+  // Visual cues on agent chips
+  const agentBadges = [1, 2, 3, 4, 5, 6, 7];
+  agentBadges.forEach(num => {
+    const b = document.getElementById(`badge-agent-${num}`);
+    if (b) {
+      b.textContent = "RUNNING...";
+      b.className = "agent-chip-badge text-gold";
+    }
+  });
+
+  const traceBox = document.getElementById("deep-analysis-trace-box");
+  if (traceBox) traceBox.style.display = "block";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/agents/deep-analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: symbol, account_equity: 100000.0 })
+    });
+    const trace = await res.json();
+
+    // Update Agent Badges
+    const updateChip = (num, text, isOk = true) => {
+      const b = document.getElementById(`badge-agent-${num}`);
+      if (b) {
+        b.textContent = text;
+        b.className = isOk ? "agent-chip-badge text-green" : "agent-chip-badge text-gold";
+      }
+    };
+
+    updateChip(1, `${trace.execution_time_ms} ms`);
+    updateChip(2, `${trace.market_structure.trend} (${trace.market_structure.regime})`);
+    updateChip(3, `${trace.multi_timeframe.dominant_bias} (${trace.multi_timeframe.confluence_score}%)`);
+    updateChip(4, trace.macro_news.is_blackout ? "BLACKOUT" : "CLEAR");
+    updateChip(5, trace.risk_guardian.approved ? "APPROVED" : "VETOED", trace.risk_guardian.approved);
+    updateChip(6, `Score: ${trace.critic.critic_score}/100`);
+    updateChip(7, trace.final_synthesis.action);
+
+    // Populate Trace Inspector
+    document.getElementById("trace-symbol").textContent = trace.symbol;
+    const actionBadge = document.getElementById("trace-action-badge");
+    if (actionBadge) {
+      actionBadge.textContent = trace.final_synthesis.action;
+      actionBadge.className = `badge ${
+        trace.final_synthesis.action === "BUY" ? "badge-success" :
+        trace.final_synthesis.action === "SELL" ? "badge-danger" :
+        trace.final_synthesis.action === "WAIT" ? "badge-warning" : "badge-muted"
+      }`;
+    }
+    document.getElementById("trace-status-label").textContent = trace.overall_status;
+    document.getElementById("trace-request-id").textContent = trace.request_id.slice(0, 8) + "...";
+    document.getElementById("trace-latency").textContent = trace.execution_time_ms;
+
+    // Risk Geometry Grid
+    const r = trace.risk_guardian;
+    const riskGrid = document.getElementById("trace-risk-grid");
+    if (riskGrid) {
+      riskGrid.innerHTML = `
+        <div class="trace-risk-item">
+          <div class="trace-risk-item-label">Verified Entry</div>
+          <div class="trace-risk-item-val">${r.entry_price}</div>
+        </div>
+        <div class="trace-risk-item">
+          <div class="trace-risk-item-label">Stop Loss</div>
+          <div class="trace-risk-item-val">${r.stop_loss}</div>
+        </div>
+        <div class="trace-risk-item">
+          <div class="trace-risk-item-label">Take Profit</div>
+          <div class="trace-risk-item-val">${r.take_profit}</div>
+        </div>
+        <div class="trace-risk-item">
+          <div class="trace-risk-item-label">Risk:Reward Ratio</div>
+          <div class="trace-risk-item-val text-gold">${r.risk_reward_ratio}:1 (Min 2.0)</div>
+        </div>
+        <div class="trace-risk-item">
+          <div class="trace-risk-item-label">Max Risk Cap</div>
+          <div class="trace-risk-item-val">${r.max_risk_percent}% ($${r.risk_amount_usd})</div>
+        </div>
+        <div class="trace-risk-item">
+          <div class="trace-risk-item-label">Calculated Lot Size</div>
+          <div class="trace-risk-item-val">${r.recommended_lot_size} Lots</div>
+        </div>
+      `;
+    }
+
+    // Critic Audit
+    const criticDiv = document.getElementById("trace-critic-content");
+    if (criticDiv) {
+      criticDiv.innerHTML = `
+        <div><strong>Counter-Trend Risk:</strong> ${trace.critic.counter_trend_risk} | <strong>Trapped Traders Risk:</strong> ${trace.critic.trapped_traders_risk}</div>
+        <div><strong>Objections:</strong> ${trace.critic.objections.length > 0 ? trace.critic.objections.join("; ") : "None. Clean setup geometry."}</div>
+        <div><strong>Opposing Evidence:</strong> ${trace.critic.opposing_evidence.join("; ") || "None."}</div>
+      `;
+    }
+
+    // Bilingual Synthesis
+    document.getElementById("trace-thesis-en").textContent = trace.final_synthesis.thesis_en;
+    document.getElementById("trace-thesis-kh").textContent = trace.final_synthesis.thesis_kh;
+
+  } catch (err) {
+    alert("Deep Analysis failed: " + err.message);
+  }
+}
+
+function initAnyRouterUI() {
+  loadAnyRouterCatalog(false);
+  loadAnyRouterRoles();
+  loadAnyRouterBudget();
+}

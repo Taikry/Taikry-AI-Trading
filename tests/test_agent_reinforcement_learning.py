@@ -80,6 +80,11 @@ def insert_mock_resolved_trade(sig_id: str, direction: str, outcome: str, agent_
 
 def test_empirical_evaluation_from_resolved_trades():
     """Verifies that individual agent predictions are correctly assessed against trade outcomes."""
+    baseline_stats = agent_self_trainer.evaluate_empirical_contributions("XAUUSD")
+    base_smc_win = baseline_stats["ict_smc_analyst"]["win_count"]
+    base_smc_loss = baseline_stats["ict_smc_analyst"]["loss_count"]
+    base_macro_loss = baseline_stats["macro_analyst"]["loss_count"]
+
     # Scenario:
     # Trade 1: BUY WIN. SMC was BULLISH (correct), Macro was BEARISH (incorrect).
     # Trade 2: BUY WIN. SMC was BULLISH (correct), Tech was BULLISH (correct).
@@ -102,11 +107,11 @@ def test_empirical_evaluation_from_resolved_trades():
     stats = agent_self_trainer.evaluate_empirical_contributions("XAUUSD")
 
     # SMC predicted BUY on both winning BUY trades
-    assert stats["ict_smc_analyst"]["win_count"] >= 2
-    assert stats["ict_smc_analyst"]["loss_count"] == 0
+    assert stats["ict_smc_analyst"]["win_count"] == base_smc_win + 2
+    assert stats["ict_smc_analyst"]["loss_count"] == base_smc_loss
 
     # Macro was wrong on Trade 1 (BEARISH on a WINNING BUY)
-    assert stats["macro_analyst"]["loss_count"] >= 1
+    assert stats["macro_analyst"]["loss_count"] == base_macro_loss + 1
 
 
 def test_train_epoch_weight_recalibration_and_constraints():

@@ -39,6 +39,21 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 MANUS_API_KEY = os.getenv("MANUS_API_KEY", "")
 MANUS_API_URL = os.getenv("MANUS_API_URL", "https://api.manus.ai/v1")
 
+# AnyRouter Inference Integration (OpenAI-compatible)
+ANYROUTER_API_KEY = os.getenv("ANYROUTER_API_KEY", "")
+ANYROUTER_BASE_URL = os.getenv("ANYROUTER_BASE_URL", "https://anyrouter.dev/api/v1").rstrip("/")
+ANYROUTER_TIMEOUT_SECONDS = float(os.getenv("ANYROUTER_TIMEOUT_SECONDS", "30.0"))
+ANYROUTER_MAX_RETRIES = int(os.getenv("ANYROUTER_MAX_RETRIES", "2"))
+ANYROUTER_SPEND_LIMIT_USD = float(os.getenv("ANYROUTER_SPEND_LIMIT_USD", "10.0"))
+ANYROUTER_CONCURRENCY_LIMIT = int(os.getenv("ANYROUTER_CONCURRENCY_LIMIT", "3"))
+
+# Multi-Agent Role Model Registry (Configurable AnyRouter or native model IDs)
+ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "")
+REASONING_MODEL = os.getenv("REASONING_MODEL", "")
+FAST_MODEL = os.getenv("FAST_MODEL", "")
+CRITIC_MODEL = os.getenv("CRITIC_MODEL", "")
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "")
+
 def get_configured_llms() -> List[str]:
     """Returns a list of LLM providers that currently have active API keys."""
     active: List[str] = []
@@ -56,6 +71,8 @@ def get_configured_llms() -> List[str]:
         active.append("deepseek")
     if MANUS_API_KEY:
         active.append("manus")
+    if ANYROUTER_API_KEY:
+        active.append("anyrouter")
     return active
 
 # Telegram Configuration

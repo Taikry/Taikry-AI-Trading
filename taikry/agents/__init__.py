@@ -10,6 +10,23 @@ from taikry.agents.risk_validator import risk_validator_agent, RiskValidatorAgen
 from taikry.agents.consensus_engine import ai_consensus_engine, AIConsensusEngine
 from taikry.agents.debate_engine import agent_debate_engine, AgentDebateEngine
 from taikry.agents.registry import agent_registry, AgentRegistry, AgentAdapter, AgentMetadata
+from taikry.agents.orchestration_layer import (
+    multi_agent_orchestrator,
+    Orchestrator,
+    MarketStructureAgent,
+    MultiTimeframeAgent,
+    MacroNewsAgent,
+    RiskGuardian,
+    IndependentCritic,
+    FinalSynthesisAgent,
+    WorkflowTrace,
+    MarketStructureOutput,
+    MultiTimeframeOutput,
+    MacroNewsOutput,
+    RiskGuardianOutput,
+    CriticOutput,
+    FinalSynthesisOutput
+)
 
 __all__ = [
     "technical_analyst_agent",
@@ -27,5 +44,20 @@ __all__ = [
     "agent_registry",
     "AgentRegistry",
     "AgentAdapter",
-    "AgentMetadata"
+    "AgentMetadata",
+    "multi_agent_orchestrator",
+    "Orchestrator",
+    "MarketStructureAgent",
+    "MultiTimeframeAgent",
+    "MacroNewsAgent",
+    "RiskGuardian",
+    "IndependentCritic",
+    "FinalSynthesisAgent",
+    "WorkflowTrace",
+    "MarketStructureOutput",
+    "MultiTimeframeOutput",
+    "MacroNewsOutput",
+    "RiskGuardianOutput",
+    "CriticOutput",
+    "FinalSynthesisOutput"
 ]

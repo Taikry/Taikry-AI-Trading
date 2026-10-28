@@ -7977,3 +7977,96 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
 
 
 
+
+
+/* -------------------------------------------------------------------------
+ * ANYROUTER & MULTI-AGENT CONTROL CENTER UI STYLES
+ * ------------------------------------------------------------------------- */
+.smoke-result-box {
+  background: var(--zyrox-surface, #0B1511);
+  border: 1px solid var(--zyrox-border, #20372C);
+  border-radius: 6px;
+  padding: 12px;
+  color: var(--zyrox-text, #EAFFF5);
+}
+
+.agent-status-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.agent-chip {
+  background: var(--zyrox-surface, #0B1511);
+  border: 1px solid var(--zyrox-border, #20372C);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-chip-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--zyrox-muted, #87A99A);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.agent-chip-badge {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--zyrox-emerald, #00D99A);
+  font-weight: 600;
+}
+
+.deep-trace-inspector {
+  background: var(--zyrox-surface, #0B1511);
+  border: 1px solid var(--zyrox-emerald, #00D99A);
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 15px;
+  color: var(--zyrox-text, #EAFFF5);
+}
+
+.trace-section {
+  padding: 8px 0;
+}
+
+.trace-grid-risk {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.trace-risk-item {
+  background: rgba(0, 217, 154, 0.05);
+  border: 1px solid var(--zyrox-border, #20372C);
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.trace-risk-item-label {
+  font-size: 10px;
+  color: var(--zyrox-muted, #87A99A);
+  text-transform: uppercase;
+}
+
+.trace-risk-item-val {
+  font-weight: 700;
+  color: var(--zyrox-text, #EAFFF5);
+}
+
+.thesis-box {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--zyrox-border, #20372C);
+  border-left: 3px solid var(--zyrox-emerald, #00D99A);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--zyrox-text, #EAFFF5);
+}

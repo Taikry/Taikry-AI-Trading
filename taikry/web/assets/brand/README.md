@@ -100,3 +100,4 @@ To rebuild all raster PNGs, MP4s, WebM, and GIFs:
 python scripts/generate_brand_assets.py
 ```
 *Requirements: Python `pillow` and system `ffmpeg`.*
+

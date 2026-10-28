@@ -1882,9 +1882,176 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
+        <!-- ANYROUTER INFERENCE GATEWAY & MODEL DISCOVERY -->
+        <div class="section-card mt-20" id="card-anyrouter-discovery">
+          <div class="section-card-title flex-between">
+            <span>🌐 AnyRouter Gateway & Dynamic Model Discovery</span>
+            <div class="flex-row gap-10 align-center">
+              <span class="badge" id="anyrouter-status-badge">Checking...</span>
+              <span class="badge badge-outline" id="anyrouter-budget-badge">Budget: $10.00</span>
+            </div>
+          </div>
+          <div class="p-15">
+            <div class="flex-row gap-10 mb-15 flex-wrap align-center">
+              <button class="btn btn-gold btn-sm" onclick="refreshAnyRouterCatalog()">🔄 Refresh Model Catalog</button>
+              <button class="btn btn-outline btn-sm" onclick="runAnyRouterSmokeTest()">⚡ Run Low-Token Smoke Test</button>
+              <span class="text-muted text-xs align-self-center" id="anyrouter-last-refresh">Catalog: Awaiting refresh</span>
+            </div>
+
+            <!-- Smoke Test Telemetry Card -->
+            <div id="anyrouter-smoke-result-box" class="smoke-result-box mb-15" style="display: none;">
+              <div class="flex-between mb-5">
+                <span class="text-bold text-xs" id="smoke-status-title">SMOKE TEST TELEMETRY</span>
+                <span class="text-xs text-muted" id="smoke-time"></span>
+              </div>
+              <div class="text-xs font-mono" id="smoke-details"></div>
+            </div>
+
+            <!-- Discovered Models Table -->
+            <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+              <table class="market-table" id="anyrouter-models-table">
+                <thead>
+                  <tr>
+                    <th>Model ID</th>
+                    <th>Provider</th>
+                    <th>Context</th>
+                    <th>Capabilities</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="anyrouter-models-tbody">
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">Click "Refresh Model Catalog" to query live AnyRouter models.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- MULTI-AGENT ROLE ASSIGNMENT MATRIX -->
+        <div class="section-card mt-20" id="card-anyrouter-roles">
+          <div class="section-card-title flex-between">
+            <span>🤖 Multi-Agent Model Router & Role Registry</span>
+            <button class="btn btn-gold btn-sm" onclick="saveAnyRouterRoles()">💾 Save Role Assignments</button>
+          </div>
+          <div class="p-15">
+            <div class="settings-form-grid">
+              <div class="settings-field">
+                <label class="settings-label" for="role-orchestrator">ORCHESTRATOR_MODEL</label>
+                <input type="text" id="role-orchestrator" class="settings-input" placeholder="e.g. anthropic/claude-3.5-sonnet">
+                <span class="settings-help">Coordinates workflow, data freshness checks, and step sequencing.</span>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label" for="role-reasoning">REASONING_MODEL</label>
+                <input type="text" id="role-reasoning" class="settings-input" placeholder="e.g. deepseek/deepseek-r1">
+                <span class="settings-help">Powers deep ICT/SMC structure reasoning and liquidity analysis.</span>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label" for="role-fast">FAST_MODEL</label>
+                <input type="text" id="role-fast" class="settings-input" placeholder="e.g. deepseek/deepseek-chat">
+                <span class="settings-help">Low-latency model for rapid classification and fallback tasks.</span>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label" for="role-critic">CRITIC_MODEL</label>
+                <input type="text" id="role-critic" class="settings-input" placeholder="e.g. anthropic/claude-3.5-sonnet">
+                <span class="settings-help">Independent devil's advocate challenging trade hypotheses and uncovering traps.</span>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label" for="role-fallback">FALLBACK_MODEL</label>
+                <input type="text" id="role-fallback" class="settings-input" placeholder="e.g. deepseek/deepseek-chat">
+                <span class="settings-help">Redundant fallback gateway when primary providers encounter limits.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AGENT CONTROL CENTER & DEEP MULTI-AGENT ANALYSIS -->
+        <div class="section-card mt-20" id="card-agent-control-center">
+          <div class="section-card-title flex-between">
+            <span>🛡 Agent Control Center & Institutional Deep Analysis</span>
+            <div class="flex-row gap-10 align-center">
+              <select id="deep-analysis-symbol" class="settings-select" style="width: auto; padding: 4px 8px;">
+                <option value="XAUUSD">XAUUSD (Gold)</option>
+                <option value="BTCUSDT">BTCUSDT (Bitcoin)</option>
+                <option value="EURUSD">EURUSD</option>
+                <option value="GBPUSD">GBPUSD</option>
+              </select>
+              <button class="btn btn-gold btn-sm" onclick="triggerDeepMultiAgentAnalysis()">⚡ Run Deep Analysis</button>
+            </div>
+          </div>
+          <div class="p-15">
+            <!-- 7 Agents Status Grid -->
+            <div class="agent-status-board mb-15">
+              <div class="agent-chip" id="chip-agent-1">
+                <div class="agent-chip-name">1. Orchestrator</div>
+                <div class="agent-chip-badge" id="badge-agent-1">STANDBY</div>
+              </div>
+              <div class="agent-chip" id="chip-agent-2">
+                <div class="agent-chip-name">2. Market Structure</div>
+                <div class="agent-chip-badge" id="badge-agent-2">STANDBY</div>
+              </div>
+              <div class="agent-chip" id="chip-agent-3">
+                <div class="agent-chip-name">3. Multi-Timeframe</div>
+                <div class="agent-chip-badge" id="badge-agent-3">STANDBY</div>
+              </div>
+              <div class="agent-chip" id="chip-agent-4">
+                <div class="agent-chip-name">4. Macro/News Feed</div>
+                <div class="agent-chip-badge" id="badge-agent-4">STANDBY</div>
+              </div>
+              <div class="agent-chip" id="chip-agent-5">
+                <div class="agent-chip-name">5. Risk Guardian</div>
+                <div class="agent-chip-badge text-gold" id="badge-agent-5">R:R ≥ 2.0 / 0.5% CAP</div>
+              </div>
+              <div class="agent-chip" id="chip-agent-6">
+                <div class="agent-chip-name">6. Independent Critic</div>
+                <div class="agent-chip-badge" id="badge-agent-6">STANDBY</div>
+              </div>
+              <div class="agent-chip" id="chip-agent-7">
+                <div class="agent-chip-name">7. Final Synthesis</div>
+                <div class="agent-chip-badge" id="badge-agent-7">EN & KH</div>
+              </div>
+            </div>
+
+            <!-- Deep Analysis Trace Inspector Box -->
+            <div id="deep-analysis-trace-box" class="deep-trace-inspector" style="display: none;">
+              <div class="flex-between border-bottom pb-10 mb-10">
+                <div>
+                  <span class="text-bold text-lg" id="trace-symbol">XAUUSD</span>
+                  <span class="badge ml-10" id="trace-action-badge">WAIT</span>
+                  <span class="text-muted text-xs ml-10" id="trace-status-label">COMPLETED</span>
+                </div>
+                <div class="text-xs text-muted">
+                  Request ID: <code id="trace-request-id">-</code> | Latency: <span id="trace-latency">-</span> ms
+                </div>
+              </div>
+
+              <!-- Risk Geometry Table -->
+              <div class="trace-section mb-10">
+                <div class="text-bold text-xs text-gold mb-5">100% DETERMINISTIC RISK GUARDIAN ARITHMETIC</div>
+                <div class="trace-grid-risk" id="trace-risk-grid"></div>
+              </div>
+
+              <!-- Critic Audit -->
+              <div class="trace-section mb-10">
+                <div class="text-bold text-xs text-gold mb-5">INDEPENDENT CRITIC DEVIL'S ADVOCATE AUDIT</div>
+                <div class="text-xs" id="trace-critic-content"></div>
+              </div>
+
+              <!-- Bilingual Synthesis Output -->
+              <div class="trace-section">
+                <div class="text-bold text-xs text-gold mb-5">BILINGUAL INSTITUTIONAL SYNTHESIS (ENGLISH & KHMER)</div>
+                <div class="thesis-box mb-10 p-10" id="trace-thesis-en"></div>
+                <div class="thesis-box p-10" id="trace-thesis-kh"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- SECTION 13: ADMIN CONSOLE -->
     <div id="tab-pane-admin" class="terminal-full-overlay tab-pane-hidden">
       <div class="overlay-card">
