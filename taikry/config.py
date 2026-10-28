@@ -47,6 +47,14 @@ ANYROUTER_MAX_RETRIES = int(os.getenv("ANYROUTER_MAX_RETRIES", "2"))
 ANYROUTER_SPEND_LIMIT_USD = float(os.getenv("ANYROUTER_SPEND_LIMIT_USD", "10.0"))
 ANYROUTER_CONCURRENCY_LIMIT = int(os.getenv("ANYROUTER_CONCURRENCY_LIMIT", "3"))
 
+
+# FreeLLMAPI Integration (OpenAI-compatible unified free-tier proxy from GitHub: https://github.com/tashfeenahmed/freellmapi)
+FREELLMAPI_ENABLED = os.getenv("FREELLMAPI_ENABLED", "true").lower() in ("true", "1", "yes")
+FREELLMAPI_BASE_URL = os.getenv("FREELLMAPI_BASE_URL", "http://localhost:4000/v1").rstrip("/")
+FREELLMAPI_API_KEY = os.getenv("FREELLMAPI_API_KEY", "sk-freellmapi-default")
+FREELLMAPI_TIMEOUT_SECONDS = float(os.getenv("FREELLMAPI_TIMEOUT_SECONDS", "30.0"))
+FREELLMAPI_DEFAULT_MODEL = os.getenv("FREELLMAPI_DEFAULT_MODEL", "deepseek-r1")
+
 # Multi-Agent Role Model Registry (Configurable AnyRouter or native model IDs)
 ORCHESTRATOR_MODEL = os.getenv("ORCHESTRATOR_MODEL", "")
 REASONING_MODEL = os.getenv("REASONING_MODEL", "")
@@ -73,6 +81,8 @@ def get_configured_llms() -> List[str]:
         active.append("manus")
     if ANYROUTER_API_KEY:
         active.append("anyrouter")
+    if FREELLMAPI_ENABLED and FREELLMAPI_BASE_URL:
+        active.append("freellmapi")
     return active
 
 # Telegram Configuration

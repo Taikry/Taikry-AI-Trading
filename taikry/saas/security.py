@@ -114,3 +114,4 @@ class LoginRateLimiter:
 
 # Global rate limiter instance
 auth_rate_limiter = LoginRateLimiter(max_attempts=5, window_seconds=900)
+

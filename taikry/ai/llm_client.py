@@ -17,6 +17,9 @@ from typing import Dict, Any, Optional, List, Tuple
 import requests
 
 from taikry.config import (
+    FREELLMAPI_ENABLED,
+    FREELLMAPI_BASE_URL,
+    FREELLMAPI_DEFAULT_MODEL,
     CLAUDE_API_KEY,
     OPENAI_API_KEY,
     GEMINI_API_KEY,
@@ -574,6 +577,59 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
     return None
 
 
+
+def call_freellmapi(
+    symbol_info: Dict[str, Any],
+    timeframe: str,
+    metrics: Dict[str, Any],
+    model: Optional[str] = None,
+    timeout: int = 8
+) -> Optional[Dict[str, Any]]:
+    """
+    Calls FreeLLMAPI: open-source free-tier proxy from GitHub (https://github.com/tashfeenahmed/freellmapi).
+    Aggregates free tiers of DeepSeek R1, Llama 3.3 70B, Gemini 2.0 Flash, Qwen 2.5.
+    """
+    from taikry.ai.freellmapi_client import freellmapi_client
+    target_model = model or freellmapi_client.default_model or "deepseek-r1"
+
+    user_prompt = f"""Asset: {symbol_info.get('name', 'Asset')} ({symbol_info.get('symbol', 'UNKNOWN')})
+Category: {symbol_info.get('category', 'Trading')}
+Timeframe: {timeframe}
+Market Indicators, Macro News & Metrics:
+{json.dumps(metrics, indent=2)}
+
+Perform institutional multi-agent causal analysis first (English & Natural Khmer), incorporating global economic catalysts (FOMC, PPI, CPI, NFP), then output trade execution strictly in JSON.
+"""
+    messages = [
+        {"role": "system", "content": LLM_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    try:
+        t0 = time.time()
+        res = freellmapi_client.chat_completion(
+            messages=messages,
+            model=target_model,
+            temperature=0.2,
+            response_format={"type": "json_object"}
+        )
+        if res.get("success"):
+            raw_text = res.get("content", "")
+            parsed = _extract_json_from_response(raw_text)
+            if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+                lat = int((time.time() - t0) * 1000)
+                parsed["_llm_meta"] = {
+                    "provider": "freellmapi",
+                    "model": res.get("model", target_model),
+                    "latency_ms": lat,
+                    "status": "SUCCESS"
+                }
+                return parsed
+    except Exception as e:
+        logger.warning(f"FreeLLMAPI call notice: {e}")
+
+    return None
+
 class LLMOrchestrator:
     """
     Lead Multi-LLM Orchestrator that unifies Frontier AI models:
@@ -594,7 +650,7 @@ class LLMOrchestrator:
         }
         self.circuit_breakers: Dict[str, Dict[str, Any]] = {
             p: {"fails": 0, "last_fail": 0.0}
-            for p in ["groq", "gemini", "deepseek", "openrouter", "claude", "openai", "manus"]
+            for p in ["groq", "gemini", "deepseek", "openrouter", "claude", "openai", "manus", "freellmapi"]
         }
 
     def get_routing_policy(self) -> Dict[str, Any]:
@@ -688,6 +744,14 @@ class LLMOrchestrator:
                 "tier": "PRO",
                 "frontier_models": ["manus-agent-pro"]
             },
+            "freellmapi": {
+                "name": "FreeLLMAPI Unified Free Aggregator",
+                "configured": bool(FREELLMAPI_ENABLED and FREELLMAPI_BASE_URL),
+                "status": "ONLINE" if self.is_provider_available("freellmapi") else "CIRCUIT_BROKEN",
+                "tier": "100% FREE",
+                "frontier_models": ["deepseek-r1", "llama-3.3-70b-versatile", "gemini-2.0-flash", "qwen-2.5-72b"],
+                "github_url": "https://github.com/tashfeenahmed/freellmapi"
+            },
             "active_mode": AI_PROVIDER,
             "routing_policy": self.get_routing_policy()
         }
@@ -716,7 +780,8 @@ class LLMOrchestrator:
             "openrouter": call_deepseek,
             "claude": call_claude,
             "openai": call_openai,
-            "manus": call_manus
+            "manus": call_manus,
+            "freellmapi": call_freellmapi
         }
 
         provenance_log: List[Dict[str, Any]] = []
@@ -1119,12 +1184,34 @@ Perform full institutional trade analysis and answer the trader's query:
 Respond strictly in JSON matching the schema.
 """
 
-    # Direct Groq call if auto or groq
     llm_res = None
     used_provider = "groq"
     used_model = "openai/gpt-oss-120b"
 
-    if prov in ["groq", "auto"]:
+    # FreeLLMAPI execution if requested or available
+    if not llm_res and (prov in ["freellmapi", "auto"]):
+        from taikry.ai.freellmapi_client import freellmapi_client
+        if prov == "freellmapi" or (not GROQ_API_KEY and not GEMINI_API_KEY and not OPENROUTER_API_KEY):
+            try:
+                fl_res = freellmapi_client.chat_completion(
+                    messages=[
+                        {"role": "system", "content": LLM_SYSTEM_PROMPT},
+                        {"role": "user", "content": llm_prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                if fl_res.get("success"):
+                    raw = fl_res.get("content", "")
+                    parsed = _extract_json_from_response(raw)
+                    if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+                        llm_res = parsed
+                        used_provider = "freellmapi"
+                        used_model = fl_res.get("model", "deepseek-r1")
+            except Exception as e:
+                logger.warning(f"FreeLLMAPI chat notice: {e}")
+
+    # Direct Groq call if auto or groq
+    if not llm_res and prov in ["groq", "auto"]:
         if GROQ_API_KEY:
             for g_mod in ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]:
                 try:

@@ -2439,3 +2439,59 @@ def execute_deep_multiagent_analysis(
         return trace.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Deep analysis failed: {str(e)}")
+
+
+# =========================================================================
+# FREELLMAPI INTEGRATION ENDPOINTS (https://github.com/tashfeenahmed/freellmapi)
+# =========================================================================
+
+class FreeLLMAPIConfigureRequest(BaseModel):
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    default_model: Optional[str] = None
+
+
+@router.get("/api/v1/freellmapi/status", tags=["FreeLLMAPI"])
+def get_freellmapi_status_endpoint():
+    """
+    Returns real-time connection status, base URL, latency, and available free models
+    from the connected FreeLLMAPI proxy (https://github.com/tashfeenahmed/freellmapi).
+    """
+    from taikry.ai.freellmapi_client import freellmapi_client
+    return freellmapi_client.get_status()
+
+
+@router.get("/api/v1/freellmapi/models", tags=["FreeLLMAPI"])
+def get_freellmapi_models_endpoint(force_refresh: bool = False):
+    """
+    Discovers available free models aggregated by FreeLLMAPI (DeepSeek R1, Llama 3.3, Gemini 2.0).
+    """
+    from taikry.ai.freellmapi_client import freellmapi_client
+    return {"models": freellmapi_client.discover_models(force_refresh=force_refresh)}
+
+
+@router.post("/api/v1/freellmapi/test", tags=["FreeLLMAPI"])
+def test_freellmapi_endpoint():
+    """
+    Runs a live low-token smoke test against the connected FreeLLMAPI proxy.
+    """
+    from taikry.ai.freellmapi_client import freellmapi_client
+    return freellmapi_client.test_connection()
+
+
+@router.post("/api/v1/freellmapi/configure", tags=["FreeLLMAPI"])
+def configure_freellmapi_endpoint(payload: FreeLLMAPIConfigureRequest):
+    """
+    Updates the FreeLLMAPI base URL or credentials dynamically.
+    """
+    from taikry.ai.freellmapi_client import freellmapi_client
+    freellmapi_client.update_config(
+        base_url=payload.base_url,
+        api_key=payload.api_key,
+        default_model=payload.default_model
+    )
+    return {
+        "success": True,
+        "message": "FreeLLMAPI configuration updated successfully.",
+        "status": freellmapi_client.get_status()
+    }

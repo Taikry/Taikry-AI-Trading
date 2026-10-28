@@ -195,3 +195,4 @@ def check_and_consume_quota(
     db.commit()
 
     return True, "Quota verified and recorded.", entitlements
+

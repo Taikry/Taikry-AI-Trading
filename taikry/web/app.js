@@ -3306,11 +3306,11 @@ function loadSettingsData() {
   setSelect("setting-density", den);
 
   if (typeof initAnyRouterUI === "function") {
-
     initAnyRouterUI();
-
   }
-
+  if (typeof initFreeLLMAPIUI === "function") {
+    initFreeLLMAPIUI();
+  }
 }
 
 function saveSettingsData() {
@@ -5421,4 +5421,168 @@ async function toggleUserSuspension(userId, currentStatus) {
   } catch (err) {
     alert("Network error: " + err.message);
   }
+}
+
+
+/* =============================================================================
+ * FREELLMAPI OPEN-SOURCE FLEET JAVASCRIPT HANDLERS
+ * ============================================================================= */
+
+async function pingFreeLLMAPI() {
+  const pill = document.getElementById("freellmapi-live-pill");
+  const label = document.getElementById("freellmapi-status-label");
+  if (pill) {
+    pill.textContent = "Checking...";
+    pill.className = "badge badge-warning";
+  }
+  if (label) label.textContent = "Probing endpoint...";
+
+  try {
+    const res = await fetch("/api/v1/freellmapi/status");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    if (pill) {
+      if (data.status === "CONNECTED" || data.status === "ONLINE") {
+        pill.textContent = "ONLINE (ACTIVE)";
+        pill.className = "badge badge-success";
+      } else {
+        pill.textContent = `STANDBY (${data.status})`;
+        pill.className = "badge badge-outline";
+      }
+    }
+    if (label) {
+      label.textContent = `${data.message || "Endpoint reachable"} (Model: ${data.default_model})`;
+    }
+
+    const urlInput = document.getElementById("freellmapi-base-url");
+    if (urlInput && data.base_url) urlInput.value = data.base_url;
+
+    const modelInput = document.getElementById("freellmapi-default-model");
+    if (modelInput && data.default_model) modelInput.value = data.default_model;
+
+  } catch (err) {
+    if (pill) {
+      pill.textContent = "UNREACHABLE";
+      pill.className = "badge badge-danger";
+    }
+    if (label) {
+      label.textContent = "Container offline or invalid Base URL";
+    }
+  }
+}
+
+async function discoverFreeLLMAPIModels() {
+  const container = document.getElementById("freellmapi-models-container");
+  const countSpan = document.getElementById("freellmapi-models-count");
+  const listDiv = document.getElementById("freellmapi-models-list");
+  const label = document.getElementById("freellmapi-status-label");
+
+  if (label) label.textContent = "Discovering models from /v1/models...";
+  try {
+    const res = await fetch("/api/v1/freellmapi/models");
+    const data = await res.json();
+
+    if (container) container.style.display = "block";
+
+    if (data.models && data.models.length > 0) {
+      if (countSpan) countSpan.textContent = data.count || data.models.length;
+      if (listDiv) {
+        listDiv.innerHTML = data.models.map(m => `
+          <button type="button" class="btn btn-outline btn-xs" style="margin: 2px;" onclick="selectFreeLLMAPIModel('${escapeHtml(m.id || m)}')">
+            ${escapeHtml(m.id || m)}
+          </button>
+        `).join("");
+      }
+      if (label) label.textContent = `Discovered ${data.count} models available in pool`;
+    } else {
+      if (countSpan) countSpan.textContent = "0";
+      if (listDiv) {
+        listDiv.innerHTML = `<span class="text-xs text-muted">No models returned or proxy not currently responding. Defaulting to deepseek-r1.</span>`;
+      }
+      if (label) label.textContent = data.message || "No models detected";
+    }
+  } catch (err) {
+    if (container) container.style.display = "block";
+    if (listDiv) listDiv.innerHTML = `<span class="text-xs text-danger">Error discovering models: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function selectFreeLLMAPIModel(modelId) {
+  const modelInput = document.getElementById("freellmapi-default-model");
+  if (modelInput) {
+    modelInput.value = modelId;
+    alert(`Selected FreeLLMAPI default model: ${modelId}`);
+  }
+}
+
+async function saveFreeLLMAPIConfig() {
+  const baseUrl = document.getElementById("freellmapi-base-url")?.value?.trim();
+  const defaultModel = document.getElementById("freellmapi-default-model")?.value?.trim();
+  const apiKey = document.getElementById("freellmapi-api-key")?.value?.trim();
+
+  try {
+    const res = await fetch("/api/v1/freellmapi/configure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        base_url: baseUrl,
+        default_model: defaultModel,
+        api_key: apiKey
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      alert(`FreeLLMAPI configuration saved!\nBase URL: ${data.base_url}\nModel: ${data.default_model}`);
+      await pingFreeLLMAPI();
+    } else {
+      const err = await res.json();
+      alert("Failed to save: " + (err.detail || "Server error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
+
+async function testFreeLLMAPIInference() {
+  const box = document.getElementById("freellmapi-test-output-box");
+  const output = document.getElementById("freellmapi-test-output");
+  const timeLabel = document.getElementById("freellmapi-test-time");
+  const title = document.getElementById("freellmapi-telemetry-title");
+
+  if (box) box.style.display = "block";
+  if (title) title.innerHTML = `<span class="text-gold">⚡ SENDING INFERENCE PROBE TO FREELLMAPI...</span>`;
+  if (output) output.textContent = "Connecting to FreeLLMAPI proxy...\nSending test payload: 'Analyze market volatility and response latency in one sentence.'";
+  if (timeLabel) timeLabel.textContent = new Date().toLocaleTimeString();
+
+  const modelId = document.getElementById("freellmapi-default-model")?.value?.trim();
+
+  try {
+    const res = await fetch("/api/v1/freellmapi/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: modelId || null })
+    });
+    const data = await res.json();
+
+    if (data.status === "SUCCESS") {
+      if (title) title.innerHTML = `<span class="text-green">✔ INFERENCE TEST PASSED (${data.latency_ms}ms)</span>`;
+      if (output) {
+        output.textContent = `Model: ${data.model}\nEndpoint: ${data.endpoint}\nStatus: HTTP 200 OK\nLatency: ${data.latency_ms}ms\nResponse:\n${data.response}`;
+      }
+      await pingFreeLLMAPI();
+    } else {
+      if (title) title.innerHTML = `<span class="text-gold">⚠ PROXY STANDBY / FALLBACK</span>`;
+      if (output) {
+        output.textContent = `Endpoint: ${data.endpoint}\nNotice: ${data.error_message || data.response || "Server returned non-200"}\nTip: Ensure Docker container is running (docker run -d -p 4000:4000 tashfeenahmed/freellmapi) or cloud URL is set.`;
+      }
+    }
+  } catch (err) {
+    if (title) title.innerHTML = `<span class="text-danger">✖ REQUEST FAILED</span>`;
+    if (output) output.textContent = `Network exception: ${err.message}`;
+  }
+}
+
+function initFreeLLMAPIUI() {
+  pingFreeLLMAPI();
 }

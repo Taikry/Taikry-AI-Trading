@@ -90,3 +90,4 @@ class BillingAdapter:
 
 
 billing_adapter = BillingAdapter()
+

@@ -89,6 +89,7 @@
           </label>
           <select id="llm-provider-select" name="llm-provider-select" aria-label="AI Engine Provider" class="top-llm-select" onchange="onLLMProviderChange(this.value)">
             <option value="auto">Auto Fleet (Claude 3.7 ➔ o3-mini ➔ Gemini 2.5 ➔ DeepSeek R1)</option>
+            <option value="freellmapi">FreeLLMAPI Fleet (GitHub Open-Source Free Aggregator)</option>
             <option value="claude">Claude 3.7 Sonnet / 3.5 Sonnet</option>
             <option value="openai">OpenAI o3-mini / o1 / GPT-4o</option>
             <option value="gemini">Google Gemini 2.5 Pro / Flash</option>
@@ -1941,6 +1942,76 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- FREELLMAPI OPEN-SOURCE FLEET GATEWAY -->
+        <div class="section-card mt-20" id="card-freellmapi-gateway">
+          <div class="section-card-title flex-between">
+            <div class="flex-row gap-10 align-center">
+              <span style="font-size: 1.1rem;">🌐 FreeLLMAPI Unified Open-Source Fleet</span>
+              <a href="https://github.com/tashfeenahmed/freellmapi" target="_blank" rel="noopener noreferrer" class="badge badge-outline" style="text-decoration:none; font-size:11px;">
+                ⭐ github.com/tashfeenahmed/freellmapi
+              </a>
+            </div>
+            <div class="flex-row gap-10 align-center">
+              <span class="badge" id="freellmapi-live-pill">Checking...</span>
+            </div>
+          </div>
+          <div class="p-15">
+            <div style="background: rgba(0, 217, 154, 0.05); border: 1px solid rgba(0, 217, 154, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+              <div style="color: #00D99A; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+                💡 Unified Free Models Aggregator / ច្រកភ្ជាប់ម៉ូដែល AI ឥតគិតថ្លៃ (100% Free Gateway)
+              </div>
+              <p style="color: #87A99A; font-size: 12px; margin: 0 0 6px 0; line-height: 1.5;">
+                <strong>English:</strong> FreeLLMAPI pools free developer tier API keys (Groq, Gemini, OpenRouter, Cerebras, SambaNova, HuggingFace, GitHub Models) into a single OpenAI-compatible endpoint with automatic fallback. You can run it locally with Docker or deploy it to <strong>Render / Railway</strong> for 24/7 cloud availability without keeping your PC powered on.
+              </p>
+              <p style="color: #87A99A; font-size: 12px; margin: 0; line-height: 1.5;">
+                <strong>ភាសាខ្មែរ:</strong> FreeLLMAPI ប្រមូលផ្តុំកូនសោ API ឥតគិតថ្លៃជាច្រើនបញ្ចូលគ្នាទៅជា OpenAI endpoint តែមួយ។ អ្នកអាចដំណើរការវាលើកុំព្យូទ័រតាម Docker ឬដាក់ពង្រាយលើ Cloud (Render/Railway) ដើម្បីដំណើរការ 24 ម៉ោងដោយមិនចាំបាច់បើក PC ចោលឡើយ។
+              </p>
+            </div>
+
+            <div class="settings-form-grid mb-15">
+              <div class="settings-field">
+                <label class="settings-label" for="freellmapi-base-url">FreeLLMAPI Base URL</label>
+                <input type="text" id="freellmapi-base-url" class="settings-input" placeholder="http://localhost:4000/v1 or https://your-app.onrender.com/v1" value="http://localhost:4000/v1">
+                <span class="settings-help">URL of your running FreeLLMAPI Docker container or cloud deployment.</span>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label" for="freellmapi-default-model">Default Model ID</label>
+                <input type="text" id="freellmapi-default-model" class="settings-input" placeholder="e.g. deepseek-r1 or gemini-2.0-flash" value="deepseek-r1">
+                <span class="settings-help">The primary free model route (e.g. deepseek-r1, llama-3.3-70b-versatile, gemini-2.0-flash).</span>
+              </div>
+              <div class="settings-field">
+                <label class="settings-label" for="freellmapi-api-key">API Key (Optional / Default)</label>
+                <input type="password" id="freellmapi-api-key" class="settings-input" placeholder="sk-freellmapi-default" value="sk-freellmapi-default">
+                <span class="settings-help">Bearer token if your FreeLLMAPI instance enforces proxy authentication.</span>
+              </div>
+            </div>
+
+            <div class="flex-row gap-10 mb-15 flex-wrap align-center">
+              <button class="btn btn-gold btn-sm" onclick="saveFreeLLMAPIConfig()">💾 Save Configuration</button>
+              <button class="btn btn-outline btn-sm" onclick="pingFreeLLMAPI()">🔄 Check Health / Ping</button>
+              <button class="btn btn-outline btn-sm" onclick="discoverFreeLLMAPIModels()">📋 Discover Models</button>
+              <button class="btn btn-outline btn-sm" onclick="testFreeLLMAPIInference()">⚡ Test Inference</button>
+              <span class="text-muted text-xs align-self-center" id="freellmapi-status-label">Standby</span>
+            </div>
+
+            <div id="freellmapi-test-output-box" class="smoke-result-box mb-15" style="display: none;">
+              <div class="flex-between mb-5">
+                <span class="text-bold text-xs" id="freellmapi-telemetry-title">FREELLMAPI TELEMETRY</span>
+                <span class="text-xs text-muted" id="freellmapi-test-time"></span>
+              </div>
+              <div class="text-xs font-mono" id="freellmapi-test-output" style="white-space: pre-wrap; max-height: 150px; overflow-y: auto;"></div>
+            </div>
+
+            <div id="freellmapi-models-container" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid #20372C; border-radius: 6px; padding: 10px;">
+              <div class="flex-between mb-5">
+                <span class="text-xs text-bold text-gold">DISCOVERED MODELS POOL (<span id="freellmapi-models-count">0</span>)</span>
+                <button class="btn btn-outline btn-xs" onclick="document.getElementById('freellmapi-models-container').style.display='none'">✕ Close</button>
+              </div>
+              <div id="freellmapi-models-list" class="flex-row gap-5 flex-wrap" style="max-height: 120px; overflow-y: auto;"></div>
             </div>
           </div>
         </div>

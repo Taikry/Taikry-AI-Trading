@@ -364,3 +364,4 @@ def delete_user_account(db: Session, user_id: int, reason: Optional[str] = None)
     db.add(audit)
     db.commit()
     return True
+
