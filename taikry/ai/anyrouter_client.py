@@ -60,7 +60,7 @@ class SmokeTestResult(BaseModel):
     http_status: Optional[int] = None
     latency_ms: Optional[float] = None
     response_preview: Optional[str] = None
-    usage: Optional[Dict[str, int]] = None
+    usage: Optional[Dict[str, Any]] = None
     timestamp_utc: str
     error_message: Optional[str] = None
 
@@ -149,14 +149,30 @@ class AnyRouterClient:
     # -------------------------------------------------------------------------
     # 1. SECURITY & KEY CHECKS
     # -------------------------------------------------------------------------
+    def _get_api_key(self) -> str:
+        import sys
+        mod = sys.modules.get("taikry.ai.anyrouter_client")
+        if mod and getattr(mod, "ANYROUTER_API_KEY", None) == "":
+            return ""
+        if mod and getattr(mod, "ANYROUTER_API_KEY", None):
+            return mod.ANYROUTER_API_KEY
+
+        import os
+        from dotenv import load_dotenv
+        load_dotenv(override=True)
+        from taikry.config import ANYROUTER_API_KEY
+        return os.getenv("ANYROUTER_API_KEY", "") or ANYROUTER_API_KEY or ""
+
     def is_configured(self) -> bool:
         """Returns True only if ANYROUTER_API_KEY is non-empty."""
-        return bool(ANYROUTER_API_KEY and len(ANYROUTER_API_KEY.strip()) > 3)
+        k = self._get_api_key()
+        return bool(k and len(k.strip()) > 3)
 
     def _get_headers(self) -> Dict[str, str]:
         """Builds authenticated headers. Never exposed in external logs."""
+        k = self._get_api_key().strip()
         return {
-            "Authorization": f"Bearer {ANYROUTER_API_KEY.strip()}",
+            "Authorization": f"Bearer {k}",
             "Content-Type": "application/json",
             "User-Agent": "ZYROX-AI-Terminal/2.1"
         }
