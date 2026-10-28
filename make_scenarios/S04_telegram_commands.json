@@ -1,0 +1,63 @@
+{
+  "name": "S04_TELEGRAM_COMMANDS",
+  "description": "Interactive Telegram bot dispatcher supporting /start, /gold, /forex, /crypto, /signals, /status, /report, /risk, and /help with user authentication for admin commands.",
+  "modules": [
+    {
+      "id": 1,
+      "module": "telegram:watchUpdates",
+      "name": "Watch Telegram Commands",
+      "parameters": {
+        "limit": 10
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:Router",
+      "name": "Command Router",
+      "routes": [
+        {
+          "name": "Command: /gold",
+          "filter": {"condition": [{"field": "1.message.text", "operator": "starts_with", "value": "/gold"}]}
+        },
+        {
+          "name": "Command: /forex",
+          "filter": {"condition": [{"field": "1.message.text", "operator": "starts_with", "value": "/forex"}]}
+        },
+        {
+          "name": "Command: /crypto",
+          "filter": {"condition": [{"field": "1.message.text", "operator": "starts_with", "value": "/crypto"}]}
+        },
+        {
+          "name": "Command: /risk",
+          "filter": {"condition": [{"field": "1.message.text", "operator": "starts_with", "value": "/risk"}]}
+        },
+        {
+          "name": "Command: /help or /start",
+          "filter": {"condition": [{"field": "1.message.text", "operator": "in", "value": ["/start", "/help"]}]}
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendRequest",
+      "name": "Fetch On-Demand Analysis",
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/analyze",
+        "method": "POST",
+        "headers": [{"name": "Content-Type", "value": "application/json"}],
+        "body": "{\"symbol\": \"{{if(1.message.text == '/crypto'; 'BTCUSDT'; if(1.message.text == '/forex'; 'EURUSD'; 'XAUUSD'))}}\"}"
+      }
+    },
+    {
+      "id": 4,
+      "module": "telegram:sendTextMessage",
+      "name": "Reply with Analysis Report",
+      "parameters": {
+        "chat_id": "{{1.message.chat.id}}",
+        "reply_to_message_id": "{{1.message.message_id}}",
+        "parse_mode": "HTML",
+        "text": "{{3.data.report_english}}\n\n==============================\n\n{{3.data.report_khmer}}"
+      }
+    }
+  ]
+}

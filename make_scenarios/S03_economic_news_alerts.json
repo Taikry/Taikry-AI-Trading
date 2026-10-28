@@ -1,0 +1,61 @@
+{
+  "name": "S03_ECONOMIC_NEWS_ALERTS",
+  "description": "Monitors verified economic calendar, filters high-impact macroeconomic releases, sends event to Python /api/v1/events/assess, and broadcasts bilingual alerts.",
+  "modules": [
+    {
+      "id": 1,
+      "module": "builtin:BasicTriggers_Scheduler",
+      "name": "Hourly Macro Scheduler",
+      "parameters": {"interval_hours": 1}
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendRequest",
+      "name": "Fetch Verified Calendar Feed",
+      "parameters": {
+        "url": "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+        "method": "GET"
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:Iterator",
+      "name": "Iterate Economic Events",
+      "parameters": {
+        "array": "{{2.data}}"
+      }
+    },
+    {
+      "id": 4,
+      "module": "builtin:Filter",
+      "name": "Filter: High Impact Events",
+      "filter": {
+        "condition": [
+          {"field": "3.impact", "operator": "equal", "value": "High"},
+          {"field": "3.country", "operator": "in", "value": ["USD", "EUR", "GBP", "JPY"]}
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendRequest",
+      "name": "POST /api/v1/events/assess",
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/events/assess",
+        "method": "POST",
+        "headers": [{"name": "Content-Type", "value": "application/json"}],
+        "body": "{\"event_title\": \"{{3.title}}\", \"country\": \"{{3.country}}\", \"impact\": \"HIGH\", \"affected_symbol\": \"XAUUSD\"}"
+      }
+    },
+    {
+      "id": 6,
+      "module": "telegram:sendTextMessage",
+      "name": "Broadcast Bilingual Macro Alert",
+      "parameters": {
+        "chat_id": "-1004341134868",
+        "parse_mode": "HTML",
+        "text": "🌐 <b>HIGH-IMPACT ECONOMIC EVENT ALERT</b>\n\n📅 <b>Event:</b> {{3.title}} ({{3.country}})\n⏰ <b>Time:</b> {{3.date}}\n🎯 <b>Expected Impact:</b> HIGH VOLATILITY\n\n💡 <b>AI Assessment:</b>\n<i>{{5.data.assessment}}</i>\n\n🛡 <b>Recommended Action:</b> <b>{{5.data.recommended_action}}</b>"
+      }
+    }
+  ]
+}

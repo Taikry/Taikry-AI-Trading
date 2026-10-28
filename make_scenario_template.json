@@ -1,0 +1,110 @@
+{
+  "name": "24/7 AI Trading Signal Dispatcher (Crypto & Forex)",
+  "description": "Receives real-time AI signals for XAUUSD, Crypto, and Forex, filters by confidence >= 70%, formats rich markdown, and dispatches to Telegram / Discord / Google Sheets.",
+  "modules": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "name": "Custom Webhook Trigger",
+      "parameters": {
+        "hook": "uu21klu4rg3s2l7u2644xi9toeburwhd",
+        "url": "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
+      },
+      "expected_output_fields": [
+        "symbol",
+        "name",
+        "category",
+        "timeframe",
+        "action",
+        "confidence",
+        "entry_price",
+        "stop_loss",
+        "take_profit_1",
+        "take_profit_2",
+        "risk_reward_ratio",
+        "rationale",
+        "metrics.rsi",
+        "metrics.trend",
+        "metrics.atr",
+        "timestamp"
+      ]
+    },
+    {
+      "id": 2,
+      "module": "builtin:Filter",
+      "name": "Signal Quality Filter",
+      "filter": {
+        "condition": [
+          {
+            "field": "1.action",
+            "operator": "in",
+            "value": ["BUY", "SELL"]
+          },
+          {
+            "field": "1.confidence",
+            "operator": "numeric_gte",
+            "value": 70
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:Router",
+      "name": "Dispatch Router"
+    },
+    {
+      "id": 4,
+      "module": "telegram:sendTextMessage",
+      "name": "Send Telegram Signal Alert",
+      "parameters": {
+        "chat_id": "{{if(1.chat_id; 1.chat_id; '-1004341134868')}}",
+        "parse_mode": "HTML",
+        "text_template": "🚨 <b>AI TRADING SIGNAL: {{1.action}} {{1.symbol}}</b>\n\n📊 <b>Asset:</b> {{1.name}} ({{1.category}})\n⏱ <b>Timeframe:</b> {{1.timeframe}}\n🎯 <b>Confidence:</b> {{1.confidence}}%\n\n💵 <b>Entry Price:</b> {{1.entry_price}}\n🛑 <b>Stop Loss:</b> {{1.stop_loss}}\n🎯 <b>Take Profit 1:</b> {{1.take_profit_1}}\n🚀 <b>Take Profit 2:</b> {{1.take_profit_2}}\n⚖️ <b>Risk/Reward:</b> {{1.risk_reward_ratio}}\n\n📈 <b>Metrics:</b> RSI: {{1.metrics.rsi}} | Trend: {{1.metrics.trend}} | ATR: {{1.metrics.atr}}\n💡 <b>AI Rationale:</b>\n<i>{{1.rationale}}</i>\n\n⏰ <code>{{1.timestamp}}</code>"
+      }
+    },
+    {
+      "id": 5,
+      "module": "discord:createMessage",
+      "name": "Send Discord Channel Alert",
+      "parameters": {
+        "embeds": [
+          {
+            "title": "AI Trading Signal: {{1.action}} {{1.symbol}}",
+            "color": "{{if(1.action == 'BUY'; 3066993; 15158332)}}",
+            "fields": [
+              {"name": "Confidence", "value": "{{1.confidence}}%", "inline": true},
+              {"name": "Entry", "value": "{{1.entry_price}}", "inline": true},
+              {"name": "Stop Loss", "value": "{{1.stop_loss}}", "inline": true},
+              {"name": "TP 1", "value": "{{1.take_profit_1}}", "inline": true},
+              {"name": "TP 2", "value": "{{1.take_profit_2}}", "inline": true},
+              {"name": "R:R", "value": "{{1.risk_reward_ratio}}", "inline": true},
+              {"name": "Rationale", "value": "{{1.rationale}}"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "module": "google-sheets:addRow",
+      "name": "Log Trade to Google Sheets / Notion",
+      "parameters": {
+        "values": [
+          "{{1.timestamp}}",
+          "{{1.symbol}}",
+          "{{1.category}}",
+          "{{1.timeframe}}",
+          "{{1.action}}",
+          "{{1.confidence}}",
+          "{{1.entry_price}}",
+          "{{1.stop_loss}}",
+          "{{1.take_profit_1}}",
+          "{{1.take_profit_2}}",
+          "{{1.risk_reward_ratio}}",
+          "{{1.rationale}}"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "S07_SYSTEM_HEALTH_AND_DAILY_SUMMARY",
+  "description": "Performs continuous 5-minute health monitoring across market providers, triggers recovery alerts if stale data occurs, and broadcasts daily executive summary.",
+  "modules": [
+    {
+      "id": 1,
+      "module": "builtin:BasicTriggers_Scheduler",
+      "name": "5-Minute Health Poller",
+      "parameters": {"interval_minutes": 5}
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendRequest",
+      "name": "GET /health",
+      "parameters": {
+        "url": "http://localhost:8000/health",
+        "method": "GET"
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:Filter",
+      "name": "Filter: Detect Stale or Degraded Feed",
+      "filter": {
+        "condition": [
+          {"field": "2.data.status", "operator": "not_equal", "value": "HEALTHY"}
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "module": "telegram:sendTextMessage",
+      "name": "Send Service Degraded Alert",
+      "parameters": {
+        "chat_id": "-1004341134868",
+        "parse_mode": "HTML",
+        "text": "⚠️ <b>TAIKRY SYSTEM HEALTH ALERT</b>\n\nStatus: <b>{{2.data.status}}</b>\nTimestamp: {{2.data.timestamp_utc}}\nMarket Feeds: {{2.data.market_status}}\n\n<i>Immediate investigation required.</i>"
+      }
+    },
+    {
+      "id": 5,
+      "module": "builtin:BasicTriggers_Scheduler",
+      "name": "Daily 22:00 UTC Summary Scheduler",
+      "parameters": {"time": "22:00"}
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendRequest",
+      "name": "GET /api/v1/reports/daily",
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/reports/daily",
+        "method": "GET"
+      }
+    },
+    {
+      "id": 7,
+      "module": "telegram:sendTextMessage",
+      "name": "Broadcast Daily Executive Briefing",
+      "parameters": {
+        "chat_id": "-1004341134868",
+        "parse_mode": "HTML",
+        "text": "📅 <b>TAIKRY PRO — DAILY EXECUTIVE MARKET BRIEFING</b>\n\n{{6.data.daily_briefing_english}}"
+      }
+    }
+  ]
+}

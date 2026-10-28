@@ -1,0 +1,78 @@
+{
+  "name": "S01_MARKET_REPORT_15M",
+  "description": "Triggers every 15 minutes, requests multi-agent analysis from Python API, routes on status, sends bilingual Telegram report, and acknowledges delivery.",
+  "modules": [
+    {
+      "id": 1,
+      "module": "builtin:BasicTriggers_Scheduler",
+      "name": "15-Minute Scheduler",
+      "parameters": {
+        "interval_minutes": 15
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendRequest",
+      "name": "POST /api/v1/analyze",
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/analyze",
+        "method": "POST",
+        "headers": [
+          {"name": "Content-Type", "value": "application/json"},
+          {"name": "X-TAIKRY-API-KEY", "value": "taikry_admin_access_token_2026"}
+        ],
+        "body": "{\"symbol\": \"XAUUSD\", \"timeframe\": \"M15\"}"
+      }
+    },
+    {
+      "id": 3,
+      "module": "json:ParseJSON",
+      "name": "Parse Analysis Response",
+      "parameters": {
+        "json": "{{2.data}}"
+      }
+    },
+    {
+      "id": 4,
+      "module": "builtin:Router",
+      "name": "Status Router",
+      "routes": [
+        {
+          "name": "Analysis Success Route",
+          "filter": {
+            "condition": [
+              {"field": "3.market_bias", "operator": "exists"},
+              {"field": "3.setup_status", "operator": "not_equal", "value": "NO TRADE"}
+            ]
+          }
+        },
+        {
+          "name": "Routine Summary / Fallback Route"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "module": "telegram:sendTextMessage",
+      "name": "Send Bilingual Telegram Report",
+      "parameters": {
+        "chat_id": "{{if(1.chat_id; 1.chat_id; '-1004341134868')}}",
+        "parse_mode": "HTML",
+        "text": "{{3.report_english}}\n\n==============================\n\n{{3.report_khmer}}"
+      }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendRequest",
+      "name": "POST /api/v1/notifications/ack",
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/notifications/ack",
+        "method": "POST",
+        "headers": [
+          {"name": "Content-Type", "value": "application/json"}
+        ],
+        "body": "{\"event_id\": \"15m_report_{{3.timestamp_utc}}\", \"channel\": \"telegram\", \"status\": \"DELIVERED\"}"
+      }
+    }
+  ]
+}

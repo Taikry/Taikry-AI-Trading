@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff099"/>
+      <stop offset="35%" stop-color="#ffd700"/>
+      <stop offset="70%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#996515"/>
+    </linearGradient>
+  </defs>
+  <circle cx="24" cy="24" r="22" fill="#1e1808" stroke="url(#goldGrad)" stroke-width="2"/>
+  <path d="M12 27 L17 17 L31 17 L36 27 Z" fill="url(#goldGrad)" stroke="#ffee77" stroke-width="0.8"/>
+  <path d="M17 17 L31 17 L33.5 21 L14.5 21 Z" fill="#fff5aa" opacity="0.6"/>
+  <text x="24" y="26" font-family="'Inter', sans-serif" font-size="7" font-weight="900" fill="#2d1c00" text-anchor="middle" letter-spacing="0.5">XAU</text>
+  <text x="24" y="39" font-family="'JetBrains Mono', monospace" font-size="6" font-weight="800" fill="#ffd700" text-anchor="middle">999.9</text>
+</svg>
