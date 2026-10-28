@@ -132,6 +132,10 @@
             <span class="dev-contact-sub"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" style="display:inline; vertical-align:middle; margin-right:2px;"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg> 0968288832</span>
           </div>
         </div>
+        <button class="top-action-btn btn-account-saas" id="top-btn-account" onclick="switchNavPane('account')" title="SaaS Account, 14-Day Free Trial & Quotas">
+          <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="top-account-label">Account (Trial)</span>
+        </button>
         <div class="status-badge status-badge-compact">
           <div class="status-dot"></div>
           <span id="system-status-text">24/7 ACTIVE</span>
@@ -228,6 +232,16 @@
           <button class="nav-icon-btn" id="btn-nav-admin" onclick="switchNavPane('admin')" title="Admin Console">
             <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
             <span class="nav-tooltip">13. Admin</span>
+          </button>
+          <!-- 14. SaaS Account -->
+          <button class="nav-icon-btn" id="btn-nav-account" onclick="switchNavPane('account')" title="SaaS Account, Free Trial & Telegram Link">
+            <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span class="nav-tooltip">14. Account & Trial</span>
+          </button>
+          <!-- 15. Support Center -->
+          <button class="nav-icon-btn" id="btn-nav-support" onclick="switchNavPane('support')" title="Support Desk & Helpdesk">
+            <svg class="nav-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span class="nav-tooltip">15. Support Desk</span>
           </button>
         </div>
 
@@ -2050,8 +2064,10 @@
           </div>
         </div>
       </div>
-    </div>
-
+    </div>
+
+
+
     <!-- SECTION 13: ADMIN CONSOLE -->
     <div id="tab-pane-admin" class="terminal-full-overlay tab-pane-hidden">
       <div class="overlay-card">
@@ -2163,7 +2179,310 @@
             </table>
           </div>
         </div>
+
+        <!-- SaaS Users & Subscriptions Manager Section -->
+        <div class="section-card mt-20">
+          <div class="section-card-title">
+            <span>🌐 SaaS Platform & User Management</span>
+            <button class="btn btn-outline btn-xs" onclick="loadAdminSaaSData()">🔄 Reload SaaS Users</button>
+          </div>
+          <!-- SaaS KPI Stats -->
+          <div class="section-kpi-grid mt-10" style="margin-bottom: 16px;">
+            <div class="section-kpi-card">
+              <div class="section-kpi-label">Registered Accounts</div>
+              <div class="section-kpi-val text-green" id="admin-saas-total-users">0</div>
+              <div class="section-kpi-sub">Total Users</div>
+            </div>
+            <div class="section-kpi-card">
+              <div class="section-kpi-label">14-Day Active Trials</div>
+              <div class="section-kpi-val text-cyan" id="admin-saas-active-trials">0</div>
+              <div class="section-kpi-sub">Free Trial Cohort</div>
+            </div>
+            <div class="section-kpi-card">
+              <div class="section-kpi-label">Paid Subscriptions</div>
+              <div class="section-kpi-val text-gold" id="admin-saas-paid-users">0</div>
+              <div class="section-kpi-sub">Pro & Premium Tier</div>
+            </div>
+            <div class="section-kpi-card">
+              <div class="section-kpi-label">AI Token Spend</div>
+              <div class="section-kpi-val text-gold" id="admin-saas-ai-spend">$0.00</div>
+              <div class="section-kpi-sub">AnyRouter Multi-Agent API</div>
+            </div>
+          </div>
+
+          <!-- User Directory Search & Table -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="admin-user-search-input" class="vip-input-field" placeholder="Search by email or name..." style="max-width: 300px;" oninput="filterAdminUsers(this.value)">
+            <button class="btn btn-outline btn-sm" onclick="loadAdminSaaSData()">Search</button>
+          </div>
+          <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+            <table class="table-terminal">
+              <thead>
+                <tr>
+                  <th>User Email</th>
+                  <th>Full Name</th>
+                  <th>Role</th>
+                  <th>Plan Tier</th>
+                  <th>Trial / Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-saas-users-tbody">
+                <tr><td colspan="6" class="text-center text-muted">Click 'Reload SaaS Users' or authenticate as Admin.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
+      <!-- ==========================================================================
+           14. SAAS ACCOUNT, 14-DAY FREE TRIAL & TELEGRAM LINKING
+           ========================================================================== -->
+      <div id="tab-pane-account" class="terminal-full-overlay tab-pane-hidden">
+        <div class="overlay-header">
+          <div>
+            <div class="overlay-title">
+              <svg class="top-btn-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>14. SaaS Account, 14-Day Free Trial & Telegram Intelligence</span>
+            </div>
+            <div class="overlay-subtitle">Live subscription entitlements, AI scan quota usage, Telegram alert linkage & credentials</div>
+          </div>
+          <div class="overlay-header-actions">
+            <button class="btn btn-outline btn-sm" onclick="loadAccountProfile()">🔄 Refresh</button>
+            <button class="btn btn-danger btn-sm" onclick="handleUserLogout()">🚪 Sign Out</button>
+            <button class="btn-close-overlay" onclick="switchNavPane('charts')">✕ Back to Terminal</button>
+          </div>
+        </div>
+
+        <!-- KPI Grid: Trial Status & Real-Time Daily Quotas -->
+        <div class="section-kpi-grid">
+          <div class="section-kpi-card">
+            <div class="section-kpi-label">Subscription Tier</div>
+            <div class="section-kpi-val text-gold" id="saas-plan-name">14-Day Free Trial</div>
+            <div class="section-kpi-sub" id="saas-plan-status">Status: Active</div>
+          </div>
+          <div class="section-kpi-card">
+            <div class="section-kpi-label">Trial Expiration</div>
+            <div class="section-kpi-val text-green" id="saas-trial-countdown">14 Days Left</div>
+            <div class="section-kpi-sub" id="saas-trial-expires-at">Calculating UTC...</div>
+          </div>
+          <div class="section-kpi-card">
+            <div class="section-kpi-label">Daily Standard Scans</div>
+            <div class="section-kpi-val text-cyan" id="saas-quota-scans">0 / 5</div>
+            <div class="section-kpi-sub">Resets 00:00 UTC daily</div>
+          </div>
+          <div class="section-kpi-card">
+            <div class="section-kpi-label">7-Agent Deep Analysis</div>
+            <div class="section-kpi-val text-gold" id="saas-quota-deep">0 / 1</div>
+            <div class="section-kpi-sub">AnyRouter Multi-Agent Quota</div>
+          </div>
+        </div>
+
+        <!-- Profile & Entitlement Grid -->
+        <div class="overview-grid mt-20">
+          <!-- Column 1: Profile & Password -->
+          <div class="section-card">
+            <div class="section-card-title">
+              <span>👤 User Profile & Language</span>
+            </div>
+            <div class="vip-grant-form-grid">
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="acc-fullname">Full Name</label>
+                <input type="text" class="vip-input-field" id="acc-fullname" placeholder="Trader Name">
+              </div>
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="acc-email">Email Address</label>
+                <input type="email" class="vip-input-field" id="acc-email" readonly style="opacity: 0.8; background: #0b1511;">
+              </div>
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="acc-language">Terminal Language</label>
+                <select class="vip-input-field" id="acc-language">
+                  <option value="en">English (Institutional)</option>
+                  <option value="kh">ភាសាខ្មែរ (Khmer Natural)</option>
+                </select>
+              </div>
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="acc-timezone">Timezone</label>
+                <input type="text" class="vip-input-field" id="acc-timezone" value="Asia/Phnom_Penh (UTC+7)">
+              </div>
+            </div>
+            <div style="margin-top: 14px;">
+              <button class="btn btn-gold btn-sm" onclick="saveUserProfile()">💾 Update Profile</button>
+            </div>
+
+            <!-- Password Update Box -->
+            <div class="section-card-title mt-20" style="font-size: 13px; border-top: 1px solid var(--zyrox-border, #20372C); padding-top: 16px;">
+              <span>🔑 Change Account Password</span>
+            </div>
+            <div class="vip-grant-form-grid" style="grid-template-columns: 1fr 1fr; margin-top: 10px;">
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="acc-old-pass">Current Password</label>
+                <input type="password" class="vip-input-field" id="acc-old-pass" placeholder="••••••••">
+              </div>
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="acc-new-pass">New Password (Min 8 Chars)</label>
+                <input type="password" class="vip-input-field" id="acc-new-pass" placeholder="••••••••">
+              </div>
+            </div>
+            <div style="margin-top: 12px;">
+              <button class="btn btn-outline btn-sm" onclick="updateUserPassword()">🛡 Change Password</button>
+            </div>
+          </div>
+
+          <!-- Column 2: Telegram Account Linking & Granular Alerts -->
+          <div class="section-card">
+            <div class="section-card-title">
+              <span>✈️ Telegram Intelligence Webhook Linking</span>
+              <span class="badge" id="saas-telegram-status-badge" style="background: rgba(0, 217, 154, 0.15); color: #00D99A; border: 1px solid #00D99A; padding: 2px 8px; border-radius: 4px; font-size: 11px;">NOT LINKED</span>
+            </div>
+
+            <div id="saas-telegram-unlinked-box" style="margin-top: 12px;">
+              <p style="font-size: 12px; color: var(--zyrox-muted, #87A99A); line-height: 1.5;">
+                Pair your account with the official ZYROX AI Telegram bot to receive instant, institutional BUY/SELL signals with exact Stop Loss, Take Profit, 1:2.0+ R:R, and risk cap alerts on your smartphone.
+              </p>
+              <div style="margin-top: 14px;">
+                <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">⚡ Connect Telegram (Instant 1-Click)</button>
+              </div>
+              <div id="saas-telegram-token-display" style="display: none; margin-top: 14px; background: #060B09; border: 1px solid #20372C; padding: 12px; border-radius: 6px;">
+                <div style="font-size: 11px; color: #87A99A; margin-bottom: 6px;">Secure 15-Minute One-Time Pairing Link:</div>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="saas-telegram-link-url" readonly class="vip-input-field" style="font-size: 11px; color: #16E6AB;">
+                  <button class="btn btn-outline btn-xs" onclick="copyTelegramLink()">📋 Copy</button>
+                  <a id="saas-telegram-link-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-gold btn-xs">🚀 Open Bot</a>
+                </div>
+              </div>
+            </div>
+
+            <div id="saas-telegram-linked-box" style="display: none; margin-top: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; background: #060B09; border: 1px solid #20372C; padding: 12px; border-radius: 6px;">
+                <div>
+                  <div style="font-weight: 600; color: #EAFFF5;" id="saas-telegram-user-display">@username</div>
+                  <div style="font-size: 11px; color: #87A99A;" id="saas-telegram-chatid-display">Chat ID: --</div>
+                </div>
+                <button class="btn btn-danger btn-xs" onclick="unlinkTelegramAccount()">Disconnect</button>
+              </div>
+
+              <!-- Notification Preferences -->
+              <div style="margin-top: 16px;">
+                <div style="font-size: 12px; font-weight: 600; color: #EAFFF5; margin-bottom: 8px;">Granular Alert Preferences:</div>
+                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #87A99A;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pref-signals" checked> Real-time Trading Signals (BUY / SELL setups)
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pref-risk" checked> 0.5% Hard Risk Cap & Invalidation Warnings
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pref-macro" checked> High-Impact Macro Economic Events (NFP, CPI, FOMC)
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pref-briefing" checked> Daily Morning Market Intelligence Briefing
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="pref-trial" checked> 14-Day Free Trial Expiration Reminders
+                  </label>
+                </div>
+                <div style="margin-top: 12px;">
+                  <button class="btn btn-outline btn-xs" onclick="saveNotificationPreferences()">💾 Save Alert Preferences</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Danger Zone: Delete Account -->
+            <div style="margin-top: 24px; border-top: 1px solid var(--zyrox-border, #20372C); padding-top: 14px;">
+              <div style="font-size: 11px; color: #ff5252; font-weight: 600;">Danger Zone:</div>
+              <p style="font-size: 11px; color: #87A99A; margin: 4px 0 8px 0;">Permanently delete your account, session credentials, and associated data.</p>
+              <button class="btn btn-danger btn-xs" onclick="confirmDeleteAccount()">🗑️ Delete Account</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==========================================================================
+           15. SUPPORT CENTER & HELPDESK
+           ========================================================================== -->
+      <div id="tab-pane-support" class="terminal-full-overlay tab-pane-hidden">
+        <div class="overlay-header">
+          <div>
+            <div class="overlay-title">
+              <svg class="top-btn-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>15. Support Center & Helpdesk</span>
+            </div>
+            <div class="overlay-subtitle">Submit inquiries, request features, or report issues directly to the ZYROX AI operations desk</div>
+          </div>
+          <div class="overlay-header-actions">
+            <button class="btn btn-outline btn-sm" onclick="loadSupportTickets()">🔄 Refresh Tickets</button>
+            <button class="btn-close-overlay" onclick="switchNavPane('charts')">✕ Back to Terminal</button>
+          </div>
+        </div>
+
+        <div class="overview-grid">
+          <!-- Submit Ticket Card -->
+          <div class="section-card">
+            <div class="section-card-title">
+              <span>📝 Open a Support Ticket</span>
+            </div>
+            <div class="vip-grant-form-grid" style="grid-template-columns: 1fr 1fr;">
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="ticket-category">Category *</label>
+                <select class="vip-input-field" id="ticket-category">
+                  <option value="technical">Technical / Chart / Data Issue</option>
+                  <option value="telegram_link">Telegram Bot Pairing</option>
+                  <option value="billing">Subscription & Billing</option>
+                  <option value="feature_request">Feature Request</option>
+                  <option value="account">Account & Security</option>
+                  <option value="other">Other Inquiry</option>
+                </select>
+              </div>
+              <div class="vip-input-wrap">
+                <label class="vip-input-label" for="ticket-priority">Priority *</label>
+                <select class="vip-input-field" id="ticket-priority">
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+            <div class="vip-input-wrap mt-10">
+              <label class="vip-input-label" for="ticket-subject">Subject *</label>
+              <input type="text" class="vip-input-field" id="ticket-subject" placeholder="Brief summary of your inquiry">
+            </div>
+            <div class="vip-input-wrap mt-10">
+              <label class="vip-input-label" for="ticket-message">Detailed Description *</label>
+              <textarea class="vip-input-field" id="ticket-message" rows="5" placeholder="Provide full details, error messages, symbol, or timeframe..."></textarea>
+            </div>
+            <div style="margin-top: 14px;">
+              <button class="btn btn-gold btn-sm" onclick="submitSupportTicket()">📩 Submit Support Ticket</button>
+            </div>
+          </div>
+
+          <!-- My Tickets History Card -->
+          <div class="section-card">
+            <div class="section-card-title">
+              <span>📋 My Ticket History</span>
+            </div>
+            <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+              <table class="table-terminal">
+                <thead>
+                  <tr>
+                    <th>Ticket #</th>
+                    <th>Subject</th>
+                    <th>Category</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody id="user-tickets-tbody">
+                  <tr><td colspan="6" class="text-center text-muted">No support tickets submitted yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div> <!-- End terminal-shell -->

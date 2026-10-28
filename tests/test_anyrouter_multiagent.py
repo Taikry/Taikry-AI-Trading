@@ -396,3 +396,4 @@ def test_api_deep_analysis_endpoint():
     assert "risk_guardian" in trace
     assert "final_synthesis" in trace
     assert trace["final_synthesis"]["action"] in ("BUY", "SELL", "WAIT", "REJECT")
+

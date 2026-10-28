@@ -127,13 +127,32 @@ class MarketMonitor247:
             for ev in closed_events:
                 self._notify_trade_closure(ev)
 
-        # 3. Periodic VIP Subscription Expiration & Reminder Sweep (Every 15 mins)
+        # 3. Periodic VIP Subscription & SaaS Trial Expiration Sweep (Every 15 mins)
         now_ts = time.time()
         if now_ts - self.last_vip_check_time >= 900:
             self.last_vip_check_time = now_ts
             try:
                 from taikry.subscriptions.vip_manager import vip_subscription_manager
                 vip_subscription_manager.check_and_process_expirations()
+            except Exception:
+                pass
+            # SaaS 14-Day Free Trial expiration sweep
+            try:
+                from taikry.database.session import SessionLocal
+                from taikry.database.models import User
+                db_saas = SessionLocal()
+                try:
+                    utc_now = datetime.datetime.now(datetime.timezone.utc)
+                    expired_users = db_saas.query(User).filter(
+                        User.trial_status == "trial_active",
+                        User.trial_expires_at <= utc_now
+                    ).all()
+                    for exp_u in expired_users:
+                        exp_u.trial_status = "trial_expired"
+                    if expired_users:
+                        db_saas.commit()
+                finally:
+                    db_saas.close()
             except Exception:
                 pass
 

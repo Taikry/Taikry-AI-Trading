@@ -8,7 +8,7 @@ import datetime
 from typing import Dict, Any, List, Optional
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Depends, Header, Query
+from fastapi import APIRouter, HTTPException, Depends, Header, Query, Cookie, Request
 from pydantic import BaseModel, Field
 
 from taikry.config import (
@@ -131,11 +131,38 @@ def get_llm_status_endpoint():
 
 # 2. POST /api/v1/analyze
 @router.post("/api/v1/analyze")
-def run_market_analysis(req: AnalyzeRequest):
+def run_market_analysis(
+    req: AnalyzeRequest,
+    authorization: Optional[str] = Header(default=None),
+    zyrox_session: Optional[str] = Cookie(default=None)
+):
     """
     Executes multi-timeframe analysis coordinating all 4 AI agents and Real LLM Orchestration.
     Produces consensus report in English and Natural Khmer.
+    Enforces SaaS subscription and 14-day free trial quotas when user is authenticated.
     """
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    elif zyrox_session:
+        token = zyrox_session.strip()
+
+    if token:
+        from taikry.database.session import SessionLocal
+        from taikry.saas.auth_service import authenticate_session
+        from taikry.saas.entitlement_service import check_and_consume_quota
+        db = SessionLocal()
+        try:
+            user = authenticate_session(db, token)
+            if user:
+                allowed, reason, _ = check_and_consume_quota(db, user.id, "standard_scan", symbol=req.symbol)
+                if not allowed:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=reason
+                    )
+        finally:
+            db.close()
     symbol = req.symbol.upper().replace("/", "").replace("-", "")
     res = ai_consensus_engine.analyze_symbol(symbol, preferred_llm=req.llm_provider)
     return res
@@ -2366,7 +2393,11 @@ def get_anyrouter_budget():
 
 
 @router.post("/api/v1/agents/deep-analysis")
-def execute_deep_multiagent_analysis(payload: DeepAnalysisApiRequest):
+def execute_deep_multiagent_analysis(
+    payload: DeepAnalysisApiRequest,
+    authorization: Optional[str] = Header(default=None),
+    zyrox_session: Optional[str] = Cookie(default=None)
+):
     """
     Step G — Deep-Analysis Workflow:
     Executes the 7-Agent Institutional Deep Analysis workflow on real market data.
@@ -2375,6 +2406,30 @@ def execute_deep_multiagent_analysis(payload: DeepAnalysisApiRequest):
     and returns a complete observable telemetry trace with bilingual synthesis.
     """
     from taikry.agents.orchestration_layer import multi_agent_orchestrator
+    from taikry.database.session import SessionLocal
+    from taikry.saas.auth_service import authenticate_session
+    from taikry.saas.entitlement_service import check_and_consume_quota
+
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    elif zyrox_session:
+        token = zyrox_session.strip()
+
+    if token:
+        db = SessionLocal()
+        try:
+            user = authenticate_session(db, token)
+            if user:
+                quota = check_and_consume_quota(db, user.id, "deep_analysis", symbol=payload.symbol)
+                if not quota.get("allowed", False):
+                    raise HTTPException(
+                        status_code=403,
+                        detail=quota.get("reason", "Daily deep analysis quota reached. Please upgrade your subscription.")
+                    )
+        finally:
+            db.close()
+
     try:
         trace = multi_agent_orchestrator.run_deep_analysis(
             symbol=payload.symbol,

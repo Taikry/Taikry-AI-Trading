@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZYROX AI — Read the Market. Own Your Edge.</title>
+  <link rel="icon" type="image/svg+xml" href="/dashboard/assets/brand/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dashboard/styles.css">
+  <style>
+    :root {
+      --landing-hero-glow: radial-gradient(circle at 50% 20%, rgba(0, 217, 154, 0.15) 0%, rgba(6, 11, 9, 0) 70%);
+    }
+    body {
+      background-color: var(--zyrox-bg, #060B09);
+      color: var(--zyrox-text, #EAFFF5);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+    .landing-nav {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 40px;
+      background: rgba(6, 11, 9, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--zyrox-border, #20372C);
+    }
+    .landing-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .landing-brand-logo {
+      width: 36px;
+      height: 36px;
+    }
+    .landing-brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: var(--zyrox-text, #EAFFF5);
+    }
+    .landing-brand-tag {
+      font-size: 10px;
+      color: var(--zyrox-emerald, #00D99A);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 1px;
+    }
+    .landing-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .landing-nav-link {
+      color: var(--zyrox-muted, #87A99A);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+    .landing-nav-link:hover {
+      color: var(--zyrox-emerald, #00D99A);
+    }
+    .landing-hero {
+      position: relative;
+      padding: 90px 20px 80px;
+      text-align: center;
+      background: var(--landing-hero-glow);
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(0, 217, 154, 0.1);
+      border: 1px solid rgba(0, 217, 154, 0.3);
+      color: var(--zyrox-emerald, #00D99A);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 24px;
+    }
+    .hero-title {
+      font-size: 56px;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      margin: 0 auto 20px;
+      max-width: 900px;
+      background: linear-gradient(180deg, #FFFFFF 0%, #EAFFF5 60%, #87A99A 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: 19px;
+      color: var(--zyrox-muted, #87A99A);
+      max-width: 680px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+    .hero-cta-group {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .btn-hero-primary {
+      background: linear-gradient(135deg, #00D99A 0%, #00B37E 100%);
+      color: #060B09;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px 28px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 20px rgba(0, 217, 154, 0.3);
+      text-decoration: none;
+    }
+    .btn-hero-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(0, 217, 154, 0.45);
+    }
+    .btn-hero-secondary {
+      background: var(--zyrox-surface, #0B1511);
+      color: var(--zyrox-text, #EAFFF5);
+      border: 1px solid var(--zyrox-border, #20372C);
+      font-weight: 600;
+      font-size: 15px;
+      padding: 14px 28px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-hero-secondary:hover {
+      background: #12221B;
+      border-color: var(--zyrox-emerald, #00D99A);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    .section {
+      padding: 90px 0;
+      border-top: 1px solid rgba(32, 55, 44, 0.4);
+    }
+    .section-header {
+      text-align: center;
+      margin-bottom: 54px;
+    }
+    .section-eyebrow {
+      color: var(--zyrox-emerald, #00D99A);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 10px;
+    }
+    .section-heading {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin: 0 0 16px;
+    }
+    .section-subtext {
+      color: var(--zyrox-muted, #87A99A);
+      font-size: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--zyrox-surface, #0B1511);
+      border: 1px solid var(--zyrox-border, #20372C);
+      border-radius: 12px;
+      padding: 32px;
+      transition: all 0.25s ease;
+    }
+    .feature-card:hover {
+      border-color: var(--zyrox-emerald, #00D99A);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    }
+    .feature-icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      background: rgba(0, 217, 154, 0.1);
+      border: 1px solid rgba(0, 217, 154, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      color: var(--zyrox-emerald, #00D99A);
+    }
+    .feature-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 10px;
+    }
+    .feature-desc {
+      color: var(--zyrox-muted, #87A99A);
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .agent-pipeline {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .agent-box {
+      background: #08110D;
+      border: 1px solid var(--zyrox-border, #20372C);
+      border-radius: 8px;
+      padding: 20px;
+      position: relative;
+    }
+    .agent-box-num {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--zyrox-emerald, #00D99A);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .agent-box-name {
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+    .agent-box-role {
+      font-size: 12px;
+      color: var(--zyrox-muted, #87A99A);
+      line-height: 1.5;
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 28px;
+    }
+    .pricing-card {
+      background: var(--zyrox-surface, #0B1511);
+      border: 1px solid var(--zyrox-border, #20372C);
+      border-radius: 12px;
+      padding: 36px 28px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .pricing-card.featured {
+      border: 2px solid var(--zyrox-emerald, #00D99A);
+      box-shadow: 0 0 35px rgba(0, 217, 154, 0.15);
+    }
+    .pricing-badge {
+      position: absolute;
+      top: -12px;
+      right: 24px;
+      background: var(--zyrox-emerald, #00D99A);
+      color: #060B09;
+      font-size: 11px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 10px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .pricing-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 8px;
+    }
+    .pricing-price {
+      font-size: 42px;
+      font-weight: 800;
+      color: #FFF;
+      margin: 16px 0;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    .pricing-interval {
+      font-size: 14px;
+      color: var(--zyrox-muted, #87A99A);
+      font-weight: 500;
+    }
+    .pricing-features {
+      list-style: none;
+      padding: 0;
+      margin: 20px 0 32px;
+      flex-grow: 1;
+    }
+    .pricing-feature {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #D1E5DB;
+      margin-bottom: 12px;
+    }
+    .pricing-feature svg {
+      color: var(--zyrox-emerald, #00D99A);
+      flex-shrink: 0;
+    }
+    .faq-list {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .faq-item {
+      background: var(--zyrox-surface, #0B1511);
+      border: 1px solid var(--zyrox-border, #20372C);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .faq-question {
+      padding: 20px 24px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    .faq-answer {
+      padding: 0 24px 20px;
+      color: var(--zyrox-muted, #87A99A);
+      font-size: 14px;
+      line-height: 1.6;
+      display: none;
+    }
+    .faq-item.active .faq-answer {
+      display: block;
+    }
+    .landing-footer {
+      background: #040806;
+      border-top: 1px solid var(--zyrox-border, #20372C);
+      padding: 60px 0 40px;
+      font-size: 13px;
+      color: var(--zyrox-muted, #87A99A);
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 40px;
+      margin-bottom: 40px;
+    }
+    .footer-heading {
+      color: #FFF;
+      font-weight: 700;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .footer-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .footer-link {
+      margin-bottom: 8px;
+    }
+    .footer-link a {
+      color: var(--zyrox-muted, #87A99A);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-link a:hover {
+      color: var(--zyrox-emerald, #00D99A);
+    }
+    .disclaimer-banner {
+      background: rgba(22, 230, 171, 0.04);
+      border: 1px solid rgba(32, 55, 44, 0.8);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-top: 30px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    /* Modal Styles */
+    .saas-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 11, 9, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .saas-modal {
+      background: var(--zyrox-surface, #0B1511);
+      border: 1px solid var(--zyrox-emerald, #00D99A);
+      border-radius: 12px;
+      max-width: 440px;
+      width: 100%;
+      padding: 32px;
+      box-shadow: 0 16px 50px rgba(0, 0, 0, 0.8);
+      position: relative;
+    }
+    .saas-modal-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: none;
+      border: none;
+      color: var(--zyrox-muted, #87A99A);
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .saas-modal-close:hover {
+      color: #FFF;
+    }
+    .saas-form-group {
+      margin-bottom: 18px;
+    }
+    .saas-form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--zyrox-muted, #87A99A);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .saas-form-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #060B09;
+      border: 1px solid var(--zyrox-border, #20372C);
+      border-radius: 6px;
+      padding: 12px 14px;
+      color: #FFF;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .saas-form-input:focus {
+      border-color: var(--zyrox-emerald, #00D99A);
+    }
+    .saas-form-btn {
+      width: 100%;
+      background: var(--zyrox-emerald, #00D99A);
+      color: #060B09;
+      border: none;
+      border-radius: 6px;
+      padding: 13px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .saas-form-btn:hover {
+      opacity: 0.9;
+    }
+    .saas-form-alert {
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .saas-form-alert.alert-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid #EF4444;
+      color: #FCA5A5;
+    }
+    .saas-form-alert.alert-success {
+      background: rgba(0, 217, 154, 0.15);
+      border: 1px solid #00D99A;
+      color: #A7F3D0;
+    }
+    @media (max-width: 768px) {
+      .landing-nav { padding: 12px 20px; }
+      .hero-title { font-size: 36px; }
+      .footer-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAVIGATION -->
+  <nav class="landing-nav">
+    <a href="/" class="landing-brand">
+      <img src="/dashboard/assets/brand/zyrox-logo-icon.svg" alt="ZYROX AI" class="landing-brand-logo">
+      <div>
+        <div class="landing-brand-title">ZYROX AI</div>
+        <div class="landing-brand-tag">FINTECH INTELLIGENCE</div>
+      </div>
+    </a>
+    <div class="landing-nav-links">
+      <a href="#features" class="landing-nav-link" data-i18n="nav_features">Features</a>
+      <a href="#agents" class="landing-nav-link" data-i18n="nav_agents">7-Agent System</a>
+      <a href="#markets" class="landing-nav-link" data-i18n="nav_markets">Markets</a>
+      <a href="#pricing" class="landing-nav-link" data-i18n="nav_pricing">Pricing</a>
+      <a href="#faq" class="landing-nav-link" data-i18n="nav_faq">FAQ</a>
+      <button onclick="toggleLandingLanguage()" class="btn btn-outline btn-xs" id="lang-toggle-btn" style="padding: 4px 10px;">ភាសាខ្មែរ</button>
+      <button onclick="openAuthModal('signin')" class="landing-nav-link" style="background: none; border: none; cursor: pointer;" data-i18n="nav_signin">Sign In</button>
+      <button onclick="openAuthModal('signup')" class="btn btn-hero-primary" style="padding: 8px 18px; font-size: 13px;" data-i18n="nav_trial_cta">14-Day Free Trial</button>
+    </div>
+  </nav>
+
+  <!-- HERO SECTION -->
+  <header class="landing-hero">
+    <div class="container">
+      <div class="hero-badge" data-i18n="hero_badge">⚡ INSTITUTIONAL MULTI-AGENT TRADING INTELLIGENCE</div>
+      <h1 class="hero-title" data-i18n="hero_title">Read the Market.<br>Own Your Edge.</h1>
+      <p class="hero-subtitle" data-i18n="hero_subtitle">
+        ZYROX AI orchestrates 7 specialized AI agents to scan liquidity sweeps, order blocks, multi-timeframe trends, and news blackouts on Gold (XAUUSD), Forex, and Crypto.
+      </p>
+      <div class="hero-cta-group">
+        <button onclick="openAuthModal('signup')" class="btn-hero-primary" data-i18n="hero_cta_trial">
+          <span>Start 14-Day Free Trial</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </button>
+        <a href="/dashboard/" class="btn-hero-secondary" data-i18n="hero_cta_terminal">Open Live Terminal</a>
+      </div>
+      <div style="margin-top: 18px; font-size: 12px; color: var(--zyrox-muted, #87A99A);">
+        ✓ No credit card required &nbsp;•&nbsp; ✓ Full feature access &nbsp;•&nbsp; ✓ Zero automatic renewal billing
+      </div>
+    </div>
+  </header>
+
+  <!-- FEATURES SECTION -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow" data-i18n="feat_eyebrow">Institutional Edge</div>
+        <h2 class="section-heading" data-i18n="feat_heading">Built for Real Trading Desks</h2>
+        <p class="section-subtext" data-i18n="feat_subtext">Engineered without simulated mockups or random number generators. Connected directly to live market feeds.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat_smc_title">Smart Money Concepts & ICT</h3>
+          <p class="feature-desc" data-i18n="feat_smc_desc">Automated detection of Buy-Side/Sell-Side Liquidity Sweeps, Fair Value Gaps (FVGs), Breaker Blocks, and Optimal Trade Entry (OTE) zones.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat_risk_title">100% Deterministic Risk Guardian</h3>
+          <p class="feature-desc" data-i18n="feat_risk_desc">Never delegates arithmetic to an AI. Strict Risk-to-Reward floor (minimum 1:2.0), 0.5% max capital risk cap, and spread cost gating.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          </div>
+          <h3 class="feature-title" data-i18n="feat_tg_title">Verified Telegram Signals</h3>
+          <p class="feature-desc" data-i18n="feat_tg_desc">Instant push alerts with exact Entry, Stop Loss, TP1, and TP2 targets, formatted bilingual in English and natural Cambodian Khmer.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7-AGENT WORKFLOW -->
+  <section class="section" id="agents">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow" data-i18n="agent_eyebrow">Multi-Agent Architecture</div>
+        <h2 class="section-heading" data-i18n="agent_heading">7 Specialized Agents Working in Concert</h2>
+        <p class="section-subtext" data-i18n="agent_subtext">Each trade proposal undergoes multi-tiered adversarial review and independent risk verification before dispatch.</p>
+      </div>
+      <div class="agent-pipeline">
+        <div class="agent-box">
+          <div class="agent-box-num">AGENT 01</div>
+          <div class="agent-box-name">Lead Orchestrator</div>
+          <div class="agent-box-role">Validates data freshness (<30s), checks session killzones, and coordinates specialist concurrency.</div>
+        </div>
+        <div class="agent-box">
+          <div class="agent-box-num">AGENT 02</div>
+          <div class="agent-box-name">Market Structure</div>
+          <div class="agent-box-role">Maps ICT/SMC order flow, liquidity pools, breaker blocks, and market regime.</div>
+        </div>
+        <div class="agent-box">
+          <div class="agent-box-num">AGENT 03</div>
+          <div class="agent-box-name">Multi-Timeframe</div>
+          <div class="agent-box-role">Calculates confluence across M5, M15, H1, and H4 using EMAs, RSI, and ATR.</div>
+        </div>
+        <div class="agent-box">
+          <div class="agent-box-num">AGENT 04</div>
+          <div class="agent-box-name">Macro/News Feed</div>
+          <div class="agent-box-role">Scans real economic calendars and enforces FOMC/CPI/NFP volatility blackouts.</div>
+        </div>
+        <div class="agent-box">
+          <div class="agent-box-num">AGENT 05</div>
+          <div class="agent-box-name">Risk Guardian</div>
+          <div class="agent-box-role">Deterministic math gatekeeper. Strict 1:2.0+ R:R floor & 0.5% max risk cap.</div>
+        </div>
+        <div class="agent-box">
+          <div class="agent-box-num">AGENT 06</div>
+          <div class="agent-box-name">Independent Critic</div>
+          <div class="agent-box-role">Devil's advocate uncovering contrarian traps, overbought exhaustion, and opposing evidence.</div>
+        </div>
+        <div class="agent-box">
+          <div class="agent-box-num">AGENT 07</div>
+          <div class="agent-box-name">Final Synthesis</div>
+          <div class="agent-box-role">Compiles institutional thesis and generates bilingual English and Khmer reports.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MARKETS SECTION -->
+  <section class="section" id="markets">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow" data-i18n="market_eyebrow">Multi-Asset Coverage</div>
+        <h2 class="section-heading" data-i18n="market_heading">Gold, Forex, and Crypto Intelligence</h2>
+        <p class="section-subtext" data-i18n="market_subtext">Supported with real multi-provider price alignment across Yahoo Finance, Binance, and Exness MT5.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3 class="feature-title text-gold">🥇 Gold & Precious Metals</h3>
+          <p class="feature-desc">Primary market specialization: XAUUSD. Monitored for New York AM/PM Silver Bullet and London Open liquidity sweeps.</p>
+        </div>
+        <div class="feature-card">
+          <h3 class="feature-title text-green">💱 Global Forex Majors</h3>
+          <p class="feature-desc">EURUSD, GBPUSD, USDJPY, AUDUSD with DXY dollar index strength correlation and central bank rate tracking.</p>
+        </div>
+        <div class="feature-card">
+          <h3 class="feature-title" style="color: #60A5FA;">⚡ Cryptocurrency Spot & Futures</h3>
+          <p class="feature-desc">24/7 autonomous monitoring on BTCUSDT, ETHUSDT, and SOLUSDT with Binance order flow metrics.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING SECTION -->
+  <section class="section" id="pricing">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow" data-i18n="price_eyebrow">Transparent Membership</div>
+        <h2 class="section-heading" data-i18n="price_heading">Simple, Transparent Pricing</h2>
+        <p class="section-subtext" data-i18n="price_subtext">Start free with our complete 14-day trial. Upgrade only when you are ready.</p>
+      </div>
+      <div class="pricing-grid">
+        <!-- FREE TRIAL -->
+        <div class="pricing-card">
+          <h3 class="pricing-title">14-Day Free Trial</h3>
+          <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0;">Full platform access. Zero commitment.</p>
+          <div class="pricing-price">$0 <span class="pricing-interval">/ 14 Days</span></div>
+          <ul class="pricing-features">
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 10 Daily AI Scans</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 3 Deep 7-Agent Analyses / Day</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 5 Active Watchlists</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Telegram Alert Integration</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Real Paper Trading Engine</li>
+          </ul>
+          <button onclick="openAuthModal('signup')" class="btn-hero-primary" style="width: 100%; justify-content: center;">Start Free Trial</button>
+        </div>
+
+        <!-- PRO -->
+        <div class="pricing-card featured">
+          <div class="pricing-badge">MOST POPULAR</div>
+          <h3 class="pricing-title">Pro Trader</h3>
+          <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0;">For active retail and proprietary traders.</p>
+          <div class="pricing-price">$29 <span class="pricing-interval">/ month</span></div>
+          <ul class="pricing-features">
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 50 Daily AI Scans</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 20 Deep 7-Agent Analyses / Day</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 25 Custom Watchlists</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Walk-Forward Backtester</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Agent Adversarial Debate View</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Priority Telegram Delivery</li>
+          </ul>
+          <button onclick="openAuthModal('signup')" class="btn-hero-primary" style="width: 100%; justify-content: center;">Choose Pro</button>
+        </div>
+
+        <!-- PREMIUM -->
+        <div class="pricing-card">
+          <h3 class="pricing-title">Institutional Elite</h3>
+          <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0;">For funds, prop desks, and volume traders.</p>
+          <div class="pricing-price">$79 <span class="pricing-interval">/ month</span></div>
+          <ul class="pricing-features">
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 200 Daily AI Scans</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 100 Deep Analyses / Day</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Unlimited Watchlists (100)</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Dedicated Webhook Relay</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Custom Prompt Models</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 24/7 VIP Account Support</li>
+          </ul>
+          <button onclick="openAuthModal('signup')" class="btn-hero-secondary" style="width: 100%; justify-content: center;">Contact Sales</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ SECTION -->
+  <section class="section" id="faq">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-eyebrow" data-i18n="faq_eyebrow">Got Questions?</div>
+        <h2 class="section-heading" data-i18n="faq_heading">Frequently Asked Questions</h2>
+      </div>
+      <div class="faq-list">
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-question">
+            <span>How does the 14-day free trial work?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer">
+            You receive full access to ZYROX AI for 14 calendar days upon registration. No credit card is required. When your trial concludes, your account automatically expires without surprise charges.
+          </div>
+        </div>
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-question">
+            <span>Do I need to leave my computer on 24/7?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer">
+            No! ZYROX AI runs entirely on our high-availability cloud infrastructure. The market scanners, AnyRouter inference engine, and Telegram notification bots run autonomously around the clock.
+          </div>
+        </div>
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-question">
+            <span>How do I connect my Telegram account?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer">
+            Once signed in, visit your Account Center and click "Connect Telegram". Our server generates a secure single-use linking token and opens a direct link to our official bot. Clicking Start automatically binds your account.
+          </div>
+        </div>
+        <div class="faq-item" onclick="toggleFaq(this)">
+          <div class="faq-question">
+            <span>Are trading signals guaranteed profitable?</span>
+            <span class="faq-icon">+</span>
+          </div>
+          <div class="faq-answer">
+            No financial model can guarantee future market results. ZYROX AI enforces a strict 1:2.0+ risk-to-reward floor and 0.5% risk cap to manage downside, but past performance never guarantees future returns.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="landing-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <img src="/dashboard/assets/brand/zyrox-logo-icon.svg" alt="ZYROX AI" width="24" height="24">
+            <span style="font-weight: 800; color: #FFF; font-size: 16px;">ZYROX AI</span>
+          </div>
+          <p style="margin: 0 0 16px; line-height: 1.6;">
+            Quantitative financial market intelligence terminal.<br>
+            <i>Read the Market. Own Your Edge.</i>
+          </p>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--zyrox-emerald, #00D99A);">
+            VERSION 2.1.0 • PRODUCTION READY
+          </div>
+        </div>
+        <div>
+          <div class="footer-heading">Platform</div>
+          <ul class="footer-links">
+            <li class="footer-link"><a href="/dashboard/">Live Terminal</a></li>
+            <li class="footer-link"><a href="#agents">Multi-Agent System</a></li>
+            <li class="footer-link"><a href="#markets">Market Scanner</a></li>
+            <li class="footer-link"><a href="#pricing">Subscription Plans</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="footer-heading">Legal & Compliance</div>
+          <ul class="footer-links">
+            <li class="footer-link"><a href="javascript:void(0)" onclick="openLegalModal('terms')">Terms of Service</a></li>
+            <li class="footer-link"><a href="javascript:void(0)" onclick="openLegalModal('privacy')">Privacy Policy</a></li>
+            <li class="footer-link"><a href="javascript:void(0)" onclick="openLegalModal('risk')">Risk Disclosure</a></li>
+          </ul>
+        </div>
+        <div>
+          <div class="footer-heading">Support</div>
+          <ul class="footer-links">
+            <li class="footer-link"><a href="javascript:void(0)" onclick="openSupportModal()">Contact Support</a></li>
+            <li class="footer-link"><a href="https://t.me/zyrox_trading_bot" target="_blank">Telegram Bot</a></li>
+            <li class="footer-link"><a href="/dashboard/#auth-signin">Account Sign In</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="disclaimer-banner">
+        <strong>Institutional Risk Disclaimer:</strong> Trading leveraged financial instruments including Gold (XAUUSD), Foreign Exchange (Forex), and Cryptocurrency involves substantial risk of loss and is not suitable for all investors. ZYROX AI provides algorithmic quantitative research and structural market intelligence for educational and analytical purposes only. Nothing on this platform constitutes individualized investment advice or financial recommendations.
+      </div>
+      <div style="text-align: center; margin-top: 24px; font-size: 12px;">
+        © 2026 ZYROX AI. All Rights Reserved. Built with institutional precision.
+      </div>
+    </div>
+  </footer>
+
+  <!-- AUTH MODAL (SIGN IN / SIGN UP / FORGOT PASSWORD) -->
+  <div class="saas-modal-backdrop" id="auth-modal-backdrop">
+    <div class="saas-modal">
+      <button class="saas-modal-close" onclick="closeAuthModal()">✕</button>
+
+      <!-- SIGN UP VIEW -->
+      <div id="modal-view-signup">
+        <h2 style="margin: 0 0 6px; font-size: 22px; font-weight: 800;">Start 14-Day Free Trial</h2>
+        <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0 0 20px;">No credit card required. Full institutional terminal access.</p>
+        <div class="saas-form-alert alert-error" id="signup-alert-error"></div>
+        <div class="saas-form-alert alert-success" id="signup-alert-success"></div>
+        <form onsubmit="handleSignUpSubmit(event)">
+          <div class="saas-form-group">
+            <label class="saas-form-label">Full Name or Handle</label>
+            <input type="text" class="saas-form-input" id="signup-name" placeholder="e.g. Alex Morgan" required>
+          </div>
+          <div class="saas-form-group">
+            <label class="saas-form-label">Email Address</label>
+            <input type="email" class="saas-form-input" id="signup-email" placeholder="alex@trader.com" required>
+          </div>
+          <div class="saas-form-group">
+            <label class="saas-form-label">Password (Min 8 Characters)</label>
+            <input type="password" class="saas-form-input" id="signup-password" minlength="8" placeholder="••••••••••••" required>
+          </div>
+          <div class="saas-form-group" style="display: flex; align-items: flex-start; gap: 8px;">
+            <input type="checkbox" id="signup-terms" checked required style="margin-top: 4px;">
+            <label for="signup-terms" style="font-size: 12px; color: var(--zyrox-muted, #87A99A); line-height: 1.4;">
+              I agree to the <a href="javascript:void(0)" onclick="openLegalModal('terms')" style="color: var(--zyrox-emerald, #00D99A);">Terms of Service</a> and <a href="javascript:void(0)" onclick="openLegalModal('privacy')" style="color: var(--zyrox-emerald, #00D99A);">Privacy Policy</a>.
+            </label>
+          </div>
+          <button type="submit" class="saas-form-btn" id="signup-btn-submit">Activate 14-Day Trial</button>
+        </form>
+        <div style="text-align: center; margin-top: 18px; font-size: 13px; color: var(--zyrox-muted, #87A99A);">
+          Already have an account? <a href="javascript:void(0)" onclick="switchModalView('signin')" style="color: var(--zyrox-emerald, #00D99A); font-weight: 600;">Sign In</a>
+        </div>
+      </div>
+
+      <!-- SIGN IN VIEW -->
+      <div id="modal-view-signin" style="display: none;">
+        <h2 style="margin: 0 0 6px; font-size: 22px; font-weight: 800;">Sign In to ZYROX AI</h2>
+        <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0 0 20px;">Access your trading intelligence terminal and live quotas.</p>
+        <div class="saas-form-alert alert-error" id="signin-alert-error"></div>
+        <div class="saas-form-alert alert-success" id="signin-alert-success"></div>
+        <form onsubmit="handleSignInSubmit(event)">
+          <div class="saas-form-group">
+            <label class="saas-form-label">Email Address</label>
+            <input type="email" class="saas-form-input" id="signin-email" placeholder="alex@trader.com" required>
+          </div>
+          <div class="saas-form-group">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+              <label class="saas-form-label">Password</label>
+              <a href="javascript:void(0)" onclick="switchModalView('forgot')" style="font-size: 11px; color: var(--zyrox-emerald, #00D99A); text-decoration: none;">Forgot?</a>
+            </div>
+            <input type="password" class="saas-form-input" id="signin-password" placeholder="••••••••••••" required>
+          </div>
+          <button type="submit" class="saas-form-btn" id="signin-btn-submit">Sign In to Dashboard</button>
+        </form>
+        <div style="text-align: center; margin-top: 18px; font-size: 13px; color: var(--zyrox-muted, #87A99A);">
+          Need an account? <a href="javascript:void(0)" onclick="switchModalView('signup')" style="color: var(--zyrox-emerald, #00D99A); font-weight: 600;">Start 14-Day Free Trial</a>
+        </div>
+      </div>
+
+      <!-- FORGOT PASSWORD VIEW -->
+      <div id="modal-view-forgot" style="display: none;">
+        <h2 style="margin: 0 0 6px; font-size: 22px; font-weight: 800;">Reset Password</h2>
+        <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0 0 20px;">Enter your email to receive recovery instructions.</p>
+        <div class="saas-form-alert alert-error" id="forgot-alert-error"></div>
+        <div class="saas-form-alert alert-success" id="forgot-alert-success"></div>
+        <form onsubmit="handleForgotSubmit(event)">
+          <div class="saas-form-group">
+            <label class="saas-form-label">Account Email</label>
+            <input type="email" class="saas-form-input" id="forgot-email" placeholder="alex@trader.com" required>
+          </div>
+          <button type="submit" class="saas-form-btn">Send Reset Link</button>
+        </form>
+        <div style="text-align: center; margin-top: 18px; font-size: 13px;">
+          <a href="javascript:void(0)" onclick="switchModalView('signin')" style="color: var(--zyrox-muted, #87A99A); text-decoration: none;">← Back to Sign In</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEGAL & SUPPORT MODAL -->
+  <div class="saas-modal-backdrop" id="info-modal-backdrop">
+    <div class="saas-modal" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+      <button class="saas-modal-close" onclick="closeInfoModal()">✕</button>
+      <h2 id="info-modal-title" style="margin: 0 0 16px; font-size: 22px; font-weight: 800;"></h2>
+      <div id="info-modal-body" style="font-size: 14px; line-height: 1.7; color: #D1E5DB;"></div>
+    </div>
+  </div>
+
+  <script>
+    // FAQ Accordion Toggle
+    function toggleFaq(el) {
+      const isActive = el.classList.contains("active");
+      document.querySelectorAll(".faq-item").forEach(item => {
+        item.classList.remove("active");
+        item.querySelector(".faq-icon").textContent = "+";
+      });
+      if (!isActive) {
+        el.classList.add("active");
+        el.querySelector(".faq-icon").textContent = "−";
+      }
+    }
+
+    // Modal Handlers
+    function openAuthModal(view = 'signup') {
+      switchModalView(view);
+      document.getElementById("auth-modal-backdrop").style.display = "flex";
+    }
+
+    function closeAuthModal() {
+      document.getElementById("auth-modal-backdrop").style.display = "none";
+    }
+
+    function switchModalView(view) {
+      document.getElementById("modal-view-signup").style.display = view === 'signup' ? 'block' : 'none';
+      document.getElementById("modal-view-signin").style.display = view === 'signin' ? 'block' : 'none';
+      document.getElementById("modal-view-forgot").style.display = view === 'forgot' ? 'block' : 'none';
+    }
+
+    function openInfoModal(title, htmlContent) {
+      document.getElementById("info-modal-title").textContent = title;
+      document.getElementById("info-modal-body").innerHTML = htmlContent;
+      document.getElementById("info-modal-backdrop").style.display = "flex";
+    }
+
+    function closeInfoModal() {
+      document.getElementById("info-modal-backdrop").style.display = "none";
+    }
+
+    function openLegalModal(type) {
+      if (type === 'terms') {
+        openInfoModal("Terms of Service", `
+          <p><strong>1. Acceptance of Terms:</strong> By creating an account or using ZYROX AI, you agree to abide by all platform rules and risk disclosures.</p>
+          <p><strong>2. Free Trial Policy:</strong> Free trials run for exactly 14 calendar days from grant. Only one trial is permitted per individual/email. No payment details are collected for trial activation.</p>
+          <p><strong>3. Non-Custodial Intelligence:</strong> ZYROX AI provides algorithmic research and simulated paper trading. The platform does not hold custody of user funds or execute real broker trades without verified user configuration.</p>
+        `);
+      } else if (type === 'privacy') {
+        openInfoModal("Privacy Policy", `
+          <p><strong>1. Information We Collect:</strong> We collect your account email, hashed passwords, encrypted session tokens, and Telegram user binding when connected.</p>
+          <p><strong>2. Security Standards:</strong> Passwords are protected using industry-standard PBKDF2-HMAC-SHA256 with random cryptographic salts. We never store plaintext passwords.</p>
+          <p><strong>3. Account Deletion:</strong> Users hold full rights to request complete account deletion through their Account Center at any time.</p>
+        `);
+      } else {
+        openInfoModal("Risk Disclosure", `
+          <p>Trading foreign exchange, commodities (Gold), and cryptocurrencies carries significant financial risk. Leverage amplifies both gains and losses. You should never risk capital you cannot afford to lose.</p>
+        `);
+      }
+    }
+
+    function openSupportModal() {
+      openInfoModal("Contact Support", `
+        <p>Our team is available 24/7 to assist with accounts, 14-day trials, Telegram linking, and technical integration.</p>
+        <p><strong>Direct Telegram Support:</strong> <a href="https://t.me/zyrox_trading_bot" target="_blank" style="color: #00D99A;">@zyrox_trading_bot</a></p>
+        <p><strong>Official Inquiries:</strong> support@zyrox.ai</p>
+        <p>You can also open an authenticated ticket directly inside the terminal dashboard.</p>
+      `);
+    }
+
+    // Auth Submission Handlers
+    async function handleSignUpSubmit(e) {
+      e.preventDefault();
+      const errBox = document.getElementById("signup-alert-error");
+      const okBox = document.getElementById("signup-alert-success");
+      const btn = document.getElementById("signup-btn-submit");
+      errBox.style.display = "none";
+      okBox.style.display = "none";
+      btn.textContent = "Activating Trial...";
+      btn.disabled = true;
+
+      try {
+        const payload = {
+          full_name: document.getElementById("signup-name").value,
+          email: document.getElementById("signup-email").value,
+          password: document.getElementById("signup-password").value,
+          language: isKhmerLanding ? "kh" : "en",
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Phnom_Penh",
+          terms_accepted: document.getElementById("signup-terms").checked
+        };
+
+        const res = await fetch("/api/v1/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Sign up failed");
+
+        okBox.textContent = "✓ Trial Activated! Redirecting to Terminal...";
+        okBox.style.display = "block";
+        setTimeout(() => { window.location.href = "/dashboard/"; }, 1000);
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = "block";
+        btn.textContent = "Activate 14-Day Trial";
+        btn.disabled = false;
+      }
+    }
+
+    async function handleSignInSubmit(e) {
+      e.preventDefault();
+      const errBox = document.getElementById("signin-alert-error");
+      const okBox = document.getElementById("signin-alert-success");
+      const btn = document.getElementById("signin-btn-submit");
+      errBox.style.display = "none";
+      okBox.style.display = "none";
+      btn.textContent = "Signing In...";
+      btn.disabled = true;
+
+      try {
+        const payload = {
+          email: document.getElementById("signin-email").value,
+          password: document.getElementById("signin-password").value
+        };
+
+        const res = await fetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Sign in failed");
+
+        okBox.textContent = "✓ Authenticated! Opening Dashboard...";
+        okBox.style.display = "block";
+        setTimeout(() => { window.location.href = "/dashboard/"; }, 800);
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = "block";
+        btn.textContent = "Sign In to Dashboard";
+        btn.disabled = false;
+      }
+    }
+
+    async function handleForgotSubmit(e) {
+      e.preventDefault();
+      const errBox = document.getElementById("forgot-alert-error");
+      const okBox = document.getElementById("forgot-alert-success");
+      errBox.style.display = "none";
+      okBox.style.display = "none";
+
+      try {
+        const email = document.getElementById("forgot-email").value;
+        const res = await fetch("/api/v1/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        okBox.textContent = data.message || "Reset link dispatched.";
+        okBox.style.display = "block";
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.style.display = "block";
+      }
+    }
+
+    // Bilingual Translation Matrix for Landing Page
+    let isKhmerLanding = false;
+    const KHMER_DICT = {
+      nav_features: "មុខងារសំខាន់ៗ",
+      nav_agents: "ប្រព័ន្ធ AI ទាំង ៧",
+      nav_markets: "ទីផ្សារជួញដូរ",
+      nav_pricing: "តម្លៃសមាជិក",
+      nav_faq: "សំណួរញឹកញាប់",
+      nav_signin: "ចូលប្រើប្រាស់",
+      nav_trial_cta: "សាកល្បងឥតគិតថ្លៃ ១៤ ថ្ងៃ",
+      hero_badge: "⚡ ប្រព័ន្ធបញ្ញាសិប្បនិម្មិតកម្រិតស្ថាប័ន MULTI-AGENT",
+      hero_title: "យល់ដឹងពីទីផ្សារ។<br>គ្រប់គ្រងឱកាសរបស់អ្នក។",
+      hero_subtitle: "ZYROX AI ដំណើរការភ្នាក់ងារ AI ឯកទេសចំនួន ៧ ដើរតួជាក្រុមស្រាវជ្រាវ ស្កេន Liquidity Sweeps, Order Blocks, និងព្រឹត្តិការណ៍សេដ្ឋកិច្ចលើមាស XAUUSD, Forex និង Crypto។",
+      hero_cta_trial: "ចាប់ផ្តើមសាកល្បង ១៤ ថ្ងៃឥតគិតថ្លៃ",
+      hero_cta_terminal: "បើកផ្ទាំងវិភាគផ្សាយផ្ទាល់",
+      feat_eyebrow: "ឧត្តមភាពកម្រិតស្ថាប័ន",
+      feat_heading: "បង្កើតឡើងសម្រាប់អ្នកជួញដូរអាជីព",
+      feat_subtext: "មិនប្រើទិន្នន័យក្លែងក្លាយ ឬការបង្កើតលេខចៃដន្យឡើយ។ ភ្ជាប់ជាមួយទិន្នន័យផ្សាយផ្ទាល់ពិតប្រាកដ។",
+      feat_smc_title: "Smart Money Concepts & ICT",
+      feat_smc_desc: "ស្វែងរក Liquidity Sweeps, Fair Value Gaps (FVGs), Breaker Blocks, និងតំបន់ OTE ដោយស្វ័យប្រវត្តិ។",
+      feat_risk_title: "Risk Guardian គណនាគណិតវិទ្យា ១០០%",
+      feat_risk_desc: "មិនប្រគល់ការគណនាហានិភ័យឱ្យ AI ឡើយ។ កំណត់ R:R អប្បបរមា 1:2.0+, ហានិភ័យអតិបរមា 0.5% និងត្រួតពិនិត្យ Spread។",
+      feat_tg_title: "សញ្ញា Telegram ផ្ទៀងផ្ទាត់ត្រឹមត្រូវ",
+      feat_tg_desc: "ផ្ញើដំណឹងភ្លាមៗជាមួយ Entry, Stop Loss, TP1, TP2 ជាពីរភាសា៖ អង់គ្លេស និងខ្មែរផ្លូវការ។",
+      agent_eyebrow: "ស្ថាបត្យកម្ម MULTI-AGENT",
+      agent_heading: "ភ្នាក់ងារឯកទេស ៧ ធ្វើការរួមគ្នា",
+      agent_subtext: "រាល់គម្រោងជួញដូរត្រូវឆ្លងកាត់ការវាយតម្លៃយ៉ាងតឹងរ៉ឹងពី Critic និង Risk Guardian មុននឹងចេញសញ្ញា។",
+      market_eyebrow: "ទីផ្សារគ្របដណ្តប់",
+      market_heading: "ការវិភាគលើ មាស, Forex, និង Crypto",
+      market_subtext: "គាំទ្រការតម្រឹមតម្លៃពិតប្រាកដតាមរយៈ Yahoo Finance, Binance, និង Exness MT5។",
+      price_eyebrow: "កញ្ចប់សមាជិកភាព",
+      price_heading: "តម្លៃសាមញ្ញ និងច្បាស់លាស់",
+      price_subtext: "ចាប់ផ្តើមដោយឥតគិតថ្លៃ ១៤ ថ្ងៃពេញលេញ។ គ្មានកាតឥណទាន គ្មានការកាត់លុយស្វ័យប្រវត្តិ។",
+      faq_eyebrow: "មានចម្ងល់ដែរឬទេ?",
+      faq_heading: "សំណួរដែលសួរញឹកញាប់"
+    };
+
+    function toggleLandingLanguage() {
+      isKhmerLanding = !isKhmerLanding;
+      document.getElementById("lang-toggle-btn").textContent = isKhmerLanding ? "English" : "ភាសាខ្មែរ";
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        if (isKhmerLanding && KHMER_DICT[key]) {
+          el.setAttribute("data-orig", el.innerHTML);
+          el.innerHTML = KHMER_DICT[key];
+        } else if (!isKhmerLanding && el.hasAttribute("data-orig")) {
+          el.innerHTML = el.getAttribute("data-orig");
+        }
+      });
+    }
+  </script>
+</body>
+</html>

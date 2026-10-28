@@ -86,6 +86,9 @@ VIP_TELEGRAM_CHAT_ID = os.getenv("VIP_TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID or "-1
 BAKONG_KHQR_ACCOUNT = os.getenv("BAKONG_KHQR_ACCOUNT", "taikry_financial@aclb")
 USDT_TRC20_WALLET = os.getenv("USDT_TRC20_WALLET", "TYD6xNf3bQeXG8sWpZ29jL4v1k8mR7q9Aa")
 TELEGRAM_ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "taikry_admin")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "zyrox_trading_bot")
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+PUBLIC_APP_URL = os.getenv("PUBLIC_APP_URL", "https://taikry-ai-trading.onrender.com")
 
 # Make.com Webhooks (Configured via environment variables only)
 MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL", "")

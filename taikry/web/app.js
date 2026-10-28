@@ -2696,6 +2696,10 @@ function switchNavPane(paneName) {
     fetchSelfTrainingData();
   } else if (paneName === "autofix") {
     fetchAutoFixAlerts();
+  } else if (paneName === "account") {
+    loadAccountProfile();
+  } else if (paneName === "support") {
+    loadSupportTickets();
   }
 }
 
@@ -3299,10 +3303,14 @@ function loadSettingsData() {
   setSelect("setting-risk-floor", rr);
   setSelect("setting-risk-cap", cap);
   setSelect("setting-language", lang);
-  setSelect("setting-density", den);
-  if (typeof initAnyRouterUI === "function") {
-    initAnyRouterUI();
-  }
+  setSelect("setting-density", den);
+
+  if (typeof initAnyRouterUI === "function") {
+
+    initAnyRouterUI();
+
+  }
+
 }
 
 function saveSettingsData() {
@@ -4852,4 +4860,565 @@ function initAnyRouterUI() {
   loadAnyRouterCatalog(false);
   loadAnyRouterRoles();
   loadAnyRouterBudget();
+}
+
+
+/* ==========================================================================
+   SAAS SUBSCRIPTION, 14-DAY FREE TRIAL, TELEGRAM & SUPPORT CLIENT LOGIC
+   ========================================================================== */
+
+let currentSaasUser = null;
+let currentTelegramLink = null;
+
+async function checkSaasSession() {
+  try {
+    const res = await fetch("/api/v1/auth/me", { credentials: "include" });
+    if (res.ok) {
+      const data = await res.json();
+      currentSaasUser = data;
+      const topLabel = document.getElementById("top-account-label");
+      if (topLabel) {
+        const roleBadge = data.role === "ADMIN" ? "👑 Admin" : (data.full_name || "Account");
+        topLabel.textContent = roleBadge;
+      }
+    } else {
+      currentSaasUser = null;
+      const topLabel = document.getElementById("top-account-label");
+      if (topLabel) topLabel.textContent = "Sign In / Trial";
+    }
+  } catch (err) {
+    console.debug("SaaS session check: not authenticated or offline");
+  }
+}
+
+async function loadAccountProfile() {
+  try {
+    // 1. Fetch current user profile
+    const userRes = await fetch("/api/v1/auth/me", { credentials: "include" });
+    if (!userRes.ok) {
+      // If unauthenticated, redirect to landing sign-in
+      if (confirm("You are currently not signed in. Would you like to go to the Sign In / Free Trial page?")) {
+        window.location.href = "/";
+      }
+      return;
+    }
+    const user = await userRes.json();
+    currentSaasUser = user;
+
+    // Fill profile fields
+    const fnInput = document.getElementById("acc-fullname");
+    if (fnInput) fnInput.value = user.full_name || "";
+    const emInput = document.getElementById("acc-email");
+    if (emInput) emInput.value = user.email || "";
+    const langSelect = document.getElementById("acc-language");
+    if (langSelect && user.preferred_language) langSelect.value = user.preferred_language;
+    const tzInput = document.getElementById("acc-timezone");
+    if (tzInput && user.timezone) tzInput.value = user.timezone;
+
+    // 2. Fetch 14-Day Free Trial & Entitlements
+    const trialRes = await fetch("/api/v1/auth/trial-status", { credentials: "include" });
+    if (trialRes.ok) {
+      const trial = await trialRes.json();
+      const planNameEl = document.getElementById("saas-plan-name");
+      const planStatusEl = document.getElementById("saas-plan-status");
+      const countdownEl = document.getElementById("saas-trial-countdown");
+      const expiresAtEl = document.getElementById("saas-trial-expires-at");
+      const scansQuotaEl = document.getElementById("saas-quota-scans");
+      const deepQuotaEl = document.getElementById("saas-quota-deep");
+
+      if (planNameEl) {
+        const tier = trial.plan_name ? trial.plan_name.toUpperCase() : "FREE TRIAL";
+        planNameEl.textContent = tier;
+      }
+      if (planStatusEl) {
+        planStatusEl.textContent = `Status: ${trial.status.replace("_", " ").toUpperCase()}`;
+        planStatusEl.className = trial.is_active ? "section-kpi-sub text-green" : "section-kpi-sub text-danger";
+      }
+      if (countdownEl) {
+        if (trial.status === "trial_active") {
+          countdownEl.textContent = `${trial.days_remaining}d ${trial.hours_remaining}h Left`;
+        } else if (trial.status === "trial_expired") {
+          countdownEl.textContent = "Expired";
+          countdownEl.className = "section-kpi-val text-danger";
+        } else if (trial.status === "active_paid") {
+          countdownEl.textContent = "Active Paid Tier";
+          countdownEl.className = "section-kpi-val text-gold";
+        } else {
+          countdownEl.textContent = trial.status;
+        }
+      }
+      if (expiresAtEl && trial.trial_expires_at) {
+        expiresAtEl.textContent = `Expires: ${trial.trial_expires_at.slice(0, 16)} UTC`;
+      }
+
+      // Quotas
+      if (scansQuotaEl) {
+        const scanLim = trial.daily_scan_limit === -1 ? "Unlimited" : trial.daily_scan_limit;
+        scansQuotaEl.textContent = `${trial.scans_used_today || 0} / ${scanLim}`;
+      }
+      if (deepQuotaEl) {
+        const deepLim = trial.daily_deep_analysis_limit === -1 ? "Unlimited" : trial.daily_deep_analysis_limit;
+        deepQuotaEl.textContent = `${trial.deep_analysis_used_today || 0} / ${deepLim}`;
+      }
+    }
+
+    // 3. Fetch Telegram Link Status
+    await loadTelegramLinkUI();
+
+  } catch (err) {
+    console.error("Failed to load account profile:", err);
+  }
+}
+
+async function loadTelegramLinkUI() {
+  try {
+    const res = await fetch("/api/v1/telegram-link/status", { credentials: "include" });
+    if (!res.ok) return;
+    const data = await res.json();
+    currentTelegramLink = data;
+
+    const badge = document.getElementById("saas-telegram-status-badge");
+    const unlinkedBox = document.getElementById("saas-telegram-unlinked-box");
+    const linkedBox = document.getElementById("saas-telegram-linked-box");
+    const userDisplay = document.getElementById("saas-telegram-user-display");
+    const chatDisplay = document.getElementById("saas-telegram-chatid-display");
+
+    if (data.linked) {
+      if (badge) {
+        badge.textContent = "CONNECTED";
+        badge.style.color = "#00D99A";
+        badge.style.borderColor = "#00D99A";
+        badge.style.background = "rgba(0, 217, 154, 0.15)";
+      }
+      if (unlinkedBox) unlinkedBox.style.display = "none";
+      if (linkedBox) linkedBox.style.display = "block";
+      if (userDisplay) userDisplay.textContent = data.telegram_username ? `@${data.telegram_username}` : "Telegram User";
+      if (chatDisplay) chatDisplay.textContent = `Chat ID: ${data.telegram_chat_id || "Verified"}`;
+
+      // Populate preferences
+      const p = data.preferences || {};
+      const setChecked = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = val !== false;
+      };
+      setChecked("pref-signals", p.trade_signals);
+      setChecked("pref-risk", p.risk_alerts);
+      setChecked("pref-macro", p.macro_events);
+      setChecked("pref-briefing", p.daily_briefing);
+      setChecked("pref-trial", p.trial_expiration_reminders);
+    } else {
+      if (badge) {
+        badge.textContent = "NOT LINKED";
+        badge.style.color = "#87A99A";
+        badge.style.borderColor = "#20372C";
+        badge.style.background = "rgba(135, 169, 154, 0.1)";
+      }
+      if (unlinkedBox) unlinkedBox.style.display = "block";
+      if (linkedBox) linkedBox.style.display = "none";
+    }
+  } catch (err) {
+    console.error("Failed to load telegram link UI:", err);
+  }
+}
+
+async function startTelegramLinking() {
+  try {
+    const res = await fetch("/api/v1/telegram-link/token", {
+      method: "POST",
+      credentials: "include"
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert("Failed to generate linking token: " + (err.detail || "Unknown error"));
+      return;
+    }
+    const data = await res.json();
+    const displayBox = document.getElementById("saas-telegram-token-display");
+    const urlInput = document.getElementById("saas-telegram-link-url");
+    const linkBtn = document.getElementById("saas-telegram-link-btn");
+
+    if (urlInput) urlInput.value = data.deep_link;
+    if (linkBtn) linkBtn.href = data.deep_link;
+    if (displayBox) displayBox.style.display = "block";
+
+  } catch (err) {
+    alert("Connection error: " + err.message);
+  }
+}
+
+function copyTelegramLink() {
+  const urlInput = document.getElementById("saas-telegram-link-url");
+  if (urlInput && urlInput.value) {
+    navigator.clipboard.writeText(urlInput.value);
+    alert("Telegram pairing link copied to clipboard! Paste it into your browser or send to your Telegram bot.");
+  }
+}
+
+async function unlinkTelegramAccount() {
+  if (!confirm("Are you sure you want to disconnect your Telegram account from ZYROX AI? Real-time mobile alerts will stop.")) {
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/telegram-link/unlink", {
+      method: "POST",
+      credentials: "include"
+    });
+    if (res.ok) {
+      alert("Telegram account successfully disconnected.");
+      await loadTelegramLinkUI();
+    } else {
+      const err = await res.json();
+      alert("Unlink failed: " + (err.detail || "Server error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
+
+async function saveNotificationPreferences() {
+  const payload = {
+    trade_signals: document.getElementById("pref-signals")?.checked ?? true,
+    risk_alerts: document.getElementById("pref-risk")?.checked ?? true,
+    macro_events: document.getElementById("pref-macro")?.checked ?? true,
+    daily_briefing: document.getElementById("pref-briefing")?.checked ?? true,
+    trial_expiration_reminders: document.getElementById("pref-trial")?.checked ?? true
+  };
+  try {
+    const res = await fetch("/api/v1/telegram-link/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      alert("Notification preferences saved successfully!");
+    } else {
+      const err = await res.json();
+      alert("Save failed: " + (err.detail || "Server error"));
+    }
+  } catch (err) {
+    alert("Save error: " + err.message);
+  }
+}
+
+async function saveUserProfile() {
+  const fullName = document.getElementById("acc-fullname")?.value?.trim();
+  const preferredLanguage = document.getElementById("acc-language")?.value;
+  const timezone = document.getElementById("acc-timezone")?.value?.trim();
+
+  try {
+    const res = await fetch("/api/v1/auth/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        full_name: fullName,
+        preferred_language: preferredLanguage,
+        timezone: timezone
+      })
+    });
+    if (res.ok) {
+      alert("Profile updated successfully!");
+      await checkSaasSession();
+    } else {
+      const err = await res.json();
+      alert("Update failed: " + (err.detail || "Server error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
+
+async function updateUserPassword() {
+  const oldPassword = document.getElementById("acc-old-pass")?.value;
+  const newPassword = document.getElementById("acc-new-pass")?.value;
+
+  if (!oldPassword || !newPassword) {
+    alert("Please enter both current and new password.");
+    return;
+  }
+  if (newPassword.length < 8) {
+    alert("New password must be at least 8 characters long.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/v1/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        old_password: oldPassword,
+        new_password: newPassword
+      })
+    });
+    if (res.ok) {
+      alert("Password changed successfully! Please keep your new credentials safe.");
+      document.getElementById("acc-old-pass").value = "";
+      document.getElementById("acc-new-pass").value = "";
+    } else {
+      const err = await res.json();
+      alert("Password update failed: " + (err.detail || "Incorrect current password"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
+
+async function handleUserLogout() {
+  if (!confirm("Are you sure you want to sign out of ZYROX AI?")) return;
+  try {
+    await fetch("/api/v1/auth/logout", {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch (err) {
+    console.debug("Logout notice:", err);
+  } finally {
+    window.location.href = "/";
+  }
+}
+
+async function confirmDeleteAccount() {
+  const confirmation = prompt("To permanently delete your ZYROX AI account and cancel all subscriptions, type 'DELETE' below:");
+  if (confirmation !== "DELETE") {
+    alert("Account deletion canceled.");
+    return;
+  }
+  try {
+    const res = await fetch("/api/v1/auth/account", {
+      method: "DELETE",
+      credentials: "include"
+    });
+    if (res.ok) {
+      alert("Your account has been deleted.");
+      window.location.href = "/";
+    } else {
+      const err = await res.json();
+      alert("Deletion failed: " + (err.detail || "Server error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
+
+/* ==========================================================================
+   SUPPORT DESK & TICKET SYSTEM LOGIC
+   ========================================================================== */
+
+async function loadSupportTickets() {
+  try {
+    const res = await fetch("/api/v1/support/tickets", { credentials: "include" });
+    const tbody = document.getElementById("user-tickets-tbody");
+    if (!tbody) return;
+
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Sign in to view your support tickets.</td></tr>`;
+      return;
+    }
+    const tickets = await res.json();
+    if (!tickets || tickets.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No support tickets submitted yet.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = tickets.map(t => {
+      const badgeClass = t.status === "RESOLVED" || t.status === "CLOSED" ? "text-green" : (t.status === "IN_PROGRESS" ? "text-gold" : "text-cyan");
+      return `
+        <tr>
+          <td><strong style="color: #16E6AB;">${t.ticket_number}</strong></td>
+          <td>${t.subject}</td>
+          <td>${t.category}</td>
+          <td>${t.priority.toUpperCase()}</td>
+          <td><span class="${badgeClass}">● ${t.status}</span></td>
+          <td style="font-size: 11px; color: #87A99A;">${(t.created_at || "").slice(0, 16)}</td>
+        </tr>
+      `;
+    }).join("");
+
+  } catch (err) {
+    console.error("Failed to load support tickets:", err);
+  }
+}
+
+async function submitSupportTicket() {
+  const category = document.getElementById("ticket-category")?.value;
+  const priority = document.getElementById("ticket-priority")?.value;
+  const subject = document.getElementById("ticket-subject")?.value?.trim();
+  const message = document.getElementById("ticket-message")?.value?.trim();
+
+  if (!subject || !message) {
+    alert("Please provide both a subject and detailed description.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/v1/support/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        category: category,
+        priority: priority,
+        subject: subject,
+        message: message
+      })
+    });
+
+    if (res.ok) {
+      const created = await res.json();
+      alert(`Support Ticket #${created.ticket_number} created successfully! Our engineering team will review your inquiry.`);
+      document.getElementById("ticket-subject").value = "";
+      document.getElementById("ticket-message").value = "";
+      await loadSupportTickets();
+    } else {
+      const err = await res.json();
+      alert("Ticket submission failed: " + (err.detail || "Please sign in first"));
+    }
+  } catch (err) {
+    alert("Submission error: " + err.message);
+  }
+}
+
+// Auto-check SaaS session on DOM ready
+document.addEventListener("DOMContentLoaded", () => {
+  checkSaasSession();
+});
+
+
+/* ==========================================================================
+   ADMIN SAAS MANAGEMENT JAVASCRIPT HANDLERS
+   ========================================================================== */
+
+let adminCachedUsers = [];
+
+async function loadAdminSaaSData() {
+  try {
+    // 1. Load Analytics
+    const anaRes = await fetch("/api/v1/admin/analytics", { credentials: "include" });
+    if (anaRes.ok) {
+      const a = await anaRes.json();
+      const totEl = document.getElementById("admin-saas-total-users");
+      const triEl = document.getElementById("admin-saas-active-trials");
+      const paidEl = document.getElementById("admin-saas-paid-users");
+      const spendEl = document.getElementById("admin-saas-ai-spend");
+
+      if (totEl) totEl.textContent = a.total_users || 0;
+      if (triEl) triEl.textContent = a.active_trials || 0;
+      if (paidEl) paidEl.textContent = a.paid_users || 0;
+      if (spendEl) spendEl.textContent = "$" + (a.total_ai_cost_usd ? a.total_ai_cost_usd.toFixed(4) : "0.00");
+    }
+
+    // 2. Load Users
+    const usersRes = await fetch("/api/v1/admin/users", { credentials: "include" });
+    const tbody = document.getElementById("admin-saas-users-tbody");
+    if (!tbody) return;
+
+    if (!usersRes.ok) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">Admin authorization required. Sign in as admin.</td></tr>`;
+      return;
+    }
+
+    const data = await usersRes.json();
+    adminCachedUsers = data.users || [];
+    renderAdminUsersTable(adminCachedUsers);
+
+  } catch (err) {
+    console.error("Failed to load admin SaaS data:", err);
+  }
+}
+
+function filterAdminUsers(query) {
+  const q = (query || "").toLowerCase();
+  const filtered = adminCachedUsers.filter(u =>
+    (u.email || "").toLowerCase().includes(q) ||
+    (u.full_name || "").toLowerCase().includes(q)
+  );
+  renderAdminUsersTable(filtered);
+}
+
+function renderAdminUsersTable(users) {
+  const tbody = document.getElementById("admin-saas-users-tbody");
+  if (!tbody) return;
+  if (!users || users.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">No users found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = users.map(u => {
+    const isSuspended = u.status === "suspended";
+    const statusColor = isSuspended ? "text-danger" : (u.trial_status === "trial_active" ? "text-green" : "text-cyan");
+    return `
+      <tr>
+        <td><strong>${u.email}</strong></td>
+        <td>${u.full_name || "--"}</td>
+        <td><span class="badge">${u.role}</span></td>
+        <td><span class="text-gold">${(u.subscription_tier || "free_trial").toUpperCase()}</span></td>
+        <td><span class="${statusColor}">● ${u.status} (${u.trial_status || "n/a"})</span></td>
+        <td>
+          <div style="display: flex; gap: 4px;">
+            <button class="btn btn-outline btn-xs" onclick="promptOverridePlan('${u.id}')">Plan</button>
+            <button class="btn ${isSuspended ? 'btn-gold' : 'btn-danger'} btn-xs" onclick="toggleUserSuspension('${u.id}', '${u.status}')">
+              ${isSuspended ? 'Activate' : 'Suspend'}
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function promptOverridePlan(userId) {
+  const plan = prompt("Enter new plan slug (free_trial, pro, premium):", "pro");
+  if (!plan) return;
+  const daysStr = prompt("Enter duration in days (e.g. 30):", "30");
+  const days = parseInt(daysStr, 10) || 30;
+
+  try {
+    const res = await fetch(`/api/v1/admin/users/${userId}/subscription`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        plan_slug: plan.toLowerCase(),
+        duration_days: days,
+        reason: "Admin manual override"
+      })
+    });
+    if (res.ok) {
+      alert(`User plan successfully updated to ${plan} for ${days} days!`);
+      await loadAdminSaaSData();
+    } else {
+      const err = await res.json();
+      alert("Override failed: " + (err.detail || "Server error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
+}
+
+async function toggleUserSuspension(userId, currentStatus) {
+  const newStatus = currentStatus === "suspended" ? "active" : "suspended";
+  if (!confirm(`Are you sure you want to change user status to '${newStatus}'?`)) return;
+
+  try {
+    const res = await fetch(`/api/v1/admin/users/${userId}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        status: newStatus,
+        reason: `Admin toggle to ${newStatus}`
+      })
+    });
+    if (res.ok) {
+      alert(`User status updated to ${newStatus}.`);
+      await loadAdminSaaSData();
+    } else {
+      const err = await res.json();
+      alert("Status update failed: " + (err.detail || "Server error"));
+    }
+  } catch (err) {
+    alert("Network error: " + err.message);
+  }
 }

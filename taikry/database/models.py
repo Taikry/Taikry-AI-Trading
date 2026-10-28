@@ -422,3 +422,210 @@ class VIPInviteLinkRecord(Base):
     revoked_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utc_now, index=True)
 
+
+
+# =============================================================================
+# SAAS PLATFORM MODELS — USERS, TRIALS, SUBSCRIPTIONS, TELEGRAM, TICKETS, AUDIT
+# =============================================================================
+
+class User(Base):
+    """
+    Core User entity for ZYROX AI SaaS accounts.
+    Secured with PBKDF2-HMAC-SHA256 password hashing.
+    """
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    salt = Column(String(64), nullable=False)
+    full_name = Column(String(128), nullable=True)
+    role = Column(String(20), default="USER", index=True, nullable=False)  # "USER", "ADMIN"
+    is_verified = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    language = Column(String(10), default="en", nullable=False)  # "en", "kh"
+    timezone = Column(String(50), default="Asia/Phnom_Penh", nullable=False)
+    terms_accepted_at = Column(DateTime, nullable=True)
+    terms_version = Column(String(20), default="v1.0")
+    privacy_accepted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+    updated_at = Column(DateTime, default=_utc_now)
+    deleted_at = Column(DateTime, nullable=True)
+
+
+class UserSession(Base):
+    """
+    Server-side session management. Stores SHA-256 hash of session token.
+    Never exposes raw tokens in database.
+    """
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+    expires_at = Column(DateTime, index=True, nullable=False)
+    created_at = Column(DateTime, default=_utc_now)
+    last_seen_at = Column(DateTime, default=_utc_now)
+
+
+class VerificationToken(Base):
+    """
+    Single-use tokens for email verification and secure password resets.
+    """
+    __tablename__ = "verification_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    token_type = Column(String(30), index=True, nullable=False)  # "EMAIL_VERIFICATION", "PASSWORD_RESET"
+    expires_at = Column(DateTime, index=True, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utc_now)
+
+
+class SubscriptionPlan(Base):
+    """
+    Plan definition with configurable feature entitlements and quotas.
+    """
+    __tablename__ = "subscription_plans"
+
+    id = Column(String(30), primary_key=True)  # "free_trial", "pro", "premium"
+    name_en = Column(String(50), nullable=False)
+    name_kh = Column(String(50), nullable=False)
+    price_usd = Column(Float, default=0.0)
+    billing_interval = Column(String(20), default="monthly")  # "trial", "monthly", "yearly", "lifetime"
+    max_ai_scans_per_day = Column(Integer, default=10)
+    max_deep_analysis_per_day = Column(Integer, default=3)
+    max_watchlists = Column(Integer, default=5)
+    backtesting_enabled = Column(Boolean, default=False)
+    telegram_alerts_enabled = Column(Boolean, default=True)
+    agent_debate_enabled = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=_utc_now)
+
+
+class UserSubscription(Base):
+    """
+    Active user subscription or trial entitlement.
+    """
+    __tablename__ = "user_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    plan_id = Column(String(30), ForeignKey("subscription_plans.id"), nullable=False)
+    status = Column(String(30), default="trial_active", index=True, nullable=False)
+    # "pending_verification", "trial_active", "trial_expired", "active_paid", "past_due", "canceled", "suspended"
+    trial_starts_at = Column(DateTime, nullable=True)
+    trial_expires_at = Column(DateTime, index=True, nullable=True)
+    current_period_starts_at = Column(DateTime, nullable=True)
+    current_period_expires_at = Column(DateTime, nullable=True)
+    cancel_at_period_end = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now)
+
+
+class TrialGrantRecord(Base):
+    """
+    Persistent audit ledger of 14-day trial grants to prevent duplicate abuse.
+    """
+    __tablename__ = "trial_grants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    email = Column(String(255), index=True, nullable=False)
+    duration_days = Column(Integer, default=14)
+    starts_at = Column(DateTime, default=_utc_now, nullable=False)
+    expires_at = Column(DateTime, index=True, nullable=False)
+    status = Column(String(20), default="ACTIVE", index=True, nullable=False)  # "ACTIVE", "EXPIRED", "REVOKED"
+    created_at = Column(DateTime, default=_utc_now)
+
+
+class AIUsageRecord(Base):
+    """
+    Granular accounting of AI and market analysis usage per user.
+    """
+    __tablename__ = "ai_usage_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    request_type = Column(String(50), nullable=False)  # "standard_scan", "deep_analysis", "chat_ai", "backtest"
+    symbol = Column(String(20), default="XAUUSD")
+    tokens_used = Column(Integer, default=0)
+    cost_usd = Column(Float, default=0.0)
+    model_used = Column(String(100), nullable=True)
+    date_str = Column(String(10), index=True, nullable=False)  # "YYYY-MM-DD"
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+
+class TelegramLink(Base):
+    """
+    Cryptographic Telegram account binding.
+    """
+    __tablename__ = "telegram_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    telegram_chat_id = Column(String(64), unique=True, index=True, nullable=True)
+    telegram_username = Column(String(64), nullable=True)
+    telegram_first_name = Column(String(128), nullable=True)
+    linking_token = Column(String(64), unique=True, index=True, nullable=True)
+    linking_token_expires_at = Column(DateTime, nullable=True)
+    is_linked = Column(Boolean, default=False, index=True, nullable=False)
+    linked_at = Column(DateTime, nullable=True)
+    unlinked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utc_now)
+
+
+class NotificationPreferences(Base):
+    """
+    User-configurable notification dispatch preferences.
+    """
+    __tablename__ = "notification_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, index=True, nullable=False)
+    ai_analysis_completed = Column(Boolean, default=True)
+    signal_generated = Column(Boolean, default=True)
+    signal_invalidated = Column(Boolean, default=True)
+    daily_summary = Column(Boolean, default=True)
+    trial_expiration_reminders = Column(Boolean, default=True)
+    subscription_status_changes = Column(Boolean, default=True)
+    system_announcements = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now)
+
+
+class SupportTicket(Base):
+    """
+    Support ticket inquiry and resolution tracking.
+    """
+    __tablename__ = "support_tickets"
+
+    id = Column(String(30), primary_key=True)  # "TICK-YYYYMMDD-XXXX"
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    category = Column(String(50), nullable=False)  # "account", "trial", "billing", "telegram", "ai_analysis", "technical"
+    subject = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    status = Column(String(30), default="OPEN", index=True, nullable=False)  # "OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"
+    priority = Column(String(20), default="NORMAL", nullable=False)
+    admin_response = Column(Text, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+
+class AuditLog(Base):
+    """
+    Immutable audit log for security events and administrative actions.
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor_user_id = Column(Integer, nullable=True)
+    action = Column(String(100), index=True, nullable=False)
+    target_type = Column(String(50), nullable=True)
+    target_id = Column(String(100), nullable=True)
+    details = Column(JSON, nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)

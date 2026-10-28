@@ -32,7 +32,7 @@ engine = create_engine(
     **engine_kwargs
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
 
 def init_db():
     """Initializes tables idempotently and runs schema migrations."""
