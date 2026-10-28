@@ -86,7 +86,7 @@ class FreeLLMAPIClient:
         try:
             url = f"{self.base_url}/models"
             headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-            resp = requests.get(url, headers=headers, timeout=min(self.timeout, 5.0))
+            resp = requests.get(url, headers=headers, timeout=min(self.timeout, 1.5))
             latency = int((time.time() - t0) * 1000)
 
             if resp.status_code == 200:
@@ -160,7 +160,7 @@ class FreeLLMAPIClient:
         try:
             url = f"{self.base_url}/models"
             headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-            resp = requests.get(url, headers=headers, timeout=self.timeout)
+            resp = requests.get(url, headers=headers, timeout=min(self.timeout, 2.5))
             if resp.status_code == 200:
                 data = resp.json()
                 raw_models = data.get("data", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])

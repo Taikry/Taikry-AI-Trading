@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--send-report", action="store_true", help="Generate full bilingual AI report and dispatch to Telegram (-1004341134868) and Make webhook")
     parser.add_argument("--daily-report", action="store_true", help="Generate and dispatch XAUUSD daily performance report to Telegram")
     parser.add_argument("--stats", action="store_true", help="Display verified XAUUSD win rates and performance analytics")
+    parser.add_argument("--reload", action="store_true", default=False, help="Enable auto-reload on code changes")
     parser.add_argument("--port", type=int, default=8000, help="Port for FastAPI server (default: 8000)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host for FastAPI server (default: 0.0.0.0)")
 
@@ -188,7 +189,7 @@ def main():
         from taikry.database.session import init_db
         init_db()
         print(f"[*] Starting TAIKRY PRO Server at http://localhost:{args.port}/dashboard ...")
-        uvicorn.run("taikry.api.app:app", host=args.host, port=args.port, reload=False)
+        uvicorn.run("taikry.api.app:app", host=args.host, port=args.port, reload=args.reload)
 
 if __name__ == "__main__":
     main()
