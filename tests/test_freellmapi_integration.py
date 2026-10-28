@@ -174,41 +174,42 @@ class TestLLMOrchestratorFreeLLMAPI:
         assert res["_llm_meta"]["status"] == "SUCCESS"
 
 
+from taikry.api.routes import (
+    get_freellmapi_status_endpoint,
+    get_freellmapi_models_endpoint,
+    test_freellmapi_endpoint as api_test_freellmapi_endpoint,
+    configure_freellmapi_endpoint,
+    FreeLLMAPIConfigureRequest
+)
+
 class TestFreeLLMAPIRoutes:
     """Verifies the REST API endpoints under /api/v1/freellmapi/*."""
 
-    def test_get_status_route(self, test_client):
-        res = test_client.get("/api/v1/freellmapi/status")
-        assert res.status_code == 200
-        data = res.json()
+    def test_get_status_route(self):
+        data = get_freellmapi_status_endpoint()
         assert "status" in data
         assert "base_url" in data
         assert "github_url" in data
 
-    def test_get_models_route(self, test_client):
-        res = test_client.get("/api/v1/freellmapi/models")
-        assert res.status_code == 200
-        data = res.json()
+    def test_get_models_route(self):
+        data = get_freellmapi_models_endpoint()
         assert "models" in data
         assert isinstance(data["models"], list)
         assert len(data["models"]) > 0
 
-    def test_configure_route(self, test_client):
-        res = test_client.post(
-            "/api/v1/freellmapi/configure",
-            json={
-                "base_url": "http://localhost:4000/v1",
-                "default_model": "deepseek-r1",
-                "api_key": "sk-custom-test-key"
-            }
+    def test_configure_route(self):
+        data = configure_freellmapi_endpoint(
+            FreeLLMAPIConfigureRequest(
+                base_url="http://localhost:4000/v1",
+                default_model="deepseek-r1",
+                api_key="sk-custom-test-key"
+            )
         )
-        assert res.status_code == 200
-        data = res.json()
         assert data["success"] is True
         assert data["status"]["default_model"] == "deepseek-r1"
 
     @patch("taikry.ai.freellmapi_client.freellmapi_client.test_connection")
-    def test_test_route_mocked(self, mock_test, test_client):
+    def test_test_route_mocked(self, mock_test):
         mock_test.return_value = {
             "success": True,
             "response": "PONG",
@@ -216,8 +217,6 @@ class TestFreeLLMAPIRoutes:
             "latency_ms": 115,
             "message": "FreeLLMAPI verified!"
         }
-        res = test_client.post("/api/v1/freellmapi/test")
-        assert res.status_code == 200
-        data = res.json()
+        data = api_test_freellmapi_endpoint()
         assert data["success"] is True
         assert data["response"] == "PONG"

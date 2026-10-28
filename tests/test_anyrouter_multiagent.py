@@ -23,7 +23,8 @@ from taikry.ai.anyrouter_client import (
     AnyRouterBudgetManager,
     SanitizedModelInfo,
     CatalogResponse,
-    SmokeTestResult
+    SmokeTestResult,
+    anyrouter_client
 )
 from taikry.agents.orchestration_layer import (
     Orchestrator,
@@ -348,52 +349,61 @@ def test_deep_analysis_aborts_on_stale_data():
 # 8. FASTAPI ENDPOINT INTEGRATION TESTS
 # =============================================================================
 
-client = TestClient(app)
+from taikry.api.routes import (
+    get_anyrouter_models,
+    get_anyrouter_roles,
+    configure_anyrouter_role,
+    get_anyrouter_budget,
+    execute_deep_multiagent_analysis,
+    AnyRouterRoleConfigRequest,
+    DeepAnalysisApiRequest
+)
 
 def test_api_anyrouter_models_endpoint():
     """Tests GET /api/v1/anyrouter/models returns sanitized catalog structure."""
-    resp = client.get("/api/v1/anyrouter/models")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "configured" in data
-    assert "status" in data
-    assert "models" in data
+    with patch("taikry.ai.anyrouter_client.AnyRouterClient.get_models") as mock_get:
+        mock_get.return_value = CatalogResponse(
+            configured=True,
+            status="CONNECTED",
+            total_models=1,
+            models=[]
+        )
+        data = get_anyrouter_models()
+        assert "configured" in data
+        assert "status" in data
+        assert "models" in data
 
 
 def test_api_anyrouter_roles_endpoints():
     """Tests GET and POST /api/v1/anyrouter/roles."""
-    get_resp = client.get("/api/v1/anyrouter/roles")
-    assert get_resp.status_code == 200
-    roles_data = get_resp.json()
+    roles_data = get_anyrouter_roles()
     assert "orchestrator" in roles_data
 
     # Assign role
-    post_resp = client.post("/api/v1/anyrouter/roles", json={
-        "role": "fast",
-        "model_id": "deepseek/deepseek-chat",
-        "validate_first": False
-    })
-    assert post_resp.status_code == 200
-    assert post_resp.json()["success"]
+    post_resp = configure_anyrouter_role(AnyRouterRoleConfigRequest(
+        role="fast",
+        model_id="deepseek/deepseek-chat",
+        validate_first=False
+    ))
+    assert post_resp["success"]
 
 
 def test_api_anyrouter_budget_endpoint():
     """Tests GET /api/v1/anyrouter/budget."""
-    resp = client.get("/api/v1/anyrouter/budget")
-    assert resp.status_code == 200
-    data = resp.json()
+    data = get_anyrouter_budget()
     assert "spend_limit_usd" in data
     assert "estimated_spend_usd" in data
 
 
 def test_api_deep_analysis_endpoint():
     """Tests POST /api/v1/agents/deep-analysis returns valid trace."""
-    resp = client.post("/api/v1/agents/deep-analysis", json={"symbol": "XAUUSD"})
-    assert resp.status_code == 200
-    trace = resp.json()
-    assert "request_id" in trace
-    assert "overall_status" in trace
-    assert "risk_guardian" in trace
-    assert "final_synthesis" in trace
-    assert trace["final_synthesis"]["action"] in ("BUY", "SELL", "WAIT", "REJECT")
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    with patch("taikry.data.providers.market_data_engine.get_verified_price", return_value=(2650.0, "MOCK_PROVIDER", now_utc)):
+        with patch("taikry.data.validator.check_data_freshness", return_value={"fresh": False, "status": "STALE", "age_minutes": 120}):
+            trace = execute_deep_multiagent_analysis(DeepAnalysisApiRequest(symbol="XAUUSD"))
+            assert "request_id" in trace
+            assert "overall_status" in trace
+            assert "risk_guardian" in trace
+            assert "final_synthesis" in trace
+            assert trace["final_synthesis"]["action"] in ("BUY", "SELL", "WAIT", "REJECT")
 

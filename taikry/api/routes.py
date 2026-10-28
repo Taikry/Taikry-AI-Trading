@@ -142,9 +142,9 @@ def run_market_analysis(
     Enforces SaaS subscription and 14-day free trial quotas when user is authenticated.
     """
     token = None
-    if authorization and authorization.startswith("Bearer "):
+    if isinstance(authorization, str) and authorization.startswith("Bearer "):
         token = authorization[7:].strip()
-    elif zyrox_session:
+    elif isinstance(zyrox_session, str) and zyrox_session:
         token = zyrox_session.strip()
 
     if token:
@@ -2411,9 +2411,9 @@ def execute_deep_multiagent_analysis(
     from taikry.saas.entitlement_service import check_and_consume_quota
 
     token = None
-    if authorization and authorization.startswith("Bearer "):
+    if isinstance(authorization, str) and authorization.startswith("Bearer "):
         token = authorization[7:].strip()
-    elif zyrox_session:
+    elif isinstance(zyrox_session, str) and zyrox_session:
         token = zyrox_session.strip()
 
     if token:

@@ -22,6 +22,9 @@ from taikry.config import (
     FREELLMAPI_DEFAULT_MODEL,
     CLAUDE_API_KEY,
     OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    OPENAI_MODEL,
+    ANYROUTER_API_KEY,
     GEMINI_API_KEY,
     DEEPSEEK_API_KEY,
     OPENROUTER_API_KEY,
@@ -128,6 +131,48 @@ def call_claude(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, 
     - Claude 3 Opus
     """
     if not CLAUDE_API_KEY:
+        # Fallback to OpenRouter or AnyRouter if available
+        if OPENROUTER_API_KEY:
+            try:
+                t0 = time.time()
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model": "anthropic/claude-3.5-sonnet",
+                        "messages": [
+                            {"role": "system", "content": LLM_SYSTEM_PROMPT},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.2
+                    },
+                    timeout=timeout
+                )
+                if resp.status_code == 200:
+                    raw_text = resp.json()["choices"][0]["message"]["content"]
+                    parsed = _extract_json_from_response(raw_text)
+                    if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+                        lat = int((time.time() - t0) * 1000)
+                        parsed["_llm_meta"] = {"provider": "claude (via openrouter)", "model": "anthropic/claude-3.5-sonnet", "latency_ms": lat, "status": "SUCCESS"}
+                        return parsed
+            except Exception as e:
+                logger.warning(f"Claude via OpenRouter notice: {e}")
+        from taikry.config import ANYROUTER_API_KEY
+        if ANYROUTER_API_KEY:
+            try:
+                from taikry.ai.anyrouter_client import anyrouter_client
+                res = anyrouter_client.generate_chat_completion(
+                    messages=[{"role": "system", "content": LLM_SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}],
+                    model="anyrouter/free",
+                    response_format={"type": "json_object"}
+                )
+                parsed = _extract_json_from_response(res.get("content", ""))
+                if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+                    parsed["_llm_meta"] = {"provider": "claude (via anyrouter)", "model": res.get("model", "anyrouter/free"), "latency_ms": res.get("latency_ms", 1500), "status": "SUCCESS"}
+                    return parsed
+            except Exception as e:
+                logger.warning(f"Claude via AnyRouter notice: {e}")
         return None
 
     models = [
@@ -204,14 +249,68 @@ def call_openai(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, 
     - GPT-4-turbo
     """
     if not OPENAI_API_KEY:
+        # Fallback to OpenRouter or AnyRouter if available
+        if OPENROUTER_API_KEY:
+            try:
+                t0 = time.time()
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model": "openai/gpt-4o",
+                        "messages": [
+                            {"role": "system", "content": LLM_SYSTEM_PROMPT},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.2
+                    },
+                    timeout=timeout
+                )
+                if resp.status_code == 200:
+                    raw_text = resp.json()["choices"][0]["message"]["content"]
+                    parsed = _extract_json_from_response(raw_text)
+                    if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+                        lat = int((time.time() - t0) * 1000)
+                        parsed["_llm_meta"] = {"provider": "openai (via openrouter)", "model": "openai/gpt-4o", "latency_ms": lat, "status": "SUCCESS"}
+                        return parsed
+            except Exception as e:
+                logger.warning(f"OpenAI via OpenRouter notice: {e}")
+        from taikry.config import ANYROUTER_API_KEY
+        if ANYROUTER_API_KEY:
+            try:
+                from taikry.ai.anyrouter_client import anyrouter_client
+                res = anyrouter_client.generate_chat_completion(
+                    messages=[{"role": "system", "content": LLM_SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}],
+                    model="anyrouter/free",
+                    response_format={"type": "json_object"}
+                )
+                parsed = _extract_json_from_response(res.get("content", ""))
+                if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+                    parsed["_llm_meta"] = {"provider": "openai (via anyrouter)", "model": res.get("model", "anyrouter/free"), "latency_ms": res.get("latency_ms", 1500), "status": "SUCCESS"}
+                    return parsed
+            except Exception as e:
+                logger.warning(f"OpenAI via AnyRouter notice: {e}")
         return None
 
-    # Priority models: o3-mini, o1, gpt-4o, gpt-4o-mini
-    models = ["o3-mini", "o1", "o1-mini", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
-    url = "https://api.openai.com/v1/chat/completions"
+    # Priority models (supports TryAI, official OpenAI, and frontier relays)
+    models = []
+    if OPENAI_MODEL:
+        models.append(OPENAI_MODEL)
+    for m in ["gpt-5.6-sol", "gpt-6-sol", "gpt-6.1-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-6-luna", "gpt-4o", "gpt-4o-mini", "o3-mini", "o1", "o1-mini", "gpt-4-turbo"]:
+        if m not in models:
+            models.append(m)
+
+    base_endpoint = (OPENAI_BASE_URL or "https://api.openai.com/v1").rstrip("/")
+    if base_endpoint.endswith("/v1"):
+        url = f"{base_endpoint}/chat/completions"
+    else:
+        url = f"{base_endpoint}/v1/chat/completions"
+
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
 
     user_prompt = f"""Asset: {symbol_info.get('name', 'Asset')} ({symbol_info.get('symbol', 'UNKNOWN')})
@@ -630,6 +729,63 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
 
     return None
 
+
+
+def call_anyrouter(
+    symbol_info: Dict[str, Any],
+    timeframe: str,
+    metrics: Dict[str, Any],
+    model: Optional[str] = None,
+    timeout: int = 15
+) -> Optional[Dict[str, Any]]:
+    """
+    Calls AnyRouter Gateway (OpenAI-compatible inference).
+    Routes dynamically to anyrouter/free, anyrouter/auto, or assigned multi-agent roles.
+    """
+    from taikry.ai.anyrouter_client import anyrouter_client
+    if not anyrouter_client.is_configured():
+        return None
+
+    target_model = model or anyrouter_client.resolve_model_for_role("orchestrator") or "anyrouter/free"
+
+    user_prompt = f"""Asset: {symbol_info.get('name', 'Asset')} ({symbol_info.get('symbol', 'UNKNOWN')})
+Category: {symbol_info.get('category', 'Trading')}
+Timeframe: {timeframe}
+Market Indicators, Macro News & Metrics:
+{json.dumps(metrics, indent=2)}
+
+Perform institutional multi-agent causal analysis first (English & Natural Khmer), incorporating global economic catalysts (FOMC, PPI, CPI, NFP), then output trade execution strictly in JSON matching the schema.
+"""
+    messages = [
+        {"role": "system", "content": LLM_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    try:
+        t0 = time.time()
+        res = anyrouter_client.generate_chat_completion(
+            messages=messages,
+            model=target_model,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+            timeout=timeout
+        )
+        raw_text = res.get("content", "")
+        parsed = _extract_json_from_response(raw_text)
+        if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+            lat = int((time.time() - t0) * 1000)
+            parsed["_llm_meta"] = {
+                "provider": "anyrouter",
+                "model": res.get("model", target_model),
+                "latency_ms": lat,
+                "status": "SUCCESS"
+            }
+            return parsed
+    except Exception as e:
+        logger.warning(f"AnyRouter call notice: {e}")
+
+    return None
+
 class LLMOrchestrator:
     """
     Lead Multi-LLM Orchestrator that unifies Frontier AI models:
@@ -644,13 +800,13 @@ class LLMOrchestrator:
     def __init__(self):
         self.routing_policy: Dict[str, Any] = {
             "prefer_local": True,
-            "priority_order": ["groq", "gemini", "deepseek", "claude", "openai", "manus"],
+            "priority_order": ["anyrouter", "groq", "gemini", "deepseek", "claude", "openai", "freellmapi", "manus"],
             "circuit_breaker_max_fails": 3,
             "circuit_breaker_cooldown_sec": 60.0
         }
         self.circuit_breakers: Dict[str, Dict[str, Any]] = {
             p: {"fails": 0, "last_fail": 0.0}
-            for p in ["groq", "gemini", "deepseek", "openrouter", "claude", "openai", "manus", "freellmapi"]
+            for p in ["groq", "gemini", "deepseek", "openrouter", "claude", "openai", "manus", "freellmapi", "anyrouter"]
         }
 
     def get_routing_policy(self) -> Dict[str, Any]:
@@ -744,6 +900,14 @@ class LLMOrchestrator:
                 "tier": "PRO",
                 "frontier_models": ["manus-agent-pro"]
             },
+                        "anyrouter": {
+                "name": "AnyRouter Multi-Agent Gateway",
+                "configured": bool(ANYROUTER_API_KEY),
+                "status": "ONLINE" if (ANYROUTER_API_KEY and self.is_provider_available("anyrouter")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("anyrouter") else "NO_API_KEY"),
+                "tier": "GATEWAY",
+                "frontier_models": ["anyrouter/free", "anyrouter/auto", "anyrouter/decision", "deepseek/deepseek-flash-latest"],
+                "docs_url": "https://docs.anyrouter.dev"
+            },
             "freellmapi": {
                 "name": "FreeLLMAPI Unified Free Aggregator",
                 "configured": bool(FREELLMAPI_ENABLED and FREELLMAPI_BASE_URL),
@@ -781,7 +945,8 @@ class LLMOrchestrator:
             "claude": call_claude,
             "openai": call_openai,
             "manus": call_manus,
-            "freellmapi": call_freellmapi
+            "freellmapi": call_freellmapi,
+            "anyrouter": call_anyrouter
         }
 
         provenance_log: List[Dict[str, Any]] = []
