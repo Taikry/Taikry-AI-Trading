@@ -1940,30 +1940,89 @@ function selectCockpitSymbol(symbol) {
   renderCockpitChips();
 }
 
-function toggleCockpitSize() {
+let currentCockpitSizeMode = localStorage.getItem("zyrox_cockpit_size_mode") || "small";
+
+function setCockpitSizeMode(mode) {
   const card = document.getElementById("cockpit-widget");
-  const btn = document.getElementById("cockpit-size-btn");
+  const sizeBtn = document.getElementById("cockpit-size-btn");
+  const colBtn = document.getElementById("cockpit-collapse-btn");
+  const indicator = document.getElementById("cockpit-mode-indicator");
+  const body = document.getElementById("cockpit-body");
   if (!card) return;
-  card.classList.toggle("cockpit-wide-mode");
-  const isWide = card.classList.contains("cockpit-wide-mode");
-  if (btn) btn.innerText = isWide ? "⤡" : "⤢";
+
+  currentCockpitSizeMode = mode;
+  try {
+    localStorage.setItem("zyrox_cockpit_size_mode", mode);
+  } catch (e) {}
+
+  card.classList.remove("cockpit-size-small", "cockpit-size-big", "collapsed");
+  if (body) body.classList.remove("collapsed");
+
+  if (mode === "small") {
+    card.classList.add("cockpit-size-small");
+    if (sizeBtn) sizeBtn.innerHTML = "↕ Small";
+    if (colBtn) colBtn.innerText = "⌃";
+    if (indicator) indicator.innerText = (typeof isKhmer !== "undefined" && isKhmer) ? "ទំហំតូច (Small) · ចុចពង្រីកធំ" : "Small Mode · Tap to Expand";
+  } else if (mode === "big") {
+    card.classList.add("cockpit-size-big");
+    if (sizeBtn) sizeBtn.innerHTML = "⤢ Big";
+    if (colBtn) colBtn.innerText = "⌃";
+    if (indicator) indicator.innerText = (typeof isKhmer !== "undefined" && isKhmer) ? "ទំហំធំ (Big) · ចុចបង្រួមតូច" : "Big Mode · Tap to Shrink";
+  } else if (mode === "collapsed") {
+    card.classList.add("collapsed");
+    if (body) body.classList.add("collapsed");
+    if (sizeBtn) sizeBtn.innerHTML = "⌄ Mini";
+    if (colBtn) colBtn.innerText = "⌄";
+    if (indicator) indicator.innerText = (typeof isKhmer !== "undefined" && isKhmer) ? "បង្រួមអប្បបរមា · ចុចបើក" : "Minimized · Tap to Open";
+  }
+}
+
+function cycleCockpitSize() {
+  if (currentCockpitSizeMode === "small") {
+    setCockpitSizeMode("big");
+  } else if (currentCockpitSizeMode === "big") {
+    setCockpitSizeMode("collapsed");
+  } else {
+    setCockpitSizeMode("small");
+  }
+}
+
+function toggleCockpitSize() {
+  if (currentCockpitSizeMode === "small") {
+    setCockpitSizeMode("big");
+  } else {
+    setCockpitSizeMode("small");
+  }
+}
+
+function toggleCockpitCollapse() {
+  if (currentCockpitSizeMode === "collapsed") {
+    setCockpitSizeMode("small");
+  } else {
+    setCockpitSizeMode("collapsed");
+  }
+}
+
+function toggleRotateChart() {
+  const isRotated = document.body.classList.toggle("chart-rotated-fullscreen");
+  const btn = document.getElementById("cockpit-rotate-btn");
+  if (btn) {
+    btn.innerHTML = isRotated ? "✕ Exit" : "🔄 Rotate";
+  }
+
+  // If Screen Orientation API is supported and in fullscreen, attempt landscape lock
+  try {
+    if (isRotated && screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock("landscape").catch(() => {});
+    } else if (!isRotated && screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+    }
+  } catch (e) {}
 }
 
 function initCockpitSize() {
-  const card = document.getElementById("cockpit-widget");
-  const body = document.getElementById("cockpit-body");
-  const btn = document.getElementById("cockpit-size-btn");
-  const colBtn = document.getElementById("cockpit-collapse-btn");
-  if (card) {
-    card.classList.remove("cockpit-wide-mode");
-    if (btn) btn.innerText = "⤢";
-    const savedCol = localStorage.getItem("taikry_cockpit_collapsed");
-    if (savedCol === "true") {
-      card.classList.add("collapsed");
-      if (body) body.classList.add("collapsed");
-      if (colBtn) colBtn.innerText = "⌄";
-    }
-  }
+  const savedMode = localStorage.getItem("zyrox_cockpit_size_mode") || "small";
+  setCockpitSizeMode(savedMode);
 }
 
 async function runCockpitAnalyze() {

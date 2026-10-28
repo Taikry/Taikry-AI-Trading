@@ -1786,17 +1786,28 @@ body.theme-solar-gold {
   display: flex;
   align-items: center;
   gap: 4px;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex: 1;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cockpit-tabs-group::-webkit-scrollbar {
+  display: none;
 }
 
 .cockpit-tab-pill {
   background: transparent;
   border: none;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 7px;
+  padding: 4px 10px;
+  border-radius: 6px;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   -webkit-user-select: none;
   user-select: none;
@@ -1808,17 +1819,18 @@ body.theme-solar-gold {
 }
 
 .cockpit-tab-pill.active {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: rgba(0, 217, 154, 0.16);
+  color: #00D99A;
   font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(0, 217, 154, 0.35);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .cockpit-top-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
 .theme-palette-wrapper {
@@ -7228,35 +7240,149 @@ html, body {
     left: auto !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 12px 0 24px 0 !important;
-    border-radius: 14px;
+    margin: 8px 0 16px 0 !important;
+    border-radius: 12px;
     z-index: 10;
+    transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+  }
+
+  /* SMALL SIZE MODE (Default on mobile) */
+  .cockpit-widget-card.cockpit-size-small {
+    max-height: 290px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-body {
+    padding: 6px 8px !important;
+    max-height: 240px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-subpane {
+    max-height: 180px !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .history-item-row {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+    gap: 4px !important;
+    margin-bottom: 4px !important;
+    border-radius: 6px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .history-sym {
+    font-size: 11px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .history-dir {
+    font-size: 9.5px !important;
+    padding: 1px 5px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .history-price {
+    font-size: 11px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .history-status {
+    font-size: 9.5px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-btn {
+    height: 32px !important;
+    font-size: 11.5px !important;
+    padding: 0 8px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-asset-row {
+    margin-bottom: 4px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-asset-badge {
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-status-badge {
+    padding: 2px 6px !important;
+    font-size: 9.5px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .chips-category-filter button {
+    padding: 2px 6px !important;
+    font-size: 9.5px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-subpane-tabs button {
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .cockpit-ai-header {
+    margin-bottom: 4px !important;
+    padding-bottom: 3px !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-small .ai-tag-title {
+    font-size: 11px !important;
+  }
+
+  /* BIG SIZE MODE (Expanded by user) */
+  .cockpit-widget-card.cockpit-size-big {
+    max-height: 75vh !important;
+  }
+
+  .cockpit-widget-card.cockpit-size-big .cockpit-body {
+    padding: 10px 12px !important;
+    max-height: calc(75vh - 50px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cockpit-widget-card.cockpit-size-big .cockpit-subpane {
+    max-height: calc(75vh - 170px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* COLLAPSED / MINIMIZED MODE */
+  .cockpit-widget-card.collapsed {
+    max-height: 42px !important;
+    overflow: hidden !important;
+    margin-bottom: 8px !important;
+  }
+
+  .cockpit-widget-card.collapsed .cockpit-body {
+    display: none !important;
   }
 
   .cockpit-body {
-    padding: 10px 12px;
+    padding: 8px 10px;
+    background: rgba(11, 21, 17, 0.96);
   }
 
   .cockpit-action-row {
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
+    margin-bottom: 6px;
   }
 
   .cockpit-btn {
-    height: 40px;
-    font-size: 13px;
+    height: 36px;
+    font-size: 12px;
   }
 
   /* Chart controls bar touch optimization */
   .pro-chart-hud-bar {
     flex-wrap: wrap;
     gap: 4px;
-    padding: 6px 8px;
+    padding: 4px 6px;
   }
 
   .tradingview-wrapper {
-    min-height: 360px !important;
-    height: 50vh !important;
+    min-height: 320px !important;
+    height: 52vh !important;
     flex-shrink: 0 !important;
     width: 100% !important;
     position: relative !important;
@@ -7264,11 +7390,214 @@ html, body {
 
   /* Telegram WebApp Mode Adjustments */
   body.telegram-webapp-mode .mobile-bottom-nav {
-    padding-bottom: 70px; /* Space for Telegram Native MainButton */
+    padding-bottom: 70px;
   }
 
   body.telegram-webapp-mode .terminal-shell {
     padding-bottom: 125px;
+  }
+}
+
+/* ==========================================================================
+   GLOBAL SIZING & ROTATE CONTROLS (DESKTOP & BASE)
+   ========================================================================== */
+
+.cockpit-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 5px 0 3px 0;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.5);
+  border-bottom: 1px solid rgba(0, 217, 154, 0.15);
+  transition: background 0.2s ease;
+  touch-action: manipulation;
+}
+
+.cockpit-resize-handle:hover,
+.cockpit-resize-handle:active {
+  background: rgba(0, 217, 154, 0.12);
+}
+
+.cockpit-resize-handle .handle-pill {
+  width: 42px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--zyrox-emerald, #00D99A);
+  opacity: 0.75;
+  transition: width 0.25s ease, opacity 0.25s ease;
+}
+
+.cockpit-resize-handle:hover .handle-pill {
+  width: 56px;
+  opacity: 1;
+}
+
+.cockpit-resize-handle .handle-mode-indicator {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--zyrox-text-secondary, #87A99A);
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.btn-card-size-toggle,
+.btn-rotate-chart-toggle,
+.btn-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 217, 154, 0.08);
+  border: 1px solid rgba(0, 217, 154, 0.28);
+  color: var(--zyrox-emerald, #00D99A);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  min-height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  touch-action: manipulation;
+}
+
+.btn-card-size-toggle:hover,
+.btn-rotate-chart-toggle:hover,
+.btn-collapse-toggle:hover {
+  background: rgba(0, 217, 154, 0.24);
+  color: #EAFFF5;
+  border-color: #00D99A;
+  box-shadow: 0 0 10px rgba(0, 217, 154, 0.35);
+}
+
+/* Floating Exit Fullscreen Badge */
+.exit-fullscreen-badge {
+  display: none;
+}
+
+body.chart-rotated-fullscreen .exit-fullscreen-badge {
+  display: flex !important;
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 10001;
+  background: #00D99A;
+  color: #060B09;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid #EAFFF5;
+  box-shadow: 0 4px 18px rgba(0, 217, 154, 0.5);
+  cursor: pointer;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Fullscreen / Rotated Chart State */
+body.chart-rotated-fullscreen .terminal-shell {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+body.chart-rotated-fullscreen .terminal-topbar,
+body.chart-rotated-fullscreen .crypto-forex-ticker-ribbon,
+body.chart-rotated-fullscreen .mobile-bottom-nav,
+body.chart-rotated-fullscreen .pro-chart-hud-bar,
+body.chart-rotated-fullscreen .terminal-watchlist-panel,
+body.chart-rotated-fullscreen .terminal-ai-sidebar {
+  display: none !important;
+}
+
+body.chart-rotated-fullscreen .terminal-center-canvas {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 9999 !important;
+  background: #060B09 !important;
+}
+
+body.chart-rotated-fullscreen .tradingview-wrapper {
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
+body.chart-rotated-fullscreen .cockpit-widget-card {
+  position: fixed !important;
+  bottom: 12px !important;
+  right: 12px !important;
+  width: auto !important;
+  max-width: 90vw !important;
+  z-index: 10000 !important;
+  margin: 0 !important;
+  background: rgba(11, 21, 17, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+/* ==========================================================================
+   LANDSCAPE MOBILE ROTATION LAYOUT (@media orientation: landscape)
+   ========================================================================== */
+@media (orientation: landscape) and (max-height: 600px) {
+  .terminal-topbar {
+    height: 36px;
+    padding: 0 10px;
+  }
+  .terminal-brand-text {
+    display: none;
+  }
+  .crypto-forex-ticker-ribbon {
+    display: none !important;
+  }
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+  .terminal-center-canvas {
+    flex-direction: row !important;
+    height: calc(100vh - 36px) !important;
+    overflow: hidden !important;
+    padding: 4px !important;
+    gap: 6px !important;
+  }
+  .tradingview-wrapper {
+    width: 62% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    flex: 1 1 62% !important;
+  }
+  .cockpit-widget-card {
+    width: 38% !important;
+    max-width: 38% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+    border-radius: 10px !important;
+  }
+  .cockpit-widget-card.cockpit-size-small,
+  .cockpit-widget-card.cockpit-size-big {
+    max-height: 100% !important;
+    height: 100% !important;
+  }
+  .cockpit-body {
+    max-height: calc(100% - 40px) !important;
+    overflow-y: auto !important;
+    padding: 6px 8px !important;
+  }
+  .cockpit-subpane {
+    max-height: calc(100vh - 220px) !important;
+    overflow-y: auto !important;
   }
 }
 

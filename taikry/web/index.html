@@ -306,10 +306,21 @@
           <!-- Embedded TradingView iframe -->
         </div>
 
+        <!-- Floating Exit Fullscreen / Rotate Badge -->
+        <button type="button" class="exit-fullscreen-badge" id="exit-fullscreen-badge" onclick="toggleRotateChart()" title="Exit Fullscreen / Rotate View">
+          <span>✕</span> <span>Exit Fullscreen</span>
+        </button>
+
         <!-- ====================================================================
              DOCKED FLOATING PRO COCKPIT WIDGET (At Bottom-Left of Chart)
              ==================================================================== -->
-        <div class="cockpit-widget-card" id="cockpit-widget">
+        <div class="cockpit-widget-card cockpit-size-small" id="cockpit-widget">
+          <!-- Mobile Drag / Tap Resize & Rotation Handle -->
+          <div class="cockpit-resize-handle" id="cockpit-resize-handle" onclick="cycleCockpitSize()" title="Tap to switch between Small, Big, and Minimized size">
+            <div class="handle-pill"></div>
+            <span class="handle-mode-indicator" id="cockpit-mode-indicator">Small Mode · Tap to Expand</span>
+          </div>
+
           <!-- Top Navigation Pills & Controls -->
           <div class="cockpit-top-bar">
             <div class="cockpit-tabs-group">
@@ -320,19 +331,9 @@
               <button class="cockpit-tab-pill" id="c-tab-xauusd-signals" onclick="switchCockpitTab('xauusd-signals', this)">🥇 Gold Signals</button>
             </div>
             <div class="cockpit-top-actions">
-              <!-- Theme Color Preset Switcher -->
-              <div class="theme-palette-wrapper" title="Change Visual Color Theme">
-                <span class="theme-palette-icon">🎨</span>
-                <select id="theme-preset-select" class="theme-select-input" onchange="changeColorTheme(this.value)" title="Change UI Style Colors">
-                  <option value="cyber-cyan">Cyber Cyan</option>
-                  <option value="tokyo-night">Tokyo Night</option>
-                  <option value="emerald-terminal">Terminal</option>
-                  <option value="deep-sapphire">Sapphire</option>
-                  <option value="solar-gold">Solar Gold</option>
-                </select>
-              </div>
-              <button class="btn-card-size-toggle" onclick="toggleCockpitSize()" id="cockpit-size-btn" title="Toggle Compact / Wide Mode">⤢</button>
-              <button class="btn-collapse-toggle" onclick="toggleCockpitCollapse()" id="cockpit-collapse-btn" title="Collapse/Expand Cockpit">⌃</button>
+              <button type="button" class="btn-card-size-toggle" onclick="cycleCockpitSize()" id="cockpit-size-btn" title="Rotate Size: Small / Big">↕ Small</button>
+              <button type="button" class="btn-rotate-chart-toggle" onclick="toggleRotateChart()" id="cockpit-rotate-btn" title="Rotate Chart / Fullscreen View">🔄 Rotate</button>
+              <button type="button" class="btn-collapse-toggle" onclick="toggleCockpitCollapse()" id="cockpit-collapse-btn" title="Minimize / Expand Cockpit">⌃</button>
             </div>
           </div>
 
