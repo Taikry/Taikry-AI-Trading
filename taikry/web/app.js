@@ -240,6 +240,9 @@ document.addEventListener("DOMContentLoaded", () => {
   renderWatchlist();
   initTickerRibbon();
   renderCockpitChips();
+  if (window.innerWidth <= 900) {
+    switchMobileView("chart");
+  }
 
   // Initialize Real Logos for Active Instrument
   const topActiveIcon = document.getElementById("top-active-icon");
@@ -488,6 +491,11 @@ function selectSymbol(sym, tvSymbol) {
   }
 
   triggerScan();
+
+  // If on mobile screen, automatically return to chart view to inspect the asset
+  if (window.innerWidth <= 900) {
+    switchMobileView("chart");
+  }
 
   const asset = WATCHLIST.find(w => w.symbol === sym) || { symbol: sym, name: sym, icon: "🪙" };
   const tfMap = { "1": "1m", "5": "5m", "15": "15m", "30": "30m", "60": "1h", "240": "4h", "D": "1d" };
@@ -2452,17 +2460,126 @@ function switchAiSidebarTab(tabName, btn) {
 }
 
 function focusAIChat() {
-  const tabBtn = document.getElementById("ai-tab-chat");
-  if (tabBtn) switchAiSidebarTab("chat", tabBtn);
-  const aiSidebar = document.getElementById("terminal-ai-sidebar");
-  if (aiSidebar && aiSidebar.classList.contains("collapsed")) {
-    aiSidebar.classList.remove("collapsed");
+  if (window.innerWidth <= 900) {
+    switchMobileView("ai");
+  } else {
+    const tabBtn = document.getElementById("ai-tab-chat");
+    if (tabBtn) switchAiSidebarTab("chat", tabBtn);
+    const aiSidebar = document.getElementById("terminal-ai-sidebar");
+    if (aiSidebar && aiSidebar.classList.contains("collapsed")) {
+      aiSidebar.classList.remove("collapsed");
+    }
   }
   const input = document.getElementById("ai-chat-input");
   if (input) {
-    input.focus();
-    input.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      input.focus();
+      input.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   }
+}
+
+let currentMobileView = "chart";
+
+function switchMobileView(view) {
+  currentMobileView = view;
+
+  // Close any open sheets or overlays
+  closeMobileMoreSheet();
+  document.querySelectorAll(".terminal-full-overlay").forEach(el => el.classList.add("tab-pane-hidden"));
+
+  // Update active state in bottom navigation bar
+  document.querySelectorAll(".mob-nav-item").forEach(item => item.classList.remove("active"));
+  const navBtn = document.getElementById(`mob-nav-${view}`);
+  if (navBtn) navBtn.classList.add("active");
+
+  // Update body classes for responsive styles
+  document.body.classList.remove("mobile-view-chart", "mobile-view-watchlist", "mobile-view-ai", "mobile-view-trade");
+  document.body.classList.add(`mobile-view-${view}`);
+
+  const mainCanvas = document.getElementById("terminal-center-canvas");
+  const wlPanel = document.getElementById("terminal-watchlist");
+  const aiSidebar = document.getElementById("terminal-ai-sidebar");
+
+  if (window.innerWidth <= 900) {
+    if (view === "chart") {
+      if (mainCanvas) mainCanvas.style.setProperty("display", "flex", "important");
+      if (wlPanel) wlPanel.style.setProperty("display", "none", "important");
+      if (aiSidebar) aiSidebar.style.setProperty("display", "none", "important");
+      if (window.taikryChart && typeof window.taikryChart.handleResize === "function") {
+        setTimeout(() => window.taikryChart.handleResize(), 80);
+      }
+    } else if (view === "watchlist") {
+      if (mainCanvas) mainCanvas.style.setProperty("display", "none", "important");
+      if (wlPanel) {
+        wlPanel.style.setProperty("display", "flex", "important");
+        wlPanel.classList.remove("collapsed");
+      }
+      if (aiSidebar) aiSidebar.style.setProperty("display", "none", "important");
+    } else if (view === "ai") {
+      if (mainCanvas) mainCanvas.style.setProperty("display", "none", "important");
+      if (wlPanel) wlPanel.style.setProperty("display", "none", "important");
+      if (aiSidebar) {
+        aiSidebar.style.setProperty("display", "flex", "important");
+        aiSidebar.classList.remove("collapsed");
+        switchAiSidebarTab("chat", document.getElementById("ai-tab-chat"));
+      }
+    } else if (view === "trade") {
+      if (mainCanvas) mainCanvas.style.setProperty("display", "none", "important");
+      if (wlPanel) wlPanel.style.setProperty("display", "none", "important");
+      if (aiSidebar) {
+        aiSidebar.style.setProperty("display", "flex", "important");
+        aiSidebar.classList.remove("collapsed");
+        switchAiSidebarTab("trade", document.getElementById("ai-tab-trade"));
+      }
+    }
+  }
+
+  // Telegram native haptic feedback if running inside Telegram Mini App
+  if (window.Telegram?.WebApp?.HapticFeedback) {
+    try {
+      window.Telegram.WebApp.HapticFeedback.selectionChanged();
+    } catch (_) {}
+  }
+}
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 900) {
+    const mainCanvas = document.getElementById("terminal-center-canvas");
+    const wlPanel = document.getElementById("terminal-watchlist");
+    const aiSidebar = document.getElementById("terminal-ai-sidebar");
+    if (mainCanvas) mainCanvas.style.removeProperty("display");
+    if (wlPanel) wlPanel.style.removeProperty("display");
+    if (aiSidebar) aiSidebar.style.removeProperty("display");
+  } else {
+    switchMobileView(currentMobileView);
+  }
+});
+
+function toggleMobileMoreSheet() {
+  const sheet = document.getElementById("mobile-more-sheet");
+  if (!sheet) return;
+  const isHidden = sheet.classList.contains("tab-pane-hidden");
+  if (isHidden) {
+    sheet.classList.remove("tab-pane-hidden");
+    const moreBtn = document.getElementById("mob-nav-more");
+    if (moreBtn) moreBtn.classList.add("active");
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      try { window.Telegram.WebApp.HapticFeedback.impactOccurred("light"); } catch (_) {}
+    }
+  } else {
+    closeMobileMoreSheet();
+  }
+}
+
+function closeMobileMoreSheet(event) {
+  const sheet = document.getElementById("mobile-more-sheet");
+  if (sheet) sheet.classList.add("tab-pane-hidden");
+  const moreBtn = document.getElementById("mob-nav-more");
+  if (moreBtn) moreBtn.classList.remove("active");
+  // Restore current view button active state
+  const activeBtn = document.getElementById(`mob-nav-${currentMobileView}`);
+  if (activeBtn) activeBtn.classList.add("active");
 }
 
 function onChatInputKeydown(e) {

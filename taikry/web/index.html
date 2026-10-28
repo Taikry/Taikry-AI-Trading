@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Taikry AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#050811">
+  <meta name="format-detection" content="telephone=no">
   <title>TAIKRY AI MARKET INTELLIGENCE PRO — Institutional Gold, Forex & Crypto</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,7 +17,7 @@
   <!-- Telegram Mini App (WebApp) SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-<body class="theme-cyber-cyan">
+<body class="theme-cyber-cyan mobile-view-chart">
 
   <!-- ==========================================================================
        MAIN TERMINAL SHELL
@@ -1536,6 +1542,76 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MOBILE BOTTOM NAVIGATION BAR (Android & iOS Phones / Telegram Mini App)
+       ========================================================================== -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Navigation">
+    <button type="button" class="mob-nav-item active" id="mob-nav-chart" onclick="switchMobileView('chart')" title="Live Chart & Terminal">
+      <span class="mob-nav-icon">📈</span>
+      <span class="mob-nav-label">Chart</span>
+    </button>
+    <button type="button" class="mob-nav-item" id="mob-nav-watchlist" onclick="switchMobileView('watchlist')" title="Watchlist & Asset Universe">
+      <span class="mob-nav-icon">📋</span>
+      <span class="mob-nav-label">Watchlist</span>
+    </button>
+    <button type="button" class="mob-nav-item" id="mob-nav-ai" onclick="switchMobileView('ai')" title="Real AI Multimodal Assistant">
+      <span class="mob-nav-icon">🤖</span>
+      <span class="mob-nav-label">AI Chat</span>
+    </button>
+    <button type="button" class="mob-nav-item" id="mob-nav-trade" onclick="switchMobileView('trade')" title="1-Click Fast Execution Bridge">
+      <span class="mob-nav-icon">⚡</span>
+      <span class="mob-nav-label">Fast Trade</span>
+    </button>
+    <button type="button" class="mob-nav-item" id="mob-nav-more" onclick="toggleMobileMoreSheet()" title="More Pro Tools & Debates">
+      <span class="mob-nav-icon">🧭</span>
+      <span class="mob-nav-label">More</span>
+    </button>
+  </nav>
+
+  <!-- MOBILE MORE OPTIONS BOTTOM SHEET -->
+  <div class="mobile-more-overlay tab-pane-hidden" id="mobile-more-sheet" onclick="closeMobileMoreSheet(event)">
+    <div class="mobile-more-card" onclick="event.stopPropagation()">
+      <div class="mobile-more-header">
+        <span class="mobile-more-title">🧭 Pro Tools & Intelligence</span>
+        <button type="button" class="mobile-more-close" onclick="closeMobileMoreSheet()" title="Close menu">✕</button>
+      </div>
+      <div class="mobile-more-grid">
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('debate'); closeMobileMoreSheet();">
+          <span class="mm-icon">🏛️</span>
+          <span class="mm-text">AI Debate (4 Agents)</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('training'); closeMobileMoreSheet();">
+          <span class="mm-icon">🧠</span>
+          <span class="mm-text">Self-Training & Stats</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="switchNavPane('autofix'); closeMobileMoreSheet();">
+          <span class="mm-icon">🛡️</span>
+          <span class="mm-text">Sentinel Auto-Fix</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="togglePortfolioDrawer(); closeMobileMoreSheet();">
+          <span class="mm-icon">💼</span>
+          <span class="mm-text">Paper Portfolio</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="toggleMacroDrawer(); closeMobileMoreSheet();">
+          <span class="mm-icon">🌐</span>
+          <span class="mm-text">Macro News & Cal</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="openDeveloperModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">👨‍💻</span>
+          <span class="mm-text">Architect: Heng Taikry</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="toggleLanguage(); closeMobileMoreSheet();">
+          <span class="mm-icon">🌐</span>
+          <span class="mm-text">ភាសាខ្មែរ / English</span>
+        </button>
+        <button type="button" class="mobile-more-btn" onclick="openPairModal(); closeMobileMoreSheet();">
+          <span class="mm-icon">🔍</span>
+          <span class="mm-text">Search Universe</span>
+        </button>
       </div>
     </div>
   </div>

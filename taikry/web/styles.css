@@ -6787,6 +6787,441 @@ html, body {
   align-items: center;
 }
 
+/* ==========================================================================
+   MOBILE & RESPONSIVE MULTI-DEVICE SUPPORT (ANDROID, IOS & DESKTOP)
+   ========================================================================== */
+
+/* 1. Mobile Bottom Navigation Bar (Glassmorphic & Touch Optimized) */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: rgba(9, 14, 26, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(24px) saturate(190%);
+  align-items: center;
+  justify-content: space-around;
+}
+
+.mob-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.mob-nav-item:hover,
+.mob-nav-item.active {
+  color: #ffd700;
+}
+
+.mob-nav-icon {
+  font-size: 19px;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  line-height: 1;
+}
+
+.mob-nav-item.active .mob-nav-icon {
+  transform: translateY(-2px) scale(1.15);
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.5));
+}
+
+.mob-nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* 2. Mobile More Options Bottom Sheet */
+.mobile-more-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: fadeIn 0.2s ease;
+}
+
+.mobile-more-overlay.tab-pane-hidden {
+  display: none !important;
+}
+
+.mobile-more-card {
+  width: 100%;
+  max-width: 500px;
+  background: rgba(13, 20, 36, 0.98);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: none;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.8);
+  padding: 16px 18px max(env(safe-area-inset-bottom, 16px), 24px) 18px;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.mobile-more-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 14px;
+}
+
+.mobile-more-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.mobile-more-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 14px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.mobile-more-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.mobile-more-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mobile-more-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.mobile-more-btn:hover,
+.mobile-more-btn:active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.mobile-more-btn .mm-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.mobile-more-btn .mm-text {
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+/* 3. Comprehensive Responsive Media Queries (Tablets & Phones <= 900px) */
+@media (max-width: 900px) {
+  /* Prevent iOS Safari automatic form zoom by enforcing 16px font-size */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  html, body {
+    height: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .terminal-shell {
+    height: 100vh;
+    height: 100dvh;
+    padding-bottom: 60px; /* Space for mobile bottom nav */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Show Bottom Navigation on mobile */
+  .mobile-bottom-nav {
+    display: flex;
+  }
+
+  /* Hide Desktop left icon sidebar */
+  .terminal-icon-nav {
+    display: none !important;
+  }
+
+  /* Compact Topbar for Mobile */
+  .terminal-topbar {
+    height: 48px;
+    padding: 0 10px;
+    gap: 6px;
+  }
+
+  .regime-ticker-bar {
+    display: none !important;
+  }
+
+  .terminal-brand-text .brand-tag {
+    display: none !important;
+  }
+
+  .terminal-brand {
+    gap: 6px;
+  }
+
+  .terminal-logo {
+    width: 24px;
+    height: 24px;
+    font-size: 13px;
+  }
+
+  .brand-name {
+    font-size: 13px;
+  }
+
+  .topbar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    max-width: 190px;
+  }
+
+  .active-symbol-pill {
+    padding: 3px 8px;
+    gap: 5px;
+    border-radius: 20px;
+  }
+
+  .active-sym-ticker {
+    font-size: 12px;
+  }
+
+  .active-sym-source {
+    display: none;
+  }
+
+  .active-sym-status {
+    display: none;
+  }
+
+  .active-sym-price {
+    font-size: 12px;
+  }
+
+  .active-sym-change {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+
+  /* Topbar Right compact buttons */
+  .top-llm-wrapper,
+  .btn-quick-trade,
+  .btn-top-alert,
+  .dev-profile-badge,
+  .btn-ask-ai {
+    display: none !important;
+  }
+
+  .btn-lang {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .status-badge-compact {
+    padding: 3px 6px;
+    font-size: 9.5px;
+  }
+
+  /* Running Loop Ribbon stays accessible across top */
+  .crypto-forex-ticker-ribbon {
+    height: 28px;
+  }
+
+  .ticker-ribbon-tag {
+    padding: 0 8px;
+    font-size: 9.5px;
+  }
+
+  /* WORKSPACE: Active Mobile View Switching */
+  .terminal-workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+  }
+
+  /* View 1: Chart & Cockpit (Default on all Mobile <= 900px) */
+  .terminal-center-canvas {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px;
+  }
+
+  .terminal-watchlist-panel,
+  .terminal-ai-sidebar {
+    display: none !important;
+  }
+
+  /* View 2: Watchlist & Search Universe */
+  body.mobile-view-watchlist .terminal-watchlist-panel {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1;
+    border: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.mobile-view-watchlist .terminal-center-canvas,
+  body.mobile-view-watchlist .terminal-ai-sidebar {
+    display: none !important;
+  }
+
+  /* View 3: AI Chat Assistant */
+  body.mobile-view-ai .terminal-ai-sidebar,
+  body.mobile-view-trade .terminal-ai-sidebar {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 1;
+    border: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.mobile-view-ai .terminal-center-canvas,
+  body.mobile-view-ai .terminal-watchlist-panel,
+  body.mobile-view-trade .terminal-center-canvas,
+  body.mobile-view-trade .terminal-watchlist-panel {
+    display: none !important;
+  }
+
+  /* Mobile Cockpit Layout - Positioned cleanly below chart in mobile scroll */
+  .cockpit-widget-card {
+    position: relative !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 12px 0 24px 0 !important;
+    border-radius: 14px;
+    z-index: 10;
+  }
+
+  .cockpit-body {
+    padding: 10px 12px;
+  }
+
+  .cockpit-action-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .cockpit-btn {
+    height: 40px;
+    font-size: 13px;
+  }
+
+  /* Chart controls bar touch optimization */
+  .pro-chart-hud-bar {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px;
+  }
+
+  .tradingview-wrapper {
+    min-height: 360px !important;
+    height: 50vh !important;
+    flex-shrink: 0 !important;
+    width: 100% !important;
+    position: relative !important;
+  }
+
+  /* Telegram WebApp Mode Adjustments */
+  body.telegram-webapp-mode .mobile-bottom-nav {
+    padding-bottom: 70px; /* Space for Telegram Native MainButton */
+  }
+
+  body.telegram-webapp-mode .terminal-shell {
+    padding-bottom: 125px;
+  }
+}
+
+/* 4. Ultra-Small Devices (iPhone SE / Older Android <= 380px) */
+@media (max-width: 380px) {
+  .mob-nav-label {
+    font-size: 9px;
+  }
+  .mob-nav-icon {
+    font-size: 16px;
+  }
+  .active-symbol-pill {
+    max-width: 140px;
+  }
+  .active-sym-price {
+    display: none;
+  }
+}
+
+
 
 
 
