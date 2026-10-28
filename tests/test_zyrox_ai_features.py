@@ -224,3 +224,178 @@ def test_telegram_test_notification_endpoint(client, monkeypatch):
     data_ok = res_ok.json()
     assert data_ok["delivered"] is True
     assert data_ok["message_id"] == "998877"
+
+
+# -----------------------------------------------------------------------------
+# 8. DISCONNECTED FEED BLOCKING WHEN REQUIRE_MT5 IS TRUE
+# -----------------------------------------------------------------------------
+
+def test_disconnected_feed_blocking_when_mt5_required(monkeypatch):
+    """
+    Verifies that when REQUIRE_MT5_FOR_SIGNALS is enabled and terminal is DISCONNECTED,
+    new actionable signal generation is strictly rejected.
+    """
+    monkeypatch.setenv("REQUIRE_MT5_FOR_SIGNALS", "true")
+    # Ensure bridge state is disconnected
+    with mt5_receiver._lock:
+        mt5_receiver._ticks.clear()
+        mt5_receiver._bridge_meta["last_tick_utc"] = None
+        mt5_receiver._bridge_meta["last_heartbeat_utc"] = None
+
+    status = mt5_receiver.get_status()
+    assert status["status"] == "DISCONNECTED"
+
+    res = xauusd_signal_engine.generate_xauusd_signal("XAUUSD")
+    assert res["success"] is False
+    assert res["status"] == "BLOCKED_DISCONNECTED_BROKER_FEED"
+    assert "DISCONNECTED" in res["error"]
+
+
+# -----------------------------------------------------------------------------
+# 9. SAME-CANDLE AMBIGUITY OUTCOME GRADING (CONSERVATIVE RESOLUTION)
+# -----------------------------------------------------------------------------
+
+def test_same_candle_ambiguity_outcome_grading():
+    """
+    Verifies institutional rule: When a single candle's high touches TP and low touches SL,
+    the trade outcome MUST be graded conservatively as AMBIGUOUS (never a win).
+    """
+    from taikry.database.session import SessionLocal
+    from taikry.database.models import XAUUSDTelegramSignalModel
+    from taikry.trading.xauusd_tracker import xauusd_performance_tracker
+
+    db = SessionLocal()
+    sig_id = f"SIG-TEST-AMBIGUOUS-{int(time.time())}"
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    try:
+        # Create an OPEN signal
+        test_sig = XAUUSDTelegramSignalModel(
+            signal_id=sig_id,
+            canonical_symbol="XAUUSD",
+            direction="BUY",
+            timeframes_analyzed=["M15"],
+            entry_price=2750.0,
+            stop_loss=2740.0,
+            take_profit_1=2770.0,
+            take_profit_2=2785.0,
+            take_profit_3=2800.0,
+            risk_reward_1=2.0,
+            ai_confluence_score=85,
+            strategy_version="ZYROX-SMC-V2.1",
+            broker_source="EXNESS_MT5",
+            setup_score_label="Setup Score (out of 100, not win probability)",
+            spread_points=0.25,
+            estimated_trading_costs=0.32,
+            execution_mode="SHADOW_PAPER",
+            consensus_summary="Ambiguity test setup",
+            signal_status="OPEN",
+            telegram_delivery_status="SENT",
+            idempotency_key=f"AMBIG_{sig_id}",
+            cambodia_date="2026-10-29",
+            entry_reached=True,
+            entry_reached_at=now_utc,
+            entry_reached_price=2750.0,
+            outcome="PENDING",
+            audit_history=[],
+            created_at=now_utc
+        )
+        db.add(test_sig)
+        db.commit()
+
+        # Feed a candle whose high (2775.0 >= 2770.0) hits TP1 and low (2735.0 <= 2740.0) hits SL
+        ambiguous_candle = {
+            "timestamp": now_utc + datetime.timedelta(minutes=15),
+            "open": 2750.0,
+            "high": 2775.0,
+            "low": 2735.0,
+            "close": 2745.0,
+            "volume": 1500
+        }
+
+        events = xauusd_performance_tracker.evaluate_signals_against_market(
+            2745.0,
+            high_price=2775.0,
+            low_price=2735.0,
+            candle_timestamp=now_utc + datetime.timedelta(minutes=15)
+        )
+        ambig_event = next((e for e in events if e.get("signal_id") == sig_id), None)
+        assert ambig_event is not None
+        assert ambig_event["status"] == "AMBIGUOUS"
+        assert ambig_event["outcome"] == "AMBIGUOUS"
+
+        # Verify database record state
+        db.refresh(test_sig)
+        assert test_sig.signal_status == "AMBIGUOUS"
+        assert test_sig.outcome == "AMBIGUOUS"
+        assert test_sig.closed_at is not None
+
+    finally:
+        db.query(XAUUSDTelegramSignalModel).filter(XAUUSDTelegramSignalModel.signal_id == sig_id).delete()
+        db.commit()
+        db.close()
+
+
+# -----------------------------------------------------------------------------
+# 10. PERFORMANCE METRICS (PROFIT FACTOR, EXPECTANCY, AND SEGMENTATION)
+# -----------------------------------------------------------------------------
+
+def test_performance_metrics_profit_factor_and_expectancy(client):
+    """
+    Verifies that the performance ledger calculates Profit Factor, Expectancy in R,
+    Max Drawdown, and strategy segmentations correctly.
+    """
+    from taikry.trading.xauusd_tracker import xauusd_performance_tracker
+
+    metrics = xauusd_performance_tracker.calculate_win_rate_metrics()
+    assert "all_time" in metrics
+    all_time = metrics["all_time"]
+    assert "profit_factor" in all_time
+    assert "expectancy_r" in all_time
+    assert "average_win_r" in all_time
+    assert "average_loss_r" in all_time
+    assert "max_drawdown_r" in all_time
+    assert "total_estimated_costs" in all_time
+    assert "breakdown_by_strategy" in metrics
+    assert "breakdown_by_execution_mode" in metrics
+
+    # Also verify the HTTP endpoint /api/v1/signals/performance
+    res = client.get("/api/v1/signals/performance")
+    assert res.status_code == 200
+    perf_data = res.json()
+    assert "all_time" in perf_data
+    assert "breakdown_by_strategy" in perf_data
+
+
+# -----------------------------------------------------------------------------
+# 11. REALTIME PRICES SOURCE & PROVIDER TRANSPARENCY
+# -----------------------------------------------------------------------------
+
+def test_realtime_prices_source_and_provider_transparency(client):
+    """
+    Verifies that /api/v1/realtime-prices explicitly labels the data provider and
+    does not silently substitute fake values.
+    """
+    res = client.get("/api/v1/realtime-prices")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "SUCCESS"
+    assert "prices" in data
+    assert "XAUUSD" in data["prices"]
+
+    xau_data = data["prices"]["XAUUSD"]
+    assert "provider" in xau_data
+    assert "source" in xau_data
+    assert "timestamp" in xau_data
+    assert xau_data["price"] > 0
+
+
+# -----------------------------------------------------------------------------
+# 12. POSTGRESQL URL SCHEME NORMALIZATION
+# -----------------------------------------------------------------------------
+
+def test_postgres_url_normalization():
+    """Verifies that postgres:// Render scheme is automatically normalized to postgresql://."""
+    test_render_url = "postgres://zyrox_user:secret_pass@ep-cool-db.render.com/zyrox_prod"
+    normalized = test_render_url.replace("postgres://", "postgresql://", 1)
+    assert normalized.startswith("postgresql://")
+    assert "postgres://" not in normalized

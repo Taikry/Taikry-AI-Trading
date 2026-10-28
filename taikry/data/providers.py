@@ -172,7 +172,7 @@ def generate_synthetic_candles(symbol: str, timeframe: str = "M15", limit: int =
             "low": round(float(p_low), decimals),
             "close": round(float(p_close), decimals),
             "volume": vol,
-            "source": "synthetic_institutional_feed"
+            "source": "DEMO_SYNTHETIC"
         })
 
     return pd.DataFrame(records)
@@ -502,7 +502,8 @@ class MultiProviderMarketData:
                 if k.startswith(f"{sym}:{tf}") and (now - c_time < 60.0) and not df.empty:
                     latest = df.iloc[-1]
                     p = float(latest["close"])
-                    src = str(latest.get("source", "yahoo_finance"))
+                    raw_src = str(latest.get("source", "fallback"))
+                    src = f"FALLBACK_{raw_src.upper()}" if not raw_src.upper().startswith("FALLBACK") and raw_src.upper() != "DEMO_SYNTHETIC" else raw_src
                     ts = latest["timestamp"]
                     self._price_cache[sym] = (now, p, src, ts)
                     REFERENCE_BASE_PRICES[sym] = p
@@ -512,24 +513,26 @@ class MultiProviderMarketData:
         p, src = self.yahoo.get_latest_price(sym)
         if p > 0:
             dt_now = datetime.datetime.now(datetime.timezone.utc)
-            self._price_cache[sym] = (now, p, src, dt_now)
+            src_labeled = f"YAHOO_FALLBACK:{src}" if not src.startswith("YAHOO_FALLBACK") else src
+            self._price_cache[sym] = (now, p, src_labeled, dt_now)
             REFERENCE_BASE_PRICES[sym] = p
-            return p, src, dt_now
+            return p, src_labeled, dt_now
 
         # 4. Fallback to get_candles
         df = self.get_candles(sym, "M5", limit=10)
         if not df.empty:
             latest = df.iloc[-1]
             p = float(latest["close"])
-            src = str(latest.get("source", "market"))
+            raw_src = str(latest.get("source", "market"))
+            src_labeled = f"FALLBACK_{raw_src.upper()}" if not raw_src.upper().startswith("FALLBACK") and raw_src.upper() != "DEMO_SYNTHETIC" else raw_src
             ts = latest["timestamp"]
-            self._price_cache[sym] = (now, p, src, ts)
+            self._price_cache[sym] = (now, p, src_labeled, ts)
             REFERENCE_BASE_PRICES[sym] = p
-            return p, src, ts
+            return p, src_labeled, ts
 
         ref_price = REFERENCE_BASE_PRICES.get(sym, 4043.90 if "XAU" in sym and XAUUSD_PRICE_REFERENCE == "SPOT" else (4060.80 if "XAU" in sym else 100.0))
         dt_now = datetime.datetime.now(datetime.timezone.utc)
-        return ref_price, "reference_feed", dt_now
+        return ref_price, "DEMO_SYNTHETIC", dt_now
 
 
 market_data_engine = MultiProviderMarketData()

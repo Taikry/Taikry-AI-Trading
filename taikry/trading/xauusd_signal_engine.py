@@ -18,8 +18,11 @@ import datetime
 import zoneinfo
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-
-from taikry.config import PRIMARY_SYMBOL, LOCAL_TIMEZONE, DEFAULT_STRATEGY_VERSION
+import os
+from taikry.config import (
+    PRIMARY_SYMBOL, LOCAL_TIMEZONE, DEFAULT_STRATEGY_VERSION,
+    COMMISSION_PER_LOT, MT5_BRIDGE_ENABLED, get_symbol_config
+)
 from taikry.database.session import SessionLocal
 from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel
 from taikry.data.providers import market_data_engine
@@ -471,15 +474,34 @@ class XAUUSDSignalEngine:
             }
         verified_price = round(float(verified_price), 2)
 
-        # Step 3b: Stale Feed Guardrail: Never use a price from a stale feed to issue a new actionable signal
+        # Step 3b: Stale/Disconnected Feed Guardrail: Never use a price from a stale or disconnected feed
         bridge_status = mt5_receiver.get_status()
-        if bridge_status.get("status") == "STALE":
+        b_status = bridge_status.get("status", "DISCONNECTED")
+        if b_status == "STALE":
             return {
                 "success": False,
                 "error": "Market feed from Exness MT5 is currently STALE (>30s without update). Actionable signals blocked to preserve capital.",
                 "canonical_symbol": canonical_symbol,
                 "status": "BLOCKED_STALE_BROKER_FEED"
             }
+
+        require_mt5 = os.getenv("REQUIRE_MT5_FOR_SIGNALS", "false").lower() in ("true", "1", "yes")
+        if require_mt5 and b_status == "DISCONNECTED":
+            return {
+                "success": False,
+                "error": "Market feed from Exness MT5 is currently DISCONNECTED. Actionable signals blocked (REQUIRE_MT5_FOR_SIGNALS=true).",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_DISCONNECTED_BROKER_FEED"
+            }
+
+        # Step 3c: Extract live spread and estimated transaction costs
+        mt5_p, mt5_src, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(canonical_symbol)
+        spread_val = float(mt5_tick.get("spread", 0.0)) if mt5_tick else 0.0
+        if spread_val <= 0:
+            cfg = get_symbol_config(canonical_symbol)
+            spread_val = float(cfg.get("spread_estimate", 0.25))
+        # 1 standard gold lot = 100 oz. $7 commission round turn = 0.07 pts
+        estimated_costs = round(spread_val + (COMMISSION_PER_LOT / 100.0), 2)
 
         # Step 4: Atomic Daily Quota Check (Cambodia Calendar Day)
         cambodia_date = get_cambodia_date_str()
@@ -598,6 +620,10 @@ class XAUUSDSignalEngine:
                 strategy_version=DEFAULT_STRATEGY_VERSION,
                 broker_source=price_source,
                 setup_score_label="Setup Score (out of 100, not win probability)",
+                calibrated_probability=None,
+                spread_points=spread_val,
+                estimated_trading_costs=estimated_costs,
+                execution_mode="SHADOW_PAPER",
                 consensus_summary=summary_text,
                 agent_opinions=_make_json_safe(agent_outputs),
                 eligible_agents_count=consensus["eligible_count"],
@@ -637,6 +663,10 @@ class XAUUSDSignalEngine:
                 "ai_score": consensus["score"],
                 "setup_score": consensus["score"],
                 "score_explanation": f"Setup confluence score {consensus['score']}/100 based on SMC structure, liquidity sweep, and multi-timeframe alignment. This is an execution setup score, NOT a statistical win probability.",
+                "calibrated_probability": None,
+                "spread_points": spread_val,
+                "estimated_trading_costs": estimated_costs,
+                "execution_mode": "SHADOW_PAPER",
                 "strategy": "ZYROX Institutional Multi-Agent Consensus",
                 "strategy_version": DEFAULT_STRATEGY_VERSION,
                 "consensus_summary": summary_text,

@@ -50,14 +50,35 @@ def run_migration():
                 logger.info("Adding missing column 'setup_score_label' to xauusd_telegram_signals...")
                 db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN setup_score_label VARCHAR(100) DEFAULT 'Setup Score (out of 100, not win probability)';"))
                 db.commit()
+            if "spread_points" not in sig_cols:
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN spread_points FLOAT DEFAULT 0.25;"))
+                db.commit()
+            if "estimated_trading_costs" not in sig_cols:
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN estimated_trading_costs FLOAT DEFAULT 0.0;"))
+                db.commit()
+            if "calibrated_probability" not in sig_cols:
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN calibrated_probability FLOAT;"))
+                db.commit()
+            if "execution_mode" not in sig_cols:
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN execution_mode VARCHAR(30) DEFAULT 'SHADOW_PAPER';"))
+                db.commit()
+            if "closed_at" not in sig_cols:
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN closed_at TIMESTAMP;"))
+                db.commit()
         else:
             for col, col_type, def_val in [
                 ("strategy_version", "VARCHAR(50)", "'ZYROX-SMC-V2.1'"),
                 ("broker_source", "VARCHAR(50)", "'EXNESS_MT5'"),
-                ("setup_score_label", "VARCHAR(100)", "'Setup Score (out of 100, not win probability)'")
+                ("setup_score_label", "VARCHAR(100)", "'Setup Score (out of 100, not win probability)'"),
+                ("spread_points", "FLOAT", "0.25"),
+                ("estimated_trading_costs", "FLOAT", "0.0"),
+                ("calibrated_probability", "FLOAT", "NULL"),
+                ("execution_mode", "VARCHAR(30)", "'SHADOW_PAPER'"),
+                ("closed_at", "TIMESTAMP", "NULL")
             ]:
                 try:
-                    db.execute(text(f"ALTER TABLE xauusd_telegram_signals ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {def_val};"))
+                    default_clause = f"DEFAULT {def_val}" if def_val != "NULL" else ""
+                    db.execute(text(f"ALTER TABLE xauusd_telegram_signals ADD COLUMN IF NOT EXISTS {col} {col_type} {default_clause};"))
                     db.commit()
                 except Exception as e:
                     db.rollback()

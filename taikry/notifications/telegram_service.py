@@ -1343,27 +1343,30 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
         evidence_text = "\n".join([f"• {ev}" for ev in evidence[:4]]) if evidence else "• High-confluence multi-timeframe structural alignment."
         expires_at = signal_data.get("expires_at", "6 Hours")
 
-        text = f"""🥇 <b>TAIKRY SIGNAL AI — XAUUSD</b>
+        action_khmer = "ទិញឡើង (BUY)" if action_name == "BUY" else "លក់ចុះ (SELL)"
+        text = f"""⚡ <b>ZYROX AI — Read the Market. Own Your Edge.</b>
+🇰🇭 <b>សញ្ញាជួញដូរមាសស្វ័យប្រវត្ត (XAUUSD Signal)</b>
 ━━━━━━━━━━━━━━━━━━━━
 📌 <b>Signal ID:</b> <code>{signal_id}</code>
-📊 <b>Instrument:</b> XAUUSD (Gold vs US Dollar)
-🎯 <b>Direction:</b> <b>{icon} {action_name}</b>
+📊 <b>Asset:</b> XAUUSD (Gold / US Dollar)
+🎯 <b>Direction / ទិសដៅ:</b> <b>{icon} {action_name} · {action_khmer}</b>
 ⏱ <b>Timeframes:</b> {timeframes}
 
-💰 <b>Entry Zone:</b> <code>{entry_str}</code>
-🛑 <b>Stop Loss (SL):</b> <code>{sl:.2f}</code>
-✅ <b>TP1:</b> <code>{tp1:.2f}</code> (R:R 1:{rr1})
-✅ <b>TP2:</b> <code>{tp2:.2f}</code> (R:R 1:{rr2})
-✅ <b>TP3:</b> <code>{tp3:.2f}</code> (R:R 1:{rr3})
+💰 <b>Entry Zone (ចំណុចចូល):</b> <code>{entry_str}</code>
+🛑 <b>Stop Loss / SL (កាត់ខាត):</b> <code>{sl:.2f}</code>
+✅ <b>TP1 (គោលដៅទី១):</b> <code>{tp1:.2f}</code> (R:R 1:{rr1})
+✅ <b>TP2 (គោលដៅទី២):</b> <code>{tp2:.2f}</code> (R:R 1:{rr2})
+✅ <b>TP3 (គោលដៅទី៣):</b> <code>{tp3:.2f}</code> (R:R 1:{rr3})
 
-🧠 <b>AI Consensus ({score}%):</b> {summary}
-🔎 <b>Key Evidence:</b>
+🧠 <b>Setup Score / ពិន្ទុវិភាគ:</b> <b>{score}/100</b>
+<i>(Institutional setup score, not a guaranteed win rate)</i>
+🔎 <b>Key Technical Confluence (ភស្តុតាងបច្ចេកទេស):</b>
 {evidence_text}
 ⌛ <b>Valid Until:</b> {expires_at}
 
-⚠️ <i>Market analysis only. Verify prices and risk before acting. No guaranteed profits. 0.5% Hard Risk Cap.</i>
+⚠️ <i>Strict Risk Rule: Max 0.5% capital risk per trade. Inferred prices are evaluated on subsequent broker bars. No guaranteed profits.</i>
 ━━━━━━━━━━━━━━━━━━━━
-🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
+🤖 <i>ZYROX AI 24/7 AUTO SENTINEL</i>"""
 
         buttons = self.build_signal_keyboard("XAUUSD")
         target_chat = chat_id or self.default_chat_id
@@ -1380,7 +1383,7 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
             "reply_markup": buttons
         }
 
-        # Safe delivery with retry policy (up to 2 retries)
+        # Safe delivery with exponential backoff retry policy (up to 2 retries)
         max_retries = 2
         last_error = None
 
@@ -1410,7 +1413,7 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
             if attempt < max_retries:
                 import time
-                time.sleep(1.0 * (attempt + 1))
+                time.sleep(1.5 * (2 ** attempt))
 
         # If retries exhausted
         self._update_db_signal_delivery(signal_id, "FAILED", None, last_error)
@@ -1459,7 +1462,7 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
             f"{report_data['tp3_attainment_rate']:.1f}%" if report_data.get("tp3_attainment_rate") is not None else "N/A"
         )
 
-        text = f"""📊 <b>TAIKRY SIGNAL AI — XAUUSD DAILY REPORT</b>
+        text = f"""📊 <b>ZYROX AI — Read the Market. Own Your Edge.</b>
 🇰🇭 <b>របាយការណ៍សង្ខេបលទ្ធផលសញ្ញា XAUUSD ប្រចាំថ្ងៃ</b>
 ━━━━━━━━━━━━━━━━━━━━
 📅 <b>Date:</b> <code>{date_str}</code> (Phnom Penh GMT+7)
@@ -1477,8 +1480,8 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 🎯 <b>TP2 Attainment:</b> {tp2_str}
 🎯 <b>TP3 Attainment:</b> {tp3_str}
 ━━━━━━━━━━━━━━━━━━━━
-⚖️ <i>Methodology: Verified outcomes evaluated strictly on subsequent tick/candle price action. Win Rate = Wins / (Wins + Losses) * 100%. Unresolved and expired excluded from denominator. Zero lookahead bias.</i>
-🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
+⚖️ <i>Methodology: Verified outcomes evaluated strictly on subsequent tick/candle price action. Win Rate = Wins / (Wins + Losses) * 100%. Unresolved, ambiguous, and expired excluded from denominator. Zero lookahead bias.</i>
+🤖 <i>ZYROX AI 24/7 AUTO SENTINEL</i>"""
 
         if not self.token or not target_chat:
             return False, None, "Telegram not configured"

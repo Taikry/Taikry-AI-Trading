@@ -299,6 +299,10 @@ class XAUUSDTelegramSignalModel(Base):
     strategy_version = Column(String(50), default="ZYROX-SMC-V2.1")
     broker_source = Column(String(50), default="EXNESS_MT5")
     setup_score_label = Column(String(100), default="Setup Score (out of 100, not win probability)")
+    calibrated_probability = Column(Float, nullable=True)  # Distinct from setup score; only populated when statistically justified
+    spread_points = Column(Float, default=0.25)  # Observed broker spread at inception
+    estimated_trading_costs = Column(Float, default=0.0)  # Estimated round-turn transaction cost in pts/$
+    execution_mode = Column(String(30), default="SHADOW_PAPER", index=True)  # SHADOW_PAPER, BACKTEST, VERIFIED_BROKER_EXECUTION
     consensus_summary = Column(Text, nullable=False)
     agent_opinions = Column(JSON, nullable=True)  # Dictionary of agent contributions
     eligible_agents_count = Column(Integer, default=0)
@@ -325,6 +329,7 @@ class XAUUSDTelegramSignalModel(Base):
     entry_reached_price = Column(Float, nullable=True)
     exit_price = Column(Float, nullable=True)
     exit_time = Column(DateTime, nullable=True)
+    closed_at = Column(DateTime, nullable=True)  # Explicit closed timestamp
     outcome = Column(String(20), default="PENDING", index=True, nullable=False)
     # PENDING, WIN, LOSS, EXPIRED_NO_ENTRY, CANCELLED, AMBIGUOUS
     outcome_policy_version = Column(String(30), default="TP1_CONSERVATIVE_V1")

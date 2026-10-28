@@ -115,6 +115,7 @@ class XAUUSDPerformanceTracker:
                             sig.signal_status = "INVALIDATED"
                             sig.outcome = "CANCELLED"
                             sig.exit_time = eval_dt
+                            sig.closed_at = eval_dt
                             sig.exit_price = sl
                             self._append_audit(sig, "INVALIDATED", f"Premature breach of Stop Loss {sl:.2f} before entry", sl, eval_dt)
                             resolved_events.append({"signal_id": sig.signal_id, "status": "INVALIDATED", "price": sl})
@@ -144,6 +145,7 @@ class XAUUSDPerformanceTracker:
                         sig.outcome = "AMBIGUOUS"
                         sig.exit_price = current_price
                         sig.exit_time = eval_dt
+                        sig.closed_at = eval_dt
                         self._append_audit(sig, "AMBIGUOUS", "Both TP1 and SL touched within same candle period. Conservative resolution applied (not a win).", current_price, eval_dt)
                         resolved_events.append({"signal_id": sig.signal_id, "status": "AMBIGUOUS", "outcome": "AMBIGUOUS"})
                         continue
@@ -154,6 +156,7 @@ class XAUUSDPerformanceTracker:
                         sig.outcome = "WIN"
                         sig.exit_price = tp1
                         sig.exit_time = eval_dt
+                        sig.closed_at = eval_dt
                         sig.pnl_r_multiple = sig.risk_reward_1
 
                         # Check if higher targets also attained in this bar
@@ -176,6 +179,7 @@ class XAUUSDPerformanceTracker:
                         sig.outcome = "LOSS"
                         sig.exit_price = sl
                         sig.exit_time = eval_dt
+                        sig.closed_at = eval_dt
                         sig.pnl_r_multiple = -1.0
                         self._append_audit(sig, "SL_HIT", f"Stop Loss hit at {sl:.2f}", sl, eval_dt)
                         resolved_events.append({"signal_id": sig.signal_id, "status": "SL_HIT", "outcome": "LOSS", "pnl_r": -1.0})
@@ -190,6 +194,7 @@ class XAUUSDPerformanceTracker:
                         sig.outcome = "WIN" if r_curr > 0.5 else "LOSS"
                         sig.exit_price = current_price
                         sig.exit_time = eval_dt
+                        sig.closed_at = eval_dt
                         self._append_audit(sig, "EXPIRED", f"Trade expired after duration limit at {current_price:.2f} ({r_curr:+.2f}R)", current_price, eval_dt)
                         resolved_events.append({"signal_id": sig.signal_id, "status": "EXPIRED", "outcome": sig.outcome})
                         continue
@@ -268,8 +273,26 @@ class XAUUSDPerformanceTracker:
             metrics_buy = self._compute_subset_metrics(buy_sigs)
             metrics_sell = self._compute_subset_metrics(sell_sigs)
 
-            # Streak calculations
+            # Streaks
             current_streak, max_win_streak, max_loss_streak = self._compute_streaks(signals)
+
+            # Segmentations
+            strategies_map: Dict[str, List[XAUUSDTelegramSignalModel]] = {}
+            modes_map: Dict[str, List[XAUUSDTelegramSignalModel]] = {}
+            for s in signals:
+                strat = getattr(s, "strategy_version", "ZYROX-SMC-V2.1") or "ZYROX-SMC-V2.1"
+                strategies_map.setdefault(strat, []).append(s)
+                mode = getattr(s, "execution_mode", "SHADOW_PAPER") or "SHADOW_PAPER"
+                modes_map.setdefault(mode, []).append(s)
+
+            breakdown_by_strategy = {
+                strat: self._compute_subset_metrics(strat_sigs)
+                for strat, strat_sigs in strategies_map.items()
+            }
+            breakdown_by_mode = {
+                mode: self._compute_subset_metrics(mode_sigs)
+                for mode, mode_sigs in modes_map.items()
+            }
 
             return {
                 "calculation_timestamp_utc": now_utc.isoformat(),
@@ -280,6 +303,8 @@ class XAUUSDPerformanceTracker:
                 "last_30_days": metrics_30d,
                 "buy_signals": metrics_buy,
                 "sell_signals": metrics_sell,
+                "breakdown_by_strategy": breakdown_by_strategy,
+                "breakdown_by_execution_mode": breakdown_by_mode,
                 "streaks": {
                     "current_streak": current_streak,
                     "max_win_streak": max_win_streak,
@@ -288,7 +313,7 @@ class XAUUSDPerformanceTracker:
                 "methodology": {
                     "formula": "Wins / (Wins + Losses) * 100%",
                     "policy": "TP1_CONSERVATIVE_V1",
-                    "notes": "Unresolved open trades and expired without entry are excluded from denominator."
+                    "notes": "Unresolved open trades and expired without entry are excluded from denominator. Inferred prices are labeled SHADOW_PAPER and never claimed as real broker fills."
                 }
             }
         finally:
@@ -328,11 +353,35 @@ class XAUUSDPerformanceTracker:
             tp2_rate = None
             tp3_rate = None
 
-        # Net R-Multiples and Average R:R
-        net_r = round(sum(s.pnl_r_multiple or 0.0 for s in signals if s.outcome in ["WIN", "LOSS"]), 2)
+        # Net R-Multiples, Gross PnL, Profit Factor, and Expectancy
+        gross_profit_r = round(sum(s.pnl_r_multiple for s in signals if s.outcome == "WIN" and (s.pnl_r_multiple or 0) > 0), 2)
+        gross_loss_r = round(sum(abs(s.pnl_r_multiple) for s in signals if s.outcome == "LOSS" and (s.pnl_r_multiple or 0) < 0), 2)
+        net_r = round(gross_profit_r - gross_loss_r, 2)
+
+        if gross_loss_r > 0:
+            profit_factor = round(gross_profit_r / gross_loss_r, 2)
+        elif gross_profit_r > 0:
+            profit_factor = round(gross_profit_r, 2)
+        else:
+            profit_factor = 0.0
+
+        avg_win_r = round(gross_profit_r / max(1, wins), 2) if wins > 0 else 0.0
+        avg_loss_r = round(gross_loss_r / max(1, losses), 2) if losses > 0 else 0.0
+
+        if resolved_sample > 0:
+            p_win = wins / float(resolved_sample)
+            p_loss = losses / float(resolved_sample)
+            expectancy_r = round((p_win * avg_win_r) - (p_loss * avg_loss_r), 2)
+        else:
+            expectancy_r = 0.0
+
         avg_rr = round(
             sum(s.risk_reward_1 for s in signals) / float(total_sent), 2
         ) if total_sent > 0 else 2.1
+
+        # Trading costs and spreads
+        total_costs = round(sum(getattr(s, "estimated_trading_costs", 0.0) or 0.0 for s in signals), 2)
+        avg_spread = round(sum(getattr(s, "spread_points", 0.25) or 0.25 for s in signals) / float(max(1, total_sent)), 2)
 
         # Calculate Max Drawdown in R
         running_r = 0.0
@@ -364,8 +413,17 @@ class XAUUSDPerformanceTracker:
             "tp3_attainment_count": tp3_hits,
             "tp3_attainment_rate": tp3_rate,
             "net_r_multiple": net_r,
+            "gross_profit_r": gross_profit_r,
+            "gross_loss_r": gross_loss_r,
+            "profit_factor": profit_factor,
+            "average_win_r": avg_win_r,
+            "average_loss_r": avg_loss_r,
+            "expectancy_r": expectancy_r,
             "max_drawdown_r": round(max_dd_r, 2),
-            "average_risk_reward": avg_rr
+            "average_risk_reward": avg_rr,
+            "total_estimated_costs": total_costs,
+            "average_spread_points": avg_spread,
+            "execution_mode": "SHADOW_PAPER"
         }
 
     def _compute_streaks(self, signals: List[XAUUSDTelegramSignalModel]) -> Tuple[str, int, int]:

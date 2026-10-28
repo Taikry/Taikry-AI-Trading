@@ -18,6 +18,8 @@ ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "taikry_admin_access_token_2026")
 
 # Database & Cache
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./taikry_market.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Timezone

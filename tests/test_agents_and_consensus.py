@@ -32,8 +32,11 @@ def test_risk_validator_rejects_insufficient_rr():
     assert res["decision"] == "REJECT"
     assert any("Insufficient Risk-to-Reward" in r for r in res["reasons"])
 
-def test_risk_validator_approves_valid_setup():
+def test_risk_validator_approves_valid_setup(monkeypatch):
     """Risk validator approves setups with valid R:R >= 1:2.0 and risk sizing."""
+    from taikry.data.economic_calendar import economic_calendar_provider
+    monkeypatch.setattr(economic_calendar_provider, "check_news_blackout", lambda sym: {"is_blackout": False, "advisory_en": None, "advisory_kh": None})
+
     fake_a1 = {
         "bias": "BULLISH",
         "key_price_levels": {

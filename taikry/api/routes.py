@@ -277,6 +277,7 @@ def get_best_market_setup(category: str = "ALL"):
 _PRICE_CACHE: Dict[str, Any] = {}
 
 @router.get("/api/v1/prices/realtime")
+@router.get("/api/v1/realtime-prices")
 def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-separated symbols list")):
     """
     High-frequency real-time prices feed across Crypto and Forex.
@@ -318,13 +319,24 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
             
             ts_str = ts.isoformat() if isinstance(ts, datetime.datetime) else str(ts or datetime.datetime.now(datetime.timezone.utc).isoformat())
 
+            if src == "EXNESS_MT5":
+                prov_display = "Exness MT5 (Live)"
+            elif "YAHOO" in src.upper():
+                prov_display = "Yahoo Finance (Fallback)"
+            elif "BINANCE" in src.upper():
+                prov_display = "Binance (Spot)"
+            elif "DEMO" in src.upper() or "SYNTHETIC" in src.upper():
+                prov_display = "DEMO (Synthetic)"
+            else:
+                prov_display = cfg.get("provider_display", src)
+
             p_data = {
                 "symbol": sym,
                 "price": p_formatted,
                 "direction": direction,
                 "source": src,
                 "quote_type": cfg.get("quote_type", "SPOT_MID"),
-                "provider": cfg.get("provider_display", src),
+                "provider": prov_display,
                 "tv_symbol": cfg.get("tv_reference_symbol", f"OANDA:{sym}" if "USDT" not in sym else f"BINANCE:{sym}"),
                 "reference_mode": XAUUSD_PRICE_REFERENCE if sym == "XAUUSD" else "STANDARD",
                 "timestamp": ts_str
@@ -341,9 +353,9 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
                 "symbol": sym,
                 "price": fallback_price,
                 "direction": "flat",
-                "source": "fallback",
+                "source": "DEMO_SYNTHETIC",
                 "quote_type": cfg.get("quote_type", "SPOT_MID"),
-                "provider": cfg.get("provider_display", "fallback"),
+                "provider": "DEMO (Synthetic)",
                 "tv_symbol": cfg.get("tv_reference_symbol", f"OANDA:{sym}" if "USDT" not in sym else f"BINANCE:{sym}"),
                 "reference_mode": XAUUSD_PRICE_REFERENCE if sym == "XAUUSD" else "STANDARD",
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -1487,6 +1499,16 @@ def get_signal_lifecycles(state: Optional[str] = None, symbol: Optional[str] = N
     }
 
 
+@router.get("/api/v1/signals/performance")
+def get_signals_performance_endpoint():
+    """
+    Returns mathematically verified win rates, profit factor, expectancy in R,
+    max drawdown, and segmented analytics calculated from actual resolved signals.
+    """
+    from taikry.trading.xauusd_tracker import xauusd_performance_tracker
+    return xauusd_performance_tracker.calculate_win_rate_metrics()
+
+
 @router.get("/api/v1/signals/{signal_id}")
 def get_signal_detail(signal_id: str):
     """
@@ -1643,12 +1665,21 @@ def get_xauusd_signals_endpoint(
                 "take_profit_3": r.take_profit_3,
                 "risk_reward_1": r.risk_reward_1,
                 "ai_score": r.ai_confluence_score,
+                "strategy_version": getattr(r, "strategy_version", "ZYROX-SMC-V2.1") or "ZYROX-SMC-V2.1",
+                "broker_source": getattr(r, "broker_source", "EXNESS_MT5") or "EXNESS_MT5",
+                "setup_score_label": getattr(r, "setup_score_label", "Setup Score (out of 100, not win probability)"),
+                "calibrated_probability": getattr(r, "calibrated_probability", None),
+                "spread_points": getattr(r, "spread_points", 0.25) or 0.25,
+                "estimated_trading_costs": getattr(r, "estimated_trading_costs", 0.0) or 0.0,
+                "execution_mode": getattr(r, "execution_mode", "SHADOW_PAPER") or "SHADOW_PAPER",
                 "signal_status": r.signal_status,
                 "telegram_delivery_status": r.telegram_delivery_status,
                 "telegram_message_id": r.telegram_message_id,
                 "cambodia_date": r.cambodia_date,
                 "entry_reached": r.entry_reached,
                 "exit_price": r.exit_price,
+                "exit_time": r.exit_time.isoformat() if r.exit_time else None,
+                "closed_at": r.closed_at.isoformat() if getattr(r, "closed_at", None) else (r.exit_time.isoformat() if r.exit_time else None),
                 "outcome": r.outcome,
                 "pnl_r_multiple": r.pnl_r_multiple,
                 "mfe_points": r.mfe_points,
@@ -1671,10 +1702,11 @@ def get_xauusd_signals_endpoint(
 
 
 @router.get("/api/v1/xauusd/signals/stats")
+@router.get("/api/v1/signals/performance")
 def get_xauusd_stats_endpoint():
     """
-    Returns mathematically verified win rates and performance analytics
-    calculated from actual resolved XAUUSD Telegram signals.
+    Returns mathematically verified win rates, profit factor, expectancy in R,
+    max drawdown, and segmented analytics calculated from actual resolved signals.
     """
     from taikry.trading.xauusd_tracker import xauusd_performance_tracker
     return xauusd_performance_tracker.calculate_win_rate_metrics()
@@ -1721,6 +1753,13 @@ def get_xauusd_signal_detail_endpoint(signal_id: str):
             "risk_reward_2": r.risk_reward_2,
             "risk_reward_3": r.risk_reward_3,
             "ai_score": r.ai_confluence_score,
+            "strategy_version": getattr(r, "strategy_version", "ZYROX-SMC-V2.1") or "ZYROX-SMC-V2.1",
+            "broker_source": getattr(r, "broker_source", "EXNESS_MT5") or "EXNESS_MT5",
+            "setup_score_label": getattr(r, "setup_score_label", "Setup Score (out of 100, not win probability)"),
+            "calibrated_probability": getattr(r, "calibrated_probability", None),
+            "spread_points": getattr(r, "spread_points", 0.25) or 0.25,
+            "estimated_trading_costs": getattr(r, "estimated_trading_costs", 0.0) or 0.0,
+            "execution_mode": getattr(r, "execution_mode", "SHADOW_PAPER") or "SHADOW_PAPER",
             "consensus_summary": r.consensus_summary,
             "supporting_evidence": r.supporting_evidence,
             "agent_opinions": r.agent_opinions,
@@ -1737,6 +1776,7 @@ def get_xauusd_signal_detail_endpoint(signal_id: str):
             "entry_reached_at": r.entry_reached_at.isoformat() if r.entry_reached_at else None,
             "exit_price": r.exit_price,
             "exit_time": r.exit_time.isoformat() if r.exit_time else None,
+            "closed_at": r.closed_at.isoformat() if getattr(r, "closed_at", None) else (r.exit_time.isoformat() if r.exit_time else None),
             "outcome": r.outcome,
             "pnl_r_multiple": r.pnl_r_multiple,
             "mfe_points": r.mfe_points,
