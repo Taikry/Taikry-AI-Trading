@@ -105,6 +105,13 @@ def test_api_calendar_and_news_endpoints(client):
     assert cal_data["status"] == "SUCCESS"
     assert len(cal_data["events"]) > 0
     assert "blackout_status" in cal_data
+    assert "next_xauusd_catalyst" in cal_data
+    cat = cal_data["next_xauusd_catalyst"]
+    if cat:
+        assert "badge_en" in cat
+        assert "badge_kh" in cat
+        assert "category" in cat
+        assert "time_display" in cat
 
     # Live news endpoint
     r_news = client.get("/api/v1/news/live")
@@ -119,6 +126,19 @@ def test_api_calendar_and_news_endpoints(client):
     llm_data = r_llm.json()
     assert "claude" in llm_data
     assert "deepseek" in llm_data
+
+def test_next_xauusd_catalyst_formatting():
+    """Verifies get_next_xauusd_catalyst extracts real Gold-relevant news and formats badges accurately."""
+    cat = economic_calendar_provider.get_next_xauusd_catalyst()
+    assert cat is not None
+    assert "category" in cat
+    assert "badge_en" in cat
+    assert "badge_kh" in cat
+    assert "⚡" in cat["badge_en"] or "🔥" in cat["badge_en"] or "✅" in cat["badge_en"]
+    assert "time_display" in cat
+    assert "time_display_kh" in cat
+    assert "gold_impact_en" in cat
+    assert "gold_impact_kh" in cat
 
 def test_telegram_calendar_command():
     """Verifies Telegram /calendar and /news command formatting with Khmer descriptions."""

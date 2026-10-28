@@ -22,6 +22,13 @@ HEADERS = {
 
 # Khmer Translation & Macro Mapping Matrix for High-Impact Events
 MACRO_KHMER_CATALOG = {
+    "FEDERAL FUNDS": {
+        "title_kh": "ការសម្រេចអត្រាការប្រាក់ Fed (Federal Funds Rate & FOMC)",
+        "gold_impact_en": "Fed policy rate decision directly dictates USD yields and Gold valuation.",
+        "gold_impact_kh": "គោលនយោបាយអត្រាការប្រាក់ Fed កំណត់ទិន្នផលដុល្លារ និងទិសដៅឡើងចុះនៃតម្លៃមាស។",
+        "forex_impact_en": "Extreme volatility expected across all USD currency pairs.",
+        "forex_impact_kh": "បង្កការប្រែប្រួលតម្លៃខ្លាំងលើគូរូបិយប័ណ្ណដុល្លារទាំងអស់។"
+    },
     "FOMC": {
         "title_kh": "ការសម្រេចអត្រាការប្រាក់ និងសេចក្តីប្រកាសរបស់ធនាគារកណ្តាលអាមេរិក (FOMC)",
         "gold_impact_en": "Fed policy trajectory directly dictates USD yield curve and Gold safe-haven valuation.",
@@ -100,6 +107,32 @@ class EconomicCalendarProvider:
             "forex_impact_en": "Generates rapid institutional rebalancing across currency pairs.",
             "forex_impact_kh": "បង្កការរៀបចំលំហូរទុនឡើងវិញលើគូរូបិយប័ណ្ណសំខាន់ៗ។"
         }
+
+    def _extract_event_category(self, title: str) -> str:
+        """Extracts concise macro acronym or keyword for UI badges."""
+        t = title.upper()
+        if "FOMC" in t or "FEDERAL RESERVE" in t or "FEDERAL FUNDS RATE" in t or "FED RATE" in t:
+            return "FOMC"
+        if "CPI" in t or "CONSUMER PRICE" in t or "INFLATION" in t:
+            return "CPI"
+        if "PPI" in t or "PRODUCER PRICE" in t:
+            return "PPI"
+        if "NON-FARM" in t or "NONFARM" in t or "NFP" in t:
+            return "NFP"
+        if "GDP" in t or "GROSS DOMESTIC" in t:
+            return "GDP"
+        if "PCE" in t:
+            return "Core PCE"
+        if "RETAIL SALES" in t:
+            return "Retail Sales"
+        if "POWELL" in t:
+            return "Fed Powell"
+        if "RATE" in t or "INTEREST" in t:
+            return "Rate Decision"
+        if "UNEMPLOYMENT" in t or "JOBLESS" in t:
+            return "Jobless Claims"
+        clean = title.split(" - ")[0].split(":")[0].strip()
+        return clean[:14]
 
     def _generate_synthetic_benchmark_schedule(self) -> List[Dict[str, Any]]:
         """
@@ -241,7 +274,7 @@ class EconomicCalendarProvider:
                             "gold_impact_kh": meta["gold_impact_kh"],
                             "forex_impact_en": meta["forex_impact_en"],
                             "forex_impact_kh": meta["forex_impact_kh"],
-                            "category": "MACRO"
+                            "category": self._extract_event_category(title)
                         })
         except Exception as e:
             logger.debug(f"FairEconomy feed skipped: {e}")
@@ -333,6 +366,115 @@ class EconomicCalendarProvider:
             "minutes_remaining": None,
             "advisory_en": "No immediate high-impact blackout in effect. Normal volatility operating conditions.",
             "advisory_kh": "មិនទាន់មានបំរាមជួញដូរនៅឡើយទេ។ ទីផ្សារមានកម្រិតបម្រែបម្រួលធម្មតា។"
+        }
+
+    def get_next_xauusd_catalyst(self) -> Optional[Dict[str, Any]]:
+        """
+        Returns the single most urgent upcoming High-Impact macro release affecting Gold (XAUUSD).
+        Prioritizes high-impact USD events (FOMC, CPI, PPI, NFP, PCE, etc.).
+        Calculates exact countdown badge text in English and Khmer.
+        """
+        events = self.get_upcoming_high_impact_events()
+        now_dt = datetime.datetime.now(datetime.timezone.utc)
+
+        # Filter events affecting XAUUSD (USD high impact or gold catalysts)
+        xau_events = []
+        for ev in events:
+            country = str(ev.get("country", "")).upper()
+            impact = str(ev.get("impact", "")).upper()
+            cat = str(ev.get("category", "")).upper()
+            title = str(ev.get("title", "")).upper()
+
+            is_gold_relevant = (
+                (country == "USD" and impact == "HIGH") or
+                any(k in cat or k in title for k in ["FOMC", "FED", "CPI", "PPI", "NFP", "PCE", "GDP", "GOLD", "RATE", "RETAIL"])
+            )
+            if is_gold_relevant:
+                xau_events.append(ev)
+
+        if not xau_events:
+            return None
+
+        # Filter events that are either active now or upcoming (not completed > 30m ago)
+        active_or_upcoming = [
+            e for e in xau_events
+            if e.get("countdown_seconds", 0) > -1800
+        ]
+        if not active_or_upcoming:
+            active_or_upcoming = xau_events
+
+        # Sort by closest time to now
+        active_or_upcoming.sort(key=lambda x: (x.get("countdown_seconds", 999999) < 0, abs(x.get("countdown_seconds", 999999))))
+        target = active_or_upcoming[0]
+
+        diff_sec = target.get("countdown_seconds", 0)
+        mins = target.get("minutes_remaining", 0)
+        cat = target.get("category", "FOMC")
+        is_blackout = target.get("blackout_active", False) or (0 <= diff_sec <= 1800)
+
+        # Build clean countdown string
+        if diff_sec < -1800:
+            passed_hrs = abs(round(mins / 60, 1))
+            badge_en = f"✅ {cat} Completed {passed_hrs}h ago"
+            badge_kh = f"✅ {cat} បានបញ្ចប់ {passed_hrs}ម៉ោងមុន"
+            time_display = f"{passed_hrs}h ago"
+            time_display_kh = f"{passed_hrs}ម៉ោងមុន"
+        elif -1800 <= diff_sec <= 0:
+            badge_en = f"🔥 {cat} RELEASING NOW · Extreme Volatility"
+            badge_kh = f"🔥 {cat} កំពុងចេញផ្សាយ · ប្រែប្រួលខ្លាំង"
+            time_display = "NOW"
+            time_display_kh = "ឥឡូវនេះ"
+        elif 0 < diff_sec <= 1800:
+            badge_en = f"⚡ {cat} in {mins}m · Blackout Active"
+            badge_kh = f"⚡ {cat} ក្នុង {mins}នាទី · បំរាមជួញដូរ"
+            time_display = f"{mins}m"
+            time_display_kh = f"{mins}នាទី"
+        elif 1800 < diff_sec < 86400:
+            hrs = diff_sec // 3600
+            rem_m = (diff_sec % 3600) // 60
+            if hrs > 0 and rem_m > 0:
+                time_display = f"{hrs}h {rem_m}m"
+                time_display_kh = f"{hrs}ម៉ោង {rem_m}នាទី"
+            elif hrs > 0:
+                time_display = f"{hrs}h"
+                time_display_kh = f"{hrs}ម៉ោង"
+            else:
+                time_display = f"{rem_m}m"
+                time_display_kh = f"{rem_m}នាទី"
+            badge_en = f"⚡ {cat} in {time_display} · High Impact"
+            badge_kh = f"⚡ {cat} ក្នុង {time_display_kh} · ឥទ្ធិពលខ្លាំងលើមាស"
+        else:
+            days = diff_sec // 86400
+            rem_hrs = (diff_sec % 86400) // 3600
+            if rem_hrs > 0:
+                time_display = f"{days}d {rem_hrs}h"
+                time_display_kh = f"{days}ថ្ងៃ {rem_hrs}ម៉ោង"
+            else:
+                time_display = f"{days}d"
+                time_display_kh = f"{days}ថ្ងៃ"
+            badge_en = f"⚡ {cat} in {time_display} · High Impact"
+            badge_kh = f"⚡ {cat} ក្នុង {time_display_kh} · ឥទ្ធិពលខ្លាំងលើមាស"
+
+        return {
+            "id": target.get("id"),
+            "title": target.get("title"),
+            "title_kh": target.get("title_kh"),
+            "category": cat,
+            "country": target.get("country", "USD"),
+            "scheduled_utc": target.get("scheduled_utc"),
+            "scheduled_display": target.get("scheduled_display"),
+            "forecast": target.get("forecast"),
+            "previous": target.get("previous"),
+            "countdown_seconds": diff_sec,
+            "minutes_remaining": mins,
+            "time_display": time_display,
+            "time_display_kh": time_display_kh,
+            "badge_en": badge_en,
+            "badge_kh": badge_kh,
+            "is_blackout": is_blackout,
+            "volatility_risk": target.get("volatility_risk", "EXTREME"),
+            "gold_impact_en": target.get("gold_impact_en"),
+            "gold_impact_kh": target.get("gold_impact_kh")
         }
 
     def get_live_macro_news(self, limit: int = 8) -> List[Dict[str, Any]]:

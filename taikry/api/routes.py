@@ -534,12 +534,14 @@ def get_high_impact_calendar(force_refresh: bool = False):
     from taikry.data.economic_calendar import economic_calendar_provider
     events = economic_calendar_provider.get_upcoming_high_impact_events(force_refresh=force_refresh)
     blackout = economic_calendar_provider.check_news_blackout("XAUUSD")
+    next_catalyst = economic_calendar_provider.get_next_xauusd_catalyst()
     return {
         "status": "SUCCESS",
         "total_events": len(events),
         "blackout_status": blackout,
+        "next_xauusd_catalyst": next_catalyst,
         "events": events,
-        "timestamp_utc": datetime.datetime.utcnow().isoformat()
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
 # 3c. GET /api/v1/calendar/blackout

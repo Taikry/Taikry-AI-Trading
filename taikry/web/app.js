@@ -12,6 +12,9 @@ let currentTimeframe = "15";
 let currentLLMProvider = "auto";
 let isKhmer = false;
 let latestAnalysisData = null;
+let currentXauusdCatalyst = null;
+let cachedMacroEvents = [];
+let macroCountdownInterval = null;
 
 // Watchlist Catalog (All Crypto & Forex)
 const WATCHLIST = [
@@ -367,6 +370,11 @@ function toggleLanguage() {
     updateSmartCauseHub(latestAnalysisData);
     updateExecutionCard(latestAnalysisData);
     updateReportView(latestAnalysisData);
+  }
+
+  if (currentXauusdCatalyst) {
+    updateMacroCatalystUI(currentXauusdCatalyst);
+    renderCockpitNewsQuickList(currentXauusdCatalyst, cachedMacroEvents);
   }
 }
 
@@ -1076,6 +1084,155 @@ async function fetchHealthAndPaper() {
   } catch (e) {}
 }
 
+function updateMacroCatalystUI(catalyst) {
+  if (!catalyst) return;
+  currentXauusdCatalyst = catalyst;
+  const badgeEl = document.getElementById("macro-catalyst-badge");
+  const textEl = document.getElementById("macro-catalyst-text");
+  if (!badgeEl || !textEl) return;
+
+  const rawBadge = isKhmer ? (catalyst.badge_kh || catalyst.badge_en) : (catalyst.badge_en || catalyst.badge_kh);
+  // Strip leading emoji if present, since .macro-fire-icon already holds the icon
+  const cleanText = rawBadge ? rawBadge.replace(/^[⚡🔥✅]\s*/, "") : "FOMC in 1d 3h · High Impact";
+  textEl.innerText = cleanText;
+
+  const iconEl = badgeEl.querySelector(".macro-fire-icon");
+  if (iconEl) {
+    if (catalyst.is_blackout || (catalyst.countdown_seconds >= -1800 && catalyst.countdown_seconds <= 1800)) {
+      iconEl.innerText = "🔥";
+    } else if (catalyst.countdown_seconds < -1800) {
+      iconEl.innerText = "✅";
+    } else {
+      iconEl.innerText = "⚡";
+    }
+  }
+
+  // Active blackout pulse
+  if (catalyst.is_blackout || (catalyst.countdown_seconds >= -1800 && catalyst.countdown_seconds <= 1800)) {
+    badgeEl.classList.add("pill-blackout-active");
+  } else {
+    badgeEl.classList.remove("pill-blackout-active");
+  }
+
+  // Set rich institutional tooltip
+  const scheduled = catalyst.scheduled_display || catalyst.scheduled_utc || "";
+  const goldImpact = isKhmer ? (catalyst.gold_impact_kh || catalyst.gold_impact_en) : (catalyst.gold_impact_en || catalyst.gold_impact_kh);
+  badgeEl.title = `📅 ${catalyst.title} (${scheduled})\n` +
+    `⚡ Impact: ${catalyst.country} High Impact (${catalyst.category})\n` +
+    `📊 Forecast: ${catalyst.forecast || 'N/A'} | Previous: ${catalyst.previous || 'N/A'}\n` +
+    `🥇 Gold Volatility: ${catalyst.volatility_risk || 'EXTREME'}\n` +
+    `💡 ${goldImpact || ''}\n` +
+    `[Click to open Full Forex Factory Macro Calendar]`;
+}
+
+function startMacroCountdownTimer() {
+  if (macroCountdownInterval) return;
+  macroCountdownInterval = setInterval(() => {
+    if (!currentXauusdCatalyst || currentXauusdCatalyst.countdown_seconds == null) return;
+    currentXauusdCatalyst.countdown_seconds -= 1;
+    const s = currentXauusdCatalyst.countdown_seconds;
+    const cat = currentXauusdCatalyst.category || "FOMC";
+
+    if (s < -1800) {
+      const passedHrs = Math.abs((s / 3600).toFixed(1));
+      currentXauusdCatalyst.badge_en = `✅ ${cat} Completed ${passedHrs}h ago`;
+      currentXauusdCatalyst.badge_kh = `✅ ${cat} បានបញ្ចប់ ${passedHrs}ម៉ោងមុន`;
+      currentXauusdCatalyst.is_blackout = false;
+    } else if (s >= -1800 && s <= 0) {
+      currentXauusdCatalyst.badge_en = `🔥 ${cat} RELEASING NOW · Extreme Volatility`;
+      currentXauusdCatalyst.badge_kh = `🔥 ${cat} កំពុងចេញផ្សាយ · ប្រែប្រួលខ្លាំង`;
+      currentXauusdCatalyst.is_blackout = true;
+    } else if (s > 0 && s <= 1800) {
+      const mins = Math.max(1, Math.floor(s / 60));
+      currentXauusdCatalyst.badge_en = `⚡ ${cat} in ${mins}m · Blackout Active`;
+      currentXauusdCatalyst.badge_kh = `⚡ ${cat} ក្នុង ${mins}នាទី · បំរាមជួញដូរ`;
+      currentXauusdCatalyst.is_blackout = true;
+    } else if (s > 1800 && s < 86400) {
+      const hrs = Math.floor(s / 3600);
+      const remM = Math.floor((s % 3600) / 60);
+      let tEn = "", tKh = "";
+      if (hrs > 0 && remM > 0) {
+        tEn = `${hrs}h ${remM}m`;
+        tKh = `${hrs}ម៉ោង ${remM}នាទី`;
+      } else if (hrs > 0) {
+        tEn = `${hrs}h`;
+        tKh = `${hrs}ម៉ោង`;
+      } else {
+        tEn = `${remM}m`;
+        tKh = `${remM}នាទី`;
+      }
+      currentXauusdCatalyst.badge_en = `⚡ ${cat} in ${tEn} · High Impact`;
+      currentXauusdCatalyst.badge_kh = `⚡ ${cat} ក្នុង ${tKh} · ឥទ្ធិពលខ្លាំងលើមាស`;
+      currentXauusdCatalyst.is_blackout = false;
+    } else {
+      const days = Math.floor(s / 86400);
+      const remH = Math.floor((s % 86400) / 3600);
+      const tEn = remH > 0 ? `${days}d ${remH}h` : `${days}d`;
+      const tKh = remH > 0 ? `${days}ថ្ងៃ ${remH}ម៉ោង` : `${days}ថ្ងៃ`;
+      currentXauusdCatalyst.badge_en = `⚡ ${cat} in ${tEn} · High Impact`;
+      currentXauusdCatalyst.badge_kh = `⚡ ${cat} ក្នុង ${tKh} · ឥទ្ធិពលខ្លាំងលើមាស`;
+      currentXauusdCatalyst.is_blackout = false;
+    }
+
+    updateMacroCatalystUI(currentXauusdCatalyst);
+  }, 1000);
+}
+
+function renderCockpitNewsQuickList(catalyst, events) {
+  const container = document.getElementById("cockpit-news-quick-list");
+  if (!container) return;
+
+  let html = "";
+  if (catalyst) {
+    const isBlackout = catalyst.is_blackout || (catalyst.countdown_seconds >= -1800 && catalyst.countdown_seconds <= 1800);
+    const catBadge = isKhmer ? (catalyst.badge_kh || catalyst.badge_en) : (catalyst.badge_en || catalyst.badge_kh);
+    const goldTxt = isKhmer ? (catalyst.gold_impact_kh || catalyst.gold_impact_en) : (catalyst.gold_impact_en || catalyst.gold_impact_kh);
+    html += `
+      <div class="cockpit-catalyst-hero ${isBlackout ? 'card-blackout-active' : ''}" onclick="toggleMacroDrawer()" title="Click to view full Macro Calendar">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-size:10px; font-weight:800; color:#fb7185; letter-spacing:0.4px;">🥇 XAUUSD HIGH-IMPACT CATALYST</span>
+          <span style="font-size:10px; font-weight:800; padding:2px 6px; border-radius:10px; background:rgba(239,68,68,0.2); color:#fca5a5; border:1px solid rgba(239,68,68,0.4);">${catalyst.volatility_risk}</span>
+        </div>
+        <div style="font-size:12px; font-weight:800; color:#fff; margin-bottom:3px;">
+          ${catalyst.title}
+        </div>
+        ${catalyst.title_kh ? `<div style="font-size:11px; color:#fce79f; margin-bottom:4px; font-family:var(--font-khmer);">${catalyst.title_kh}</div>` : ''}
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:10.5px; color:#cbd5e1; margin-bottom:4px;">
+          <span>⏱️ ${catBadge}</span>
+          <span>Forecast: <b>${catalyst.forecast || 'N/A'}</b></span>
+        </div>
+        <div style="font-size:10px; color:#94a3b8; line-height:1.35; border-top:1px solid rgba(255,255,255,0.08); padding-top:4px;">
+          ${goldTxt}
+        </div>
+      </div>
+    `;
+  }
+
+  if (events && events.length > 0) {
+    html += `<div style="font-size:10px; font-weight:700; color:#94a3b8; margin:6px 0 4px 0; text-transform:uppercase; letter-spacing:0.3px;">Upcoming Macro Releases</div>`;
+    events.slice(0, 4).forEach(ev => {
+      const isBlk = ev.blackout_active;
+      const title = ev.title;
+      const titleKh = ev.title_kh;
+      const timeUntil = ev.time_until;
+      html += `
+        <div class="cockpit-news-card ${isBlk ? 'card-blackout-active' : ''}" onclick="toggleMacroDrawer()" title="Click to view macro details">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+            <span style="font-size:9.5px; font-weight:800; color:#fca5a5; background:rgba(239,68,68,0.18); padding:1px 5px; border-radius:4px;">🔴 ${ev.country} HIGH</span>
+            <span style="font-size:10px; font-weight:700; color:#ffd700;">${timeUntil}</span>
+          </div>
+          <div style="font-size:11px; font-weight:700; color:#e2e8f0;">${title}</div>
+          ${titleKh ? `<div style="font-size:10px; color:#fde68a; font-family:var(--font-khmer);">${titleKh}</div>` : ''}
+        </div>
+      `;
+    });
+  } else if (!catalyst) {
+    html = `<div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">No high-impact macro releases scheduled today.</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
 async function fetchMacroEvents(forceRefresh = false) {
   const container = document.getElementById("calendar-events-container");
   const blackoutBanner = document.getElementById("macro-blackout-banner");
@@ -1087,6 +1244,15 @@ async function fetchMacroEvents(forceRefresh = false) {
     const url = `${API_BASE}/api/v1/calendar/high-impact${forceRefresh ? '?force_refresh=true' : ''}`;
     const r = await fetch(url);
     const data = await r.json();
+
+    // 0. Update Real-Time Macro Catalyst Badge on Chart HUD & Cockpit News
+    if (data.next_xauusd_catalyst) {
+      currentXauusdCatalyst = data.next_xauusd_catalyst;
+      updateMacroCatalystUI(currentXauusdCatalyst);
+      startMacroCountdownTimer();
+    }
+    cachedMacroEvents = data.events || [];
+    renderCockpitNewsQuickList(currentXauusdCatalyst, cachedMacroEvents);
 
     // 1. Audit News Blackout
     const blackout = data.blackout_status || {};
@@ -3044,6 +3210,8 @@ function switchCockpitSubpane(paneName) {
     loadSignalLifecycles();
   } else if (paneName === "bot") {
     loadAgentRegistryStatus();
+  } else if (paneName === "news") {
+    renderCockpitNewsQuickList(currentXauusdCatalyst, cachedMacroEvents);
   }
 }
 

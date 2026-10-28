@@ -1393,6 +1393,105 @@ body.khmer-mode {
    LIVE HIGH-IMPACT FOREX FACTORY & MACRO NEWS HUD STYLING
    ========================================================================== */
 
+/* Pinned Macro Event Catalyst Pill on Chart HUD */
+.macro-catalyst-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.38);
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.macro-catalyst-pill:hover {
+  background: rgba(239, 68, 68, 0.24);
+  border-color: rgba(239, 68, 68, 0.7);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.35);
+  transform: translateY(-1px);
+}
+
+.macro-catalyst-pill .macro-fire-icon {
+  font-size: 12px;
+  color: #fb7185;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Blackout Active / Imminent Catalyst Pulsing Animation */
+.macro-catalyst-pill.pill-blackout-active {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.32), rgba(220, 38, 38, 0.45));
+  border-color: #ef4444;
+  color: #ffffff;
+  animation: macroBlackoutPulse 1.2s infinite alternate;
+}
+
+@keyframes macroBlackoutPulse {
+  0% {
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+    border-color: rgba(239, 68, 68, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.85);
+    border-color: #f87171;
+  }
+}
+
+/* Cockpit News Mini List & Hero Catalyst Card */
+.cockpit-news-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+.cockpit-catalyst-hero {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(30, 41, 59, 0.7) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cockpit-catalyst-hero:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.24) 0%, rgba(30, 41, 59, 0.85) 100%);
+  border-color: rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+}
+
+.cockpit-news-card {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+
+.cockpit-news-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.cockpit-news-card.card-blackout-active {
+  border-color: rgba(239, 68, 68, 0.6);
+  background: rgba(239, 68, 68, 0.07);
+}
+
 .macro-news-hud {
   position: relative;
   overflow: hidden;
