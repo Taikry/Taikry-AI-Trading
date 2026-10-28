@@ -7728,6 +7728,7 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
   display: block;
   object-fit: contain;
   transition: transform 0.2s ease, filter 0.2s ease;
+  -webkit-user-select: none;
   user-select: none;
 }
 .terminal-brand:hover .brand-vector-logo {
