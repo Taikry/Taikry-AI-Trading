@@ -1888,7 +1888,6 @@ body.theme-solar-gold {
   overflow-x: auto;
   white-space: nowrap;
   flex: 1;
-  scrollbar-width: none;
   -ms-overflow-style: none;
 }
 

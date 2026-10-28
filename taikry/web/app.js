@@ -1711,6 +1711,13 @@ function changeColorTheme(theme) {
 function initColorTheme() {
   const saved = localStorage.getItem("taikry_theme_preset") || "cyber-cyan";
   changeColorTheme(saved);
+  let metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (!metaTheme) {
+    metaTheme = document.createElement("meta");
+    metaTheme.name = "theme-color";
+    document.head.appendChild(metaTheme);
+  }
+  metaTheme.content = "#060B09";
 }
 
 function switchCockpitTab(tabName, btn) {
