@@ -248,4 +248,27 @@ class PaperTradingEngine:
         finally:
             db.close()
 
+    # -------------------------------------------------------------------------
+    # SHADOW MODE STRICT SAFETY ENFORCEMENT
+    # -------------------------------------------------------------------------
+
+    @property
+    def is_shadow_mode(self) -> bool:
+        """Returns True: Engine runs in strictly non-executable shadow simulation mode."""
+        return True
+
+    @property
+    def can_place_live_orders(self) -> bool:
+        """Strict safety invariant: Shadow mode is prohibited from live order execution."""
+        return False
+
+    def place_live_broker_order(self, *args, **kwargs):
+        """Security guard: raises PermissionError to enforce Shadow Mode separation."""
+        raise PermissionError(
+            "SECURITY VETO: Shadow mode has zero permission to place live broker orders. "
+            "Real order routing must run through a separate explicitly authorized execution service."
+        )
+
+
 paper_trading_engine = PaperTradingEngine()
+

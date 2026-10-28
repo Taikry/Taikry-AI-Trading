@@ -2,10 +2,16 @@ import json
 import urllib.request
 import urllib.error
 import sys
+import os
 
-URL = "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
+URL = os.getenv("MAKE_WEBHOOK_URL", "")
 
 def send_webhook(symbol="XAUUSD", timeframe="M5", action="analyze", test="true"):
+    url = os.getenv("MAKE_WEBHOOK_URL", URL)
+    if not url:
+        print("[ERROR] MAKE_WEBHOOK_URL is not configured in environment. Please set MAKE_WEBHOOK_URL.")
+        return 1, "MAKE_WEBHOOK_URL not configured"
+
     payload = {
         "symbol": symbol,
         "timeframe": timeframe,

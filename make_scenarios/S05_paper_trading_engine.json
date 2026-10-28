@@ -7,7 +7,7 @@
       "module": "gateway:CustomWebHook",
       "name": "Trade Execution Webhook",
       "parameters": {
-        "url": "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
+        "url": "https://hook.us2.make.com/YOUR_MAKE_WEBHOOK_ID"
       }
     },
     {

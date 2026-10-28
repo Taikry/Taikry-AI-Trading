@@ -134,6 +134,13 @@ def test_signal_lifecycle_evaluation_invalidation_prior_to_entry():
 
 def test_signal_lifecycle_evaluation_entry_trigger_to_active():
     """Verifies that when market price reaches the entry price, signal transitions to ACTIVE."""
+    db = SessionLocal()
+    try:
+        db.query(SignalLifecycleModel).filter(SignalLifecycleModel.symbol == "BTCUSDT").delete()
+        db.commit()
+    finally:
+        db.close()
+
     sig = signal_lifecycle_manager.create_signal(
         symbol="BTCUSDT",
         direction="BUY",

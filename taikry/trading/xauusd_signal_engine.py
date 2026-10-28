@@ -19,11 +19,12 @@ import zoneinfo
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 
-from taikry.config import PRIMARY_SYMBOL, LOCAL_TIMEZONE
+from taikry.config import PRIMARY_SYMBOL, LOCAL_TIMEZONE, DEFAULT_STRATEGY_VERSION
 from taikry.database.session import SessionLocal
 from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel
 from taikry.data.providers import market_data_engine
 from taikry.data.validator import validate_dataframe, is_market_open
+from taikry.data.mt5_receiver import mt5_receiver
 from taikry.agents.registry import agent_registry
 
 logger = logging.getLogger("taikry.trading.xauusd_signal_engine")
@@ -470,6 +471,16 @@ class XAUUSDSignalEngine:
             }
         verified_price = round(float(verified_price), 2)
 
+        # Step 3b: Stale Feed Guardrail: Never use a price from a stale feed to issue a new actionable signal
+        bridge_status = mt5_receiver.get_status()
+        if bridge_status.get("status") == "STALE":
+            return {
+                "success": False,
+                "error": "Market feed from Exness MT5 is currently STALE (>30s without update). Actionable signals blocked to preserve capital.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_STALE_BROKER_FEED"
+            }
+
         # Step 4: Atomic Daily Quota Check (Cambodia Calendar Day)
         cambodia_date = get_cambodia_date_str()
         quota_status = self.get_daily_quota_status(cambodia_date)
@@ -584,6 +595,9 @@ class XAUUSDSignalEngine:
                 risk_reward_2=consensus["risk_reward_2"],
                 risk_reward_3=consensus["risk_reward_3"],
                 ai_confluence_score=consensus["score"],
+                strategy_version=DEFAULT_STRATEGY_VERSION,
+                broker_source=price_source,
+                setup_score_label="Setup Score (out of 100, not win probability)",
                 consensus_summary=summary_text,
                 agent_opinions=_make_json_safe(agent_outputs),
                 eligible_agents_count=consensus["eligible_count"],
@@ -610,6 +624,7 @@ class XAUUSDSignalEngine:
                 "success": True,
                 "signal_id": sig_id,
                 "canonical_symbol": canonical_symbol,
+                "broker": price_source,
                 "direction": decision,
                 "entry_price": entry,
                 "stop_loss": sl,
@@ -620,6 +635,10 @@ class XAUUSDSignalEngine:
                 "risk_reward_2": consensus["risk_reward_2"],
                 "risk_reward_3": consensus["risk_reward_3"],
                 "ai_score": consensus["score"],
+                "setup_score": consensus["score"],
+                "score_explanation": f"Setup confluence score {consensus['score']}/100 based on SMC structure, liquidity sweep, and multi-timeframe alignment. This is an execution setup score, NOT a statistical win probability.",
+                "strategy": "ZYROX Institutional Multi-Agent Consensus",
+                "strategy_version": DEFAULT_STRATEGY_VERSION,
                 "consensus_summary": summary_text,
                 "supporting_evidence": consensus["supporting_evidence"],
                 "cambodia_date": cambodia_date,

@@ -2026,5 +2026,178 @@ def get_vip_stats_endpoint():
     return vip_subscription_manager.get_vip_stats()
 
 
+# -----------------------------------------------------------------------------
+# WINDOWS EXNESS MT5 SECURE BRIDGE ENDPOINTS (READ-ONLY)
+# -----------------------------------------------------------------------------
+
+class BridgeMarketDataPayload(BaseModel):
+    ticks: List[Dict[str, Any]]
+    timestamp: Optional[str] = None
+
+class BridgeCandlesPayload(BaseModel):
+    symbol: str
+    timeframe: str
+    candles: List[Dict[str, Any]]
+
+class BridgeHeartbeatPayload(BaseModel):
+    broker: Optional[str] = "Exness"
+    server: Optional[str] = "Exness-Real"
+    bridge_version: Optional[str] = "2.1.0"
+    terminal_ping_ms: Optional[float] = 0.0
+    active_symbols: Optional[List[str]] = None
+
+class TelegramTestPayload(BaseModel):
+    message: Optional[str] = None
+    chat_id: Optional[str] = None
+
+
+@router.post("/api/v1/bridge/market-data")
+def ingest_bridge_market_data(
+    payload: BridgeMarketDataPayload,
+    x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
+    x_bridge_timestamp: Optional[str] = Header(None, alias="X-Bridge-Timestamp"),
+    x_bridge_signature: Optional[str] = Header(None, alias="X-Bridge-Signature")
+):
+    """
+    Ingests authenticated real-time market data ticks from Windows MT5 Bridge.
+    Validates token, replay protection timestamp, and stores bid/ask/spread.
+    """
+    from taikry.data.mt5_receiver import mt5_receiver
+    if not mt5_receiver.verify_auth_token(x_bridge_token or "", x_bridge_timestamp, x_bridge_signature):
+        raise HTTPException(status_code=401, detail="Unauthorized: invalid MT5 bridge token or timestamp drift")
+
+    ingested = 0
+    for tick in payload.ticks:
+        sym = tick.get("symbol")
+        if sym:
+            mt5_receiver.record_tick(sym, tick)
+            ingested += 1
+
+    return {
+        "status": "SUCCESS",
+        "ingested_ticks": ingested,
+        "bridge_status": mt5_receiver.get_status()
+    }
+
+
+@router.post("/api/v1/bridge/candles")
+def ingest_bridge_candles(
+    payload: BridgeCandlesPayload,
+    x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token"),
+    x_bridge_timestamp: Optional[str] = Header(None, alias="X-Bridge-Timestamp")
+):
+    """Ingests multi-timeframe authentic OHLCV candles from Windows MT5 Bridge."""
+    from taikry.data.mt5_receiver import mt5_receiver
+    if not mt5_receiver.verify_auth_token(x_bridge_token or "", x_bridge_timestamp):
+        raise HTTPException(status_code=401, detail="Unauthorized MT5 bridge token")
+
+    count = mt5_receiver.record_candles(payload.symbol, payload.timeframe, payload.candles)
+    return {
+        "status": "SUCCESS",
+        "symbol": payload.symbol,
+        "timeframe": payload.timeframe,
+        "candles_saved": count
+    }
+
+
+@router.post("/api/v1/bridge/heartbeat")
+def bridge_heartbeat_endpoint(
+    payload: BridgeHeartbeatPayload,
+    x_bridge_token: Optional[str] = Header(None, alias="X-Bridge-Token")
+):
+    """Heartbeat endpoint pinged by Windows MT5 Bridge."""
+    from taikry.data.mt5_receiver import mt5_receiver
+    if not mt5_receiver.verify_auth_token(x_bridge_token or ""):
+        raise HTTPException(status_code=401, detail="Unauthorized MT5 bridge token")
+
+    status = mt5_receiver.record_heartbeat(payload.model_dump())
+    return {
+        "status": "SUCCESS",
+        "bridge": status
+    }
+
+
+@router.get("/api/v1/bridge/status")
+def get_bridge_status_endpoint():
+    """
+    Returns real-time connection status of the Windows MT5 Bridge.
+    Dashboard uses this to display CONNECTED / STALE / DISCONNECTED badges.
+    """
+    from taikry.data.mt5_receiver import mt5_receiver
+    return mt5_receiver.get_status()
+
+
+# -----------------------------------------------------------------------------
+# TELEGRAM VERIFIED TEST NOTIFICATION & DELIVERY AUDIT
+# -----------------------------------------------------------------------------
+
+@router.post("/api/v1/telegram/test-notification")
+def send_telegram_test_notification_endpoint(
+    payload: TelegramTestPayload,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key")
+):
+    """
+    Sends an authentic diagnostic test notification to the configured Telegram channel/chat.
+    Strictly reports real API delivery status and logs delivery record.
+    """
+    from taikry.notifications.telegram_service import telegram_service
+    from taikry.config import TELEGRAM_CHAT_ID
+
+    target_chat = payload.chat_id or TELEGRAM_CHAT_ID
+    if not target_chat:
+        raise HTTPException(status_code=400, detail="Telegram chat_id is not configured on server or in payload")
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    msg_text = payload.message or (
+        f"⚡ <b>ZYROX AI — DIAGNOSTIC HEALTH PING</b>\n\n"
+        f"<b>Status:</b> All Systems Operational\n"
+        f"<b>Platform:</b> ZYROX AI Market Intelligence\n"
+        f"<b>Tagline:</b> Read the Market. Own Your Edge.\n"
+        f"<b>Timestamp:</b> <code>{now_utc}</code>\n"
+        f"<b>Telegram Relay:</b> Verified 200 OK"
+    )
+
+    success, msg_id, err = telegram_service.send_text(msg_text, chat_id=target_chat)
+    if not success:
+        return {
+            "delivered": False,
+            "error": err or "Failed to deliver message via Telegram Bot API",
+            "chat_id": target_chat,
+            "timestamp": now_utc
+        }
+
+    return {
+        "delivered": True,
+        "message_id": msg_id,
+        "chat_id": target_chat,
+        "timestamp": now_utc
+    }
+
+
+# -----------------------------------------------------------------------------
+# ZYROX AI SYSTEM & STRATEGY INFORMATION
+# -----------------------------------------------------------------------------
+
+@router.get("/api/v1/system/info")
+def get_system_info_endpoint():
+    """Returns official ZYROX AI brand, strategy versions, and integration health."""
+    from taikry.data.mt5_receiver import mt5_receiver
+    from taikry.config import DEFAULT_STRATEGY_VERSION, MAX_DAILY_XAUUSD_SIGNALS
+
+    return {
+        "brand_name": "ZYROX AI",
+        "tagline": "Read the Market. Own Your Edge.",
+        "version": "2.1.0",
+        "strategy_version": DEFAULT_STRATEGY_VERSION,
+        "max_daily_xauusd_signals": MAX_DAILY_XAUUSD_SIGNALS,
+        "mt5_bridge": mt5_receiver.get_status(),
+        "primary_asset": "XAUUSD (Gold)",
+        "supported_markets": ["Gold & Metals", "Forex Major/Minor", "Crypto Spot/Futures"],
+        "local_time_display": "Asia/Phnom_Penh (UTC+7)",
+        "bilingual": ["en", "kh"]
+    }
+
+
+
 
 

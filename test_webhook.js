@@ -1,4 +1,8 @@
-const url = 'https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd';
+const url = process.env.MAKE_WEBHOOK_URL || '';
+if (!url) {
+  console.error('[ERROR] MAKE_WEBHOOK_URL environment variable is required.');
+  process.exit(1);
+}
 
 const payload = {
   symbol: 'XAUUSD',

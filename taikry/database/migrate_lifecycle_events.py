@@ -35,6 +35,35 @@ def run_migration():
                 db.commit()
                 logger.info("Column 'telegram_message_id' successfully added.")
 
+            # Inspect xauusd_telegram_signals columns for ZYROX AI strategy versioning & broker source
+            sig_res = db.execute(text("PRAGMA table_info(xauusd_telegram_signals);")).fetchall()
+            sig_cols = [r[1] for r in sig_res]
+            if "strategy_version" not in sig_cols:
+                logger.info("Adding missing column 'strategy_version' to xauusd_telegram_signals...")
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN strategy_version VARCHAR(50) DEFAULT 'ZYROX-SMC-V2.1';"))
+                db.commit()
+            if "broker_source" not in sig_cols:
+                logger.info("Adding missing column 'broker_source' to xauusd_telegram_signals...")
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN broker_source VARCHAR(50) DEFAULT 'EXNESS_MT5';"))
+                db.commit()
+            if "setup_score_label" not in sig_cols:
+                logger.info("Adding missing column 'setup_score_label' to xauusd_telegram_signals...")
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN setup_score_label VARCHAR(100) DEFAULT 'Setup Score (out of 100, not win probability)';"))
+                db.commit()
+        else:
+            for col, col_type, def_val in [
+                ("strategy_version", "VARCHAR(50)", "'ZYROX-SMC-V2.1'"),
+                ("broker_source", "VARCHAR(50)", "'EXNESS_MT5'"),
+                ("setup_score_label", "VARCHAR(100)", "'Setup Score (out of 100, not win probability)'")
+            ]:
+                try:
+                    db.execute(text(f"ALTER TABLE xauusd_telegram_signals ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {def_val};"))
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.debug(f"PostgreSQL column addition {col}: {e}")
+
+
         # 3. Clean up stale / expired signals in WAITING_CONFIRMATION
         now_dt = datetime.datetime.now(datetime.timezone.utc)
         all_waiting = db.query(SignalLifecycleModel).filter(

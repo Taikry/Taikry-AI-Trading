@@ -1,29 +1,53 @@
-/* TAIKRY AI MARKET INTELLIGENCE PRO — Black & Gold Theme */
+/* ==========================================================================
+   ZYROX AI — PROFESSIONAL MULTI-MARKET INTELLIGENCE PLATFORM
+   Brand Theme: Obsidian & Emerald Restrained Institutional Terminal
+   Tagline: Read the Market. Own Your Edge.
+   ========================================================================== */
 :root {
-  --bg-primary: #0a0b0e;
-  --bg-secondary: #12141a;
-  --bg-card: rgba(22, 25, 34, 0.85);
-  --bg-card-hover: rgba(30, 34, 46, 0.95);
+  /* ZYROX AI Strict Brand Identity Palette */
+  --zyrox-bg: #060B09;
+  --zyrox-panel: #0B1511;
+  --zyrox-panel-secondary: #0E1B15;
+  --zyrox-panel-hover: #12241C;
+  --zyrox-emerald: #00D99A;
+  --zyrox-emerald-dim: rgba(0, 217, 154, 0.12);
+  --zyrox-emerald-border: rgba(0, 217, 154, 0.28);
+  --zyrox-deep-green: #0A2A20;
+  --zyrox-text: #EAFFF5;
+  --zyrox-text-secondary: #87A99A;
+  --zyrox-text-muted: #557366;
+  --zyrox-negative: #FF647C;
+  --zyrox-negative-bg: rgba(255, 100, 124, 0.12);
+  --zyrox-warning: #FFC76B;
+  --zyrox-warning-bg: rgba(255, 199, 107, 0.12);
+  --zyrox-cyan: #38EF7D;
+  --zyrox-border: rgba(0, 217, 154, 0.16);
+
+  /* Dashboard Framework Mapping */
+  --bg-primary: #060B09;
+  --bg-secondary: #0B1511;
+  --bg-card: rgba(14, 27, 21, 0.90);
+  --bg-card-hover: rgba(18, 36, 28, 0.98);
   
-  --gold-primary: #d4af37;
-  --gold-bright: #ffd700;
-  --gold-gradient: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #aa8010 100%);
-  --gold-subtle: rgba(212, 175, 55, 0.15);
-  --gold-border: rgba(212, 175, 55, 0.3);
+  --gold-primary: #00D99A;
+  --gold-bright: #38EF7D;
+  --gold-gradient: linear-gradient(135deg, #00D99A 0%, #00B37E 60%, #0A2A20 100%);
+  --gold-subtle: rgba(0, 217, 154, 0.12);
+  --gold-border: rgba(0, 217, 154, 0.25);
 
-  --accent-green: #00e676;
-  --accent-red: #ff3d71;
-  --accent-blue: #00b0ff;
-  --accent-yellow: #ffab00;
+  --accent-green: #00D99A;
+  --accent-red: #FF647C;
+  --accent-blue: #38EF7D;
+  --accent-yellow: #FFC76B;
 
-  --text-primary: #f0f3f8;
-  --text-secondary: #9aa4b2;
-  --text-muted: #5e6978;
+  --text-primary: #EAFFF5;
+  --text-secondary: #87A99A;
+  --text-muted: #557366;
 
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-khmer: 'Kantumruy Pro', 'Hanuman', 'Khmer OS Siemreap', sans-serif;
-  --border-radius: 12px;
-  --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --border-radius: 8px;
+  --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html {
@@ -3288,9 +3312,9 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background-color: #07090e;
+  background-color: #060B09;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #f0f3f8;
+  color: #EAFFF5;
 }
 
 .terminal-shell {
@@ -3299,27 +3323,26 @@ html, body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: radial-gradient(circle at 15% 15%, rgba(14, 165, 233, 0.06), transparent 45%),
-              radial-gradient(circle at 85% 85%, rgba(245, 158, 11, 0.05), transparent 45%),
-              radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.03), transparent 60%),
-              #050811;
+  background: radial-gradient(circle at 15% 15%, rgba(0, 217, 154, 0.04), transparent 45%),
+              radial-gradient(circle at 85% 85%, rgba(10, 42, 32, 0.25), transparent 50%),
+              #060B09;
   position: relative;
 }
 
 /* TOP GLOBAL INTELLIGENCE BAR */
 .terminal-topbar {
   height: 48px;
-  background: rgba(8, 13, 24, 0.75);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  background: rgba(11, 21, 17, 0.92);
+  border-bottom: 1px solid rgba(0, 217, 154, 0.16);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), inset 0 -1px 0 rgba(0, 217, 154, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
   flex-shrink: 0;
   z-index: 50;
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
 }
 
 .status-badge-compact {
@@ -3347,15 +3370,15 @@ html, body {
 .terminal-logo {
   width: 28px;
   height: 28px;
-  background: linear-gradient(135deg, #ffd700 0%, #d4af37 50%, #aa8010 100%);
+  background: linear-gradient(135deg, #00D99A 0%, #00B37E 60%, #0A2A20 100%);
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 900;
-  color: #000;
+  color: #060B09;
   font-size: 15px;
-  box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+  box-shadow: 0 0 14px rgba(0, 217, 154, 0.35);
 }
 
 .terminal-brand-text {
@@ -3367,19 +3390,63 @@ html, body {
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.5px;
-  color: #fff;
+  color: #EAFFF5;
 }
 
 .brand-accent {
-  color: var(--gold-bright, #ffd700);
+  color: #00D99A;
   margin-left: 2px;
 }
 
 .brand-tag {
   font-size: 8.5px;
   font-weight: 700;
-  color: #64748b;
+  color: #87A99A;
   letter-spacing: 0.8px;
+}
+
+/* Windows Exness MT5 Bridge Status Pill */
+.bridge-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(14, 27, 21, 0.90);
+  border: 1px solid rgba(0, 217, 154, 0.22);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: #EAFFF5;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.bridge-status-pill:hover {
+  background: rgba(18, 36, 28, 0.98);
+  border-color: #00D99A;
+  box-shadow: 0 0 10px rgba(0, 217, 154, 0.25);
+}
+
+.bridge-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.bridge-status-dot.bridge-connected {
+  background: #00D99A;
+  box-shadow: 0 0 8px #00D99A;
+}
+
+.bridge-status-dot.bridge-stale {
+  background: #FFC76B;
+  box-shadow: 0 0 8px #FFC76B;
+}
+
+.bridge-status-dot.bridge-disconnected {
+  background: #64748B;
 }
 
 /* Live Market Regime Ticker Bar */

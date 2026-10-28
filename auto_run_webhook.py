@@ -4,8 +4,13 @@ import json
 import time
 import urllib.error
 import urllib.request
+import os
 
-URL = "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
+URL = os.getenv("MAKE_WEBHOOK_URL", "")
+if not URL:
+    print("[ERROR] MAKE_WEBHOOK_URL environment variable is required.")
+    import sys
+    sys.exit(1)
 
 def send_test_webhook(iteration=1, symbol="XAUUSD", timeframe="M5", action="analyze"):
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()

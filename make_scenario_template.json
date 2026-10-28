@@ -7,8 +7,8 @@
       "module": "gateway:CustomWebHook",
       "name": "Custom Webhook Trigger",
       "parameters": {
-        "hook": "uu21klu4rg3s2l7u2644xi9toeburwhd",
-        "url": "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
+        "hook": "YOUR_MAKE_WEBHOOK_ID",
+        "url": "https://hook.us2.make.com/YOUR_MAKE_WEBHOOK_ID"
       },
       "expected_output_fields": [
         "symbol",

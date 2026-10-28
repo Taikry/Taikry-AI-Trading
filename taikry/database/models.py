@@ -296,6 +296,9 @@ class XAUUSDTelegramSignalModel(Base):
 
     # Multi-Agent Consensus Details
     ai_confluence_score = Column(Integer, default=85)
+    strategy_version = Column(String(50), default="ZYROX-SMC-V2.1")
+    broker_source = Column(String(50), default="EXNESS_MT5")
+    setup_score_label = Column(String(100), default="Setup Score (out of 100, not win probability)")
     consensus_summary = Column(Text, nullable=False)
     agent_opinions = Column(JSON, nullable=True)  # Dictionary of agent contributions
     eligible_agents_count = Column(Integer, default=0)

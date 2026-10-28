@@ -405,10 +405,13 @@ class YahooFinanceDataProvider(BaseDataProvider):
         return 0.0, "none"
 
 
+from taikry.data.mt5_receiver import mt5_receiver
+
 class MultiProviderMarketData:
     """
     Unified institutional market data engine with automatic failover,
     caching, fast timeouts, and resilient synthetic fallback.
+    Prioritizes real-time Windows Exness MT5 bridge data when connected and fresh.
     """
     def __init__(self):
         self.yahoo = YahooFinanceDataProvider()
@@ -420,8 +423,14 @@ class MultiProviderMarketData:
         now = time.time()
         cache_key = f"{symbol}:{timeframe}:{limit}"
         cached = self._candle_cache.get(cache_key)
-        if cached and (now - cached[0] < 30.0) and not cached[1].empty:
+        if cached and (now - cached[0] < 15.0) and not cached[1].empty:
             return cached[1]
+
+        # 0. Check Windows MT5 Bridge for Authentic Broker Candles First
+        mt5_df = mt5_receiver.get_candles(symbol, timeframe, limit=limit)
+        if not mt5_df.empty and len(mt5_df) >= min(limit, 5):
+            self._candle_cache[cache_key] = (now, mt5_df)
+            return mt5_df
 
         cfg = get_symbol_config(symbol)
         category = cfg.get("category", "")
@@ -472,6 +481,14 @@ class MultiProviderMarketData:
         """
         now = time.time()
         sym = symbol.upper()
+
+        # 0. Check Windows MT5 Bridge First (Primary Authoritative Source for Exness)
+        mt5_p, mt5_src, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(sym)
+        if mt5_fresh and mt5_p > 0:
+            recv_at = mt5_tick.get("received_at") or datetime.datetime.now(datetime.timezone.utc)
+            self._price_cache[sym] = (now, mt5_p, "EXNESS_MT5", recv_at)
+            REFERENCE_BASE_PRICES[sym] = mt5_p
+            return mt5_p, "EXNESS_MT5", recv_at
 
         # 1. Check verified price cache (10s TTL)
         if sym in self._price_cache:

@@ -83,8 +83,8 @@ python engine_247.py --interval 30
 
 ## 🤖 Make.com Scenario Configuration
 
-Your Make.com Webhook URL is already configured:
-`https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd`
+Your Make.com Webhook URL (configured in .env):
+`https://hook.us2.make.com/YOUR_MAKE_WEBHOOK_ID`
 
 ### Modules to Connect in Make.com:
 
@@ -131,7 +131,7 @@ Create a `.env` file in the root folder to customize settings:
 GEMINI_API_KEY=your_gemini_api_key_here
 
 # Make.com Webhook URL
-MAKE_WEBHOOK_URL=https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd
+MAKE_WEBHOOK_URL=https://hook.us2.make.com/YOUR_MAKE_WEBHOOK_ID
 
 # Engine Parameters
 MIN_CONFIDENCE_THRESHOLD=70

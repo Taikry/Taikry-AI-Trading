@@ -5,7 +5,11 @@ param (
     [string]$test = "true"
 )
 
-$url = "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
+$url = $env:MAKE_WEBHOOK_URL
+if (-not $url) {
+    Write-Host "[ERROR] MAKE_WEBHOOK_URL environment variable is required." -ForegroundColor Red
+    exit 1
+}
 
 $payload = @{
     symbol    = $symbol

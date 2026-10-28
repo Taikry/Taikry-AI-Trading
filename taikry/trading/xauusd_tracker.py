@@ -247,10 +247,17 @@ class XAUUSDPerformanceTracker:
             d7_cutoff = now_utc - datetime.timedelta(days=7)
             d30_cutoff = now_utc - datetime.timedelta(days=30)
 
-            # Subsets
+            # Subsets with safe timezone comparison
+            def _as_utc(dt_val):
+                if dt_val is None:
+                    return None
+                if dt_val.tzinfo is None:
+                    return dt_val.replace(tzinfo=datetime.timezone.utc)
+                return dt_val.astimezone(datetime.timezone.utc)
+
             today_sigs = [s for s in signals if s.cambodia_date == today_cambodia]
-            d7_sigs = [s for s in signals if s.created_at >= d7_cutoff]
-            d30_sigs = [s for s in signals if s.created_at >= d30_cutoff]
+            d7_sigs = [s for s in signals if _as_utc(s.created_at) and _as_utc(s.created_at) >= d7_cutoff]
+            d30_sigs = [s for s in signals if _as_utc(s.created_at) and _as_utc(s.created_at) >= d30_cutoff]
             buy_sigs = [s for s in signals if s.direction == "BUY"]
             sell_sigs = [s for s in signals if s.direction == "SELL"]
 

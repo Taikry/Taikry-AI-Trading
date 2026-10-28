@@ -131,6 +131,47 @@ class TelegramService:
             self._audit("telegram", "message", {"text_len": len(text)}, "FAILED", 0, str(e))
             return False
 
+    def send_text(
+        self,
+        text: str,
+        chat_id: Optional[str] = None,
+        parse_mode: str = "HTML"
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Sends plain or HTML formatted text to Telegram chat.
+        Returns: (success: bool, message_id: Optional[str], error: Optional[str])
+        """
+        if not self.token:
+            return False, None, "Telegram bot token is not configured on server"
+
+        target_chat = chat_id or self.default_chat_id
+        if not target_chat:
+            return False, None, "Telegram chat_id is not configured"
+
+        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+        body = {
+            "chat_id": target_chat,
+            "text": text,
+            "parse_mode": parse_mode
+        }
+
+        try:
+            r = requests.post(url, json=body, timeout=8)
+            resp = r.json()
+            if r.status_code == 200 and resp.get("ok"):
+                msg_id = str(resp.get("result", {}).get("message_id", ""))
+                self._audit("telegram", "text_message", {"text_len": len(text)}, "SENT", 200, None)
+                return True, msg_id, None
+            else:
+                err = resp.get("description", f"HTTP {r.status_code}: {r.text[:100]}")
+                self._audit("telegram", "text_message", {"text_len": len(text)}, "FAILED", r.status_code, err)
+                return False, None, err
+        except Exception as e:
+            safe_err = str(e).replace(self.token, "[REDACTED]")
+            self._audit("telegram", "text_message", {"text_len": len(text)}, "FAILED", 0, safe_err)
+            return False, None, safe_err
+
+
     def answer_callback_query(
         self,
         callback_query_id: str,

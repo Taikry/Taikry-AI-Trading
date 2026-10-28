@@ -1,10 +1,7 @@
 import os
 
-# Make.com Webhook URL (User endpoint)
-MAKE_WEBHOOK_URL = os.getenv(
-    "MAKE_WEBHOOK_URL",
-    "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
-)
+# Make.com Webhook URL (Configured via environment variables only)
+MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL", "")
 
 # Telegram Direct Alerts Configuration (Optional: send directly to Telegram without 3rd party limits)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

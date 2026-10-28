@@ -68,13 +68,17 @@ BAKONG_KHQR_ACCOUNT = os.getenv("BAKONG_KHQR_ACCOUNT", "taikry_financial@aclb")
 USDT_TRC20_WALLET = os.getenv("USDT_TRC20_WALLET", "TYD6xNf3bQeXG8sWpZ29jL4v1k8mR7q9Aa")
 TELEGRAM_ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "taikry_admin")
 
-# Make.com Webhooks
-MAKE_WEBHOOK_URL = os.getenv(
-    "MAKE_WEBHOOK_URL",
-    "https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd"
-)
+# Make.com Webhooks (Configured via environment variables only)
+MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL", "")
 MAKE_CRITICAL_ALERT_WEBHOOK = os.getenv("MAKE_CRITICAL_ALERT_WEBHOOK", MAKE_WEBHOOK_URL)
 MAKE_PAPER_TRADE_WEBHOOK = os.getenv("MAKE_PAPER_TRADE_WEBHOOK", MAKE_WEBHOOK_URL)
+
+# Windows MT5 Bridge Configuration
+MT5_BRIDGE_TOKEN = os.getenv("MT5_BRIDGE_TOKEN", "")
+MT5_BRIDGE_ENABLED = os.getenv("MT5_BRIDGE_ENABLED", "true").lower() in ("true", "1", "yes")
+MT5_BRIDGE_STALE_SECONDS = int(os.getenv("MT5_BRIDGE_STALE_SECONDS", "30"))
+MAX_DAILY_XAUUSD_SIGNALS = int(os.getenv("MAX_DAILY_XAUUSD_SIGNALS", "4"))
+DEFAULT_STRATEGY_VERSION = os.getenv("DEFAULT_STRATEGY_VERSION", "ZYROX-SMC-V2.1")
 
 # 24/7 Monitoring Engine Parameters
 MONITORING_INTERVAL_MINUTES = int(os.getenv("MONITORING_INTERVAL_MINUTES", "15"))

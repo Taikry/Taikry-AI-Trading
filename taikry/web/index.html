@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Taikry AI">
+  <meta name="apple-mobile-web-app-title" content="ZYROX AI">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#050811">
+  <meta name="theme-color" content="#060B09">
   <meta name="format-detection" content="telephone=no">
-  <title>TAIKRY AI MARKET INTELLIGENCE PRO — Institutional Gold, Forex & Crypto</title>
+  <title>ZYROX AI — Read the Market. Own Your Edge.</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,7 +17,7 @@
   <!-- Telegram Mini App (WebApp) SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-<body class="theme-cyber-cyan mobile-view-chart">
+<body class="theme-zyrox-emerald mobile-view-chart">
 
   <!-- ==========================================================================
        MAIN TERMINAL SHELL
@@ -28,11 +28,11 @@
     <header class="terminal-topbar">
       <!-- Left: Brand Logo & Market Regime Bar -->
       <div class="topbar-left">
-        <div class="terminal-brand" onclick="switchNavPane('terminal')" title="TAIKRY AI Intelligence Pro">
-          <div class="terminal-logo">T</div>
+        <div class="terminal-brand" onclick="switchNavPane('terminal')" title="ZYROX AI — Read the Market. Own Your Edge.">
+          <div class="terminal-logo">Z</div>
           <div class="terminal-brand-text">
-            <span class="brand-name" id="t-brand-title">TAIKRY<span class="brand-accent">PRO</span></span>
-            <span class="brand-tag" id="t-brand-sub">INSTITUTIONAL AI TERMINAL</span>
+            <span class="brand-name" id="t-brand-title">ZYROX<span class="brand-accent">AI</span></span>
+            <span class="brand-tag" id="t-brand-sub">READ THE MARKET · OWN YOUR EDGE</span>
           </div>
         </div>
 
@@ -108,6 +108,11 @@
         <button class="top-action-btn btn-lang" id="btn-lang-toggle" onclick="toggleLanguage()" title="Toggle Language (English / ភាសាខ្មែរ)">
           <span>🌐</span> <span id="lang-btn-text">ភាសាខ្មែរ</span>
         </button>
+        <!-- Windows Exness MT5 Bridge Live Status Pill -->
+        <div class="bridge-status-pill" id="top-bridge-status-pill" onclick="openMT5BridgeModal()" title="Exness MT5 Windows Bridge: Click to view status & setup guide">
+          <span class="bridge-status-dot bridge-disconnected" id="top-bridge-dot"></span>
+          <span class="bridge-status-label" id="top-bridge-label">MT5: STANDBY</span>
+        </div>
         <!-- Developer Profile & Direct Telegram Contact Badge -->
         <div class="dev-profile-badge" onclick="openDeveloperModal()" title="System Architect: Heng Taikry · Telegram: 0968288832">
           <div class="dev-avatar-pulse">
@@ -1374,11 +1379,65 @@
     </div>
   </div>
 
+  <!-- Windows Exness MT5 Bridge Status & Diagnostic Modal -->
+  <div class="modal-backdrop modal-hidden" id="exness-mt5-bridge-modal">
+    <div class="modal-card bridge-modal-card">
+      <div class="modal-header">
+        <div class="modal-title">🔌 <span>Exness MT5 Windows Bridge Engine</span></div>
+        <button class="modal-close-btn" onclick="closeMT5BridgeModal()">✕</button>
+      </div>
+
+      <div class="bridge-modal-body">
+        <div class="bridge-status-hero">
+          <div class="bridge-hero-badge" id="bridge-modal-status-badge">● STANDBY</div>
+          <div class="bridge-hero-desc">
+            Direct authenticated bridge between your local Windows Exness MT5 terminal and ZYROX AI cloud intelligence.
+          </div>
+        </div>
+
+        <div class="bridge-metrics-grid">
+          <div class="bridge-metric-card">
+            <span class="bmc-label">Broker / Terminal</span>
+            <span class="bmc-val" id="bmc-broker-val">Exness (MetaTrader 5)</span>
+          </div>
+          <div class="bridge-metric-card">
+            <span class="bmc-label">Account Server</span>
+            <span class="bmc-val" id="bmc-server-val">Exness-Real / Demo</span>
+          </div>
+          <div class="bridge-metric-card">
+            <span class="bmc-label">Last Tick Age</span>
+            <span class="bmc-val" id="bmc-age-val">--</span>
+          </div>
+          <div class="bridge-metric-card">
+            <span class="bmc-label">Safety Mode</span>
+            <span class="bmc-val text-green">100% READ-ONLY</span>
+          </div>
+        </div>
+
+        <div class="bridge-instruction-box">
+          <div class="bib-title">🚀 How to Connect Your Windows MT5 in 30 Seconds:</div>
+          <ol class="bib-steps">
+            <li>Ensure Exness MetaTrader 5 is running on your Windows PC.</li>
+            <li>In MT5, enable: <code>Tools ➔ Options ➔ Expert Advisors ➔ Allow algorithmic trading</code>.</li>
+            <li>Run the bridge in your Windows terminal:
+              <pre class="bridge-cmd-code"><code>python mt5_bridge/exness_mt5_bridge.py --backend-url https://taikry-ai-trading.onrender.com</code></pre>
+            </li>
+          </ol>
+        </div>
+
+        <div class="modal-actions-row">
+          <button class="btn btn-gold btn-sm" onclick="testBridgeStatus()">🔄 Refresh Status</button>
+          <button class="btn btn-outline btn-sm" onclick="closeMT5BridgeModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- VIP Subscriptions & Tier Specs Modal -->
   <div class="modal-backdrop modal-hidden" id="plans-spec-modal">
     <div class="modal-card modal-card-wide">
       <div class="modal-header">
-        <div class="modal-title">👑 <span id="t-vip-modal-title">TAIKRY VIP Telegram Subscriptions & Access Manager</span></div>
+        <div class="modal-title">👑 <span id="t-vip-modal-title">ZYROX AI VIP Telegram Subscriptions & Access Manager</span></div>
         <button class="modal-close-btn" onclick="closePlansModal()">✕</button>
       </div>
 

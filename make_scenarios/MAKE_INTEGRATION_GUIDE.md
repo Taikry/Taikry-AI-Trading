@@ -9,7 +9,7 @@ This guide details how to import, configure, test, and link all 7 Make.com autom
 | Scenario ID | Name | Trigger | Target Endpoints / Action |
 | :--- | :--- | :--- | :--- |
 | **S01** | `MARKET_REPORT_15M` | 15-Minute Scheduler | `POST /api/v1/analyze` -> Bilingual Telegram Dispatch |
-| **S02** | `CRITICAL_MARKET_ALERTS` | Webhook (`uu21klu4rg3s2l7u2644xi9toeburwhd`) | Instant High-Priority Alert (`setup_status == APPROVE`) |
+| **S02** | `CRITICAL_MARKET_ALERTS` | Webhook (`YOUR_MAKE_WEBHOOK_ID`) | Instant High-Priority Alert (`setup_status == APPROVE`) |
 | **S03** | `ECONOMIC_NEWS_ALERTS` | 1-Hour Scheduler | Calendar Ingestion -> `POST /api/v1/events/assess` -> Telegram |
 | **S04** | `TELEGRAM_COMMANDS` | Telegram `/command` | Interactive Command Dispatcher (`/gold`, `/forex`, `/crypto`, etc.) |
 | **S05** | `PAPER_TRADING_ENGINE` | Webhook from Python | `POST /api/v1/paper-trades/evaluate` -> Position Ledger Audit |
@@ -25,7 +25,7 @@ This guide details how to import, configure, test, and link all 7 Make.com autom
 1. In Make.com, go to **Webhooks > Custom Webhook**.
 
 2. Point your webhook URL:
-   `https://hook.us2.make.com/uu21klu4rg3s2l7u2644xi9toeburwhd`
+   `https://hook.us2.make.com/YOUR_MAKE_WEBHOOK_ID`
 
 3. Send a test ping from your terminal:
 

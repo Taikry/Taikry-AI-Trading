@@ -102,8 +102,9 @@ function getAssetRealLogoHTML(sym) {
 // Khmer UI Dictionary
 const I18N = {
   en: {
-    brand_title: "TAIKRY AI MARKET INTELLIGENCE PRO",
-    brand_sub: "24/7 Autonomous Institutional Multi-Agent Platform",
+    brand_title: "ZYROX AI — Read the Market. Own Your Edge.",
+    brand_sub: "Professional AI-Assisted Multi-Market Intelligence Platform",
+    tagline: "Read the Market. Own Your Edge.",
     scan_btn: "Scan Market Now",
     watchlist_title: "Market Watchlist",
     macro_title: "High-Impact Forex Factory & News",
@@ -151,8 +152,9 @@ const I18N = {
     cockpit_execute: "🚀 1-Click Execute & Dispatch to Telegram"
   },
   kh: {
-    brand_title: "ប្រព័ន្ធបញ្ញាសិប្បនិម្មិត TAIKRY PRO",
-    brand_sub: "ប្រព័ន្ធស្វ័យប្រវត្តវិភាគទីផ្សារហិរញ្ញវត្ថុស្ថាប័ន ២៤/៧",
+    brand_title: "ZYROX AI — ប្រព័ន្ធបញ្ញាសិប្បនិម្មិតវិភាគទីផ្សារ",
+    brand_sub: "អានដំណើរទីផ្សារ · ក្តាប់ឱកាសចំណេញរបស់អ្នក (Read the Market. Own Your Edge.)",
+    tagline: "អានដំណើរទីផ្សារ · ក្តាប់ឱកាសចំណេញរបស់អ្នក",
     scan_btn: "វិភាគទីផ្សារឥឡូវនេះ",
     watchlist_title: "បញ្ជីតាមដានទីផ្សារ",
     macro_title: "ព័ត៌មានម៉ាក្រូឥទ្ធិពលខ្លាំង Forex Factory",
@@ -3329,6 +3331,78 @@ function showCyberToast(msg) {
     if (toast.parentNode) toast.remove();
   }, 2800);
 }
+
+// =========================================================================
+// WINDOWS EXNESS MT5 BRIDGE CONTROLLER & MODAL
+// =========================================================================
+
+function openMT5BridgeModal() {
+  const modal = document.getElementById("exness-mt5-bridge-modal");
+  if (modal) {
+    modal.classList.remove("modal-hidden");
+    testBridgeStatus();
+  }
+}
+
+function closeMT5BridgeModal() {
+  const modal = document.getElementById("exness-mt5-bridge-modal");
+  if (modal) {
+    modal.classList.add("modal-hidden");
+  }
+}
+
+async function testBridgeStatus() {
+  try {
+    const res = await fetch("/api/v1/bridge/status");
+    if (!res.ok) throw new Error("Bridge status check failed");
+    const data = await res.json();
+    updateBridgeStatusUI(data);
+  } catch (e) {
+    console.debug("[MT5_BRIDGE] Status check error:", e);
+    updateBridgeStatusUI({ status: "DISCONNECTED" });
+  }
+}
+
+function updateBridgeStatusUI(data) {
+  const status = data.status || "DISCONNECTED";
+  const topDot = document.getElementById("top-bridge-dot");
+  const topLabel = document.getElementById("top-bridge-label");
+  const modalBadge = document.getElementById("bridge-modal-status-badge");
+  const bmcBroker = document.getElementById("bmc-broker-val");
+  const bmcServer = document.getElementById("bmc-server-val");
+  const bmcAge = document.getElementById("bmc-age-val");
+
+  if (topDot && topLabel) {
+    topDot.className = "bridge-status-dot";
+    if (status === "CONNECTED") {
+      topDot.classList.add("bridge-connected");
+      topLabel.innerText = "MT5: CONNECTED";
+      topLabel.style.color = "#00D99A";
+    } else if (status === "STALE") {
+      topDot.classList.add("bridge-stale");
+      topLabel.innerText = "MT5: STALE";
+      topLabel.style.color = "#FFC76B";
+    } else {
+      topDot.classList.add("bridge-disconnected");
+      topLabel.innerText = "MT5: STANDBY";
+      topLabel.style.color = "#87A99A";
+    }
+  }
+
+  if (modalBadge) {
+    modalBadge.innerText = `● ${status}`;
+    modalBadge.className = "bridge-hero-badge " + (status === "CONNECTED" ? "text-green" : (status === "STALE" ? "text-gold" : "text-muted"));
+  }
+
+  if (bmcBroker && data.broker) bmcBroker.innerText = data.broker;
+  if (bmcServer && data.server) bmcServer.innerText = data.server;
+  if (bmcAge) {
+    bmcAge.innerText = data.seconds_since_last_activity != null ? `${data.seconds_since_last_activity}s ago` : "No ticks yet";
+  }
+}
+
+// Auto-poll bridge status every 15s
+setInterval(testBridgeStatus, 15000);
 
 function showPlansModal() {
   const modal = document.getElementById("plans-spec-modal");
