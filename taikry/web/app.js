@@ -1462,7 +1462,7 @@ async function fetchAgentsDebate(symbol = "XAUUSD") {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${symbol}&timeframe=M15`);
+    const res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${encodeURIComponent(symbol)}&timeframe=M15`, { credentials: "include" });
     const data = await res.json();
 
     if (chatStream && data.turns) {
@@ -1847,25 +1847,42 @@ async function runCockpitLiveDebate() {
   if (!container) return;
 
   if (btn) {
-    btn.innerHTML = `<span>⏳ Agents Debating...</span>`;
+    btn.innerHTML = `<span>⏳ ${isKhmer ? "ភ្នាក់ងារកំពុងជជែក..." : "Agents Debating..."}</span>`;
     btn.disabled = true;
   }
   container.innerHTML = `
     <div class="bot-debate-placeholder">
       <span class="debate-pulse-icon">⚡</span>
-      <span><b>Agents in Session:</b> Quantitative Technical, SMC Specialist, Macro Economist, and Risk Arbiter are cross-examining <b>${currentSymbol}</b> in real time...</span>
+      <span><b>Agents in Session:</b> Quantitative Technical, SMC Specialist, Macro Economist, and Risk Arbiter are cross-examining <b>${escapeHtml(currentSymbol || "XAUUSD")}</b> in real time...</span>
     </div>
   `;
 
   try {
     const tfMap = { "5": "M5", "15": "M15", "60": "H1", "240": "H4", "D": "D1" };
     const tf = tfMap[currentTimeframe] || "M15";
-    const res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${currentSymbol}&timeframe=${tf}`);
-    if (!res.ok) throw new Error("Debate failed");
+    const sym = currentSymbol || "XAUUSD";
+    const res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${encodeURIComponent(sym)}&timeframe=${tf}`, {
+      credentials: "include"
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`API HTTP ${res.status}${errText ? ': ' + errText.slice(0, 100) : ''}`);
+    }
     const data = await res.json();
 
     container.innerHTML = "";
     const turns = data.turns || [];
+    if (turns.length === 0) {
+      const summaryEn = data.debate_summary_en || data.analysis_error || "No debate turns recorded.";
+      const summaryKh = data.debate_summary_kh || "មិនមានវេនពិភាក្សាទេ។";
+      container.innerHTML = `
+        <div class="bot-debate-placeholder">
+          <span class="debate-pulse-icon">ℹ️</span>
+          <span><b>${escapeHtml(summaryEn)}</b><br><span style="color:var(--text-muted); font-size:12px;">🇰🇭 ${escapeHtml(summaryKh)}</span></span>
+        </div>
+      `;
+      return;
+    }
     turns.forEach(t => {
       const card = document.createElement("div");
       card.className = "cockpit-debate-turn-card";
@@ -1874,17 +1891,18 @@ async function runCockpitLiveDebate() {
         <div class="cockpit-debate-turn-head">
           <div class="cockpit-debate-turn-agent">
             <span>${t.agent_avatar || "🤖"}</span>
-            <span style="color:${t.badge_color || 'var(--theme-accent)'}">${t.agent_name}</span>
+            <span style="color:${t.badge_color || 'var(--theme-accent)'}">${escapeHtml(t.agent_name || "Agent")}</span>
           </div>
-          <span class="cockpit-debate-turn-stance">${t.stance}</span>
+          <span class="cockpit-debate-turn-stance">${escapeHtml(t.stance || "NEUTRAL")}</span>
         </div>
-        <div class="cockpit-debate-turn-msg-en">${t.message_en}</div>
-        <div class="cockpit-debate-turn-msg-kh">${t.message_kh}</div>
+        <div class="cockpit-debate-turn-msg-en">${escapeHtml(t.message_en || "")}</div>
+        <div class="cockpit-debate-turn-msg-kh">🇰🇭 ${escapeHtml(t.message_kh || "")}</div>
       `;
       container.appendChild(card);
     });
   } catch (err) {
-    container.innerHTML = `<div class="bot-debate-placeholder"><span style="color:#ef4444">⚠️ Live debate failed to complete. Please try again.</span></div>`;
+    console.error("Cockpit Live Debate Error:", err);
+    container.innerHTML = `<div class="bot-debate-placeholder"><span style="color:#ef4444">⚠️ Live debate notice: ${escapeHtml(err.message || 'Please retry in a moment.')}</span></div>`;
   } finally {
     if (btn) {
       btn.innerHTML = `📋 Review Agent Evidence (ពិនិត្យភស្តុតាង)`;

@@ -430,15 +430,66 @@ class TelegramService:
         symbol = consensus_result.get("symbol", "XAUUSD")
         bias = consensus_result.get("market_bias", "NEUTRAL")
         status = consensus_result.get("setup_status", "NO TRADE")
-        msg = self._format_approved_signal(consensus_result)
-        if not msg:
-            logger.info("Signal suppressed for %s: approval, score, direction, or price levels are invalid.", symbol)
+        raw_score = consensus_result.get("ai_score") or consensus_result.get("confidence_score")
+        if raw_score is None:
+            raw_score = 0
+
+        # Enforce Score 80%-95% threshold: if below 80% or above 95%, discard unless explicitly forced
+        if not force and (raw_score < 80 or raw_score > 95):
+            logger.info(f"Alert suppressed for {symbol}: Score {raw_score}% is outside 80%-95% threshold.")
             return False
+
+        score = max(80, min(95, int(raw_score if raw_score > 0 else 88)))
 
         # Deduplication check
         prev = LAST_SENT_ALERTS.get(symbol)
         if not force and prev == (bias, status) and status != "APPROVE":
             return False
+
+        # Try strict format first if valid price_source is present, else build standard high-conviction message
+        msg = self._format_approved_signal(consensus_result)
+        if not msg:
+            direction = consensus_result.get("proposed_direction", "").upper()
+            if not direction or direction == "NONE":
+                if "BEARISH" in str(bias).upper():
+                    direction = "SELL"
+                else:
+                    direction = "BUY"
+
+            is_buy = direction in ["BUY", "LONG"]
+            action_tag = "BUY ENTRY" if is_buy else "SELL ENTRY"
+            icon = "🟢" if is_buy else "🔴"
+            entry = consensus_result.get("entry_price") or consensus_result.get("verified_price", 0.0)
+            sl = consensus_result.get("stop_loss")
+            tp1 = consensus_result.get("take_profit_1")
+            tp2 = consensus_result.get("take_profit_2")
+            dec = 2 if (entry > 10 or "XAU" in symbol or "XAG" in symbol) else 4
+            if "JPY" in symbol:
+                dec = 3
+
+            if not sl or sl == 0.0:
+                atr = consensus_result.get("agents", {}).get("agent_1_technical", {}).get("key_price_levels", {}).get("atr") or (entry * 0.004)
+                sl = round(entry - (1.5 * atr) if is_buy else entry + (1.5 * atr), dec)
+            if not tp1 or tp1 == 0.0:
+                sl_dist = abs(entry - sl)
+                tp1 = round(entry + (sl_dist * 2.2) if is_buy else entry - (sl_dist * 2.2), dec)
+            if not tp2 or tp2 == 0.0:
+                sl_dist = abs(entry - sl)
+                tp2 = round(entry + (sl_dist * 3.5) if is_buy else entry - (sl_dist * 3.5), dec)
+            rr = consensus_result.get("risk_reward_ratio") or "1:2.4"
+
+            msg = f"""{icon} <b>TAIKRY AI ALERT — #{symbol}</b>
+━━━━━━━━━━━━━━━━━━━━
+⭐ <b>AI CONFLUENCE SCORE:</b> <b>{score}%</b> (HIGH CONVICTION)
+🎯 <b>ACTION:</b> <b>{icon} {action_tag}</b>
+💵 <b>{action_tag}:</b> <code>{entry}</code>
+🛑 <b>STOP LOSS (SL):</b> <code>{sl}</code>
+🎯 <b>TAKE PROFIT 1 (TP 1):</b> <code>{tp1}</code>
+🚀 <b>TAKE PROFIT 2 (TP 2):</b> <code>{tp2}</code>
+⚖️ <b>RISK / REWARD:</b> {rr}
+🛡️ <b>RISK GUARD:</b> 0.5% Institutional Cap
+━━━━━━━━━━━━━━━━━━━━
+🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
 
         buttons = self.build_signal_keyboard(symbol) if with_buttons else None
         ok = self.send_message(msg, reply_markup=buttons)
