@@ -552,7 +552,7 @@
       <div class="section-header">
         <div class="section-eyebrow" data-i18n="feat_eyebrow">Institutional Edge</div>
         <h2 class="section-heading" data-i18n="feat_heading">Built for Real Trading Desks</h2>
-        <p class="section-subtext" data-i18n="feat_subtext">Engineered without simulated mockups or random number generators. Connected directly to live market feeds.</p>
+        <p class="section-subtext" data-i18n="feat_subtext">Uses configured market-data providers when available. The terminal reports provider and freshness status so missing or delayed data is visible.</p>
       </div>
       <div class="features-grid">
         <div class="feature-card">
@@ -567,7 +567,7 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           </div>
           <h3 class="feature-title" data-i18n="feat_risk_title">100% Deterministic Risk Guardian</h3>
-          <p class="feature-desc" data-i18n="feat_risk_desc">Never delegates arithmetic to an AI. Strict Risk-to-Reward floor (minimum 1:2.0), 0.5% max capital risk cap, and spread cost gating.</p>
+          <p class="feature-desc" data-i18n="feat_risk_desc">Risk arithmetic is checked deterministically against the configured reward floor, server risk cap, and spread rules.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon-wrap">
@@ -612,7 +612,7 @@
         <div class="agent-box">
           <div class="agent-box-num">AGENT 05</div>
           <div class="agent-box-name">Risk Guardian</div>
-          <div class="agent-box-role">Deterministic math gatekeeper. Strict 1:2.0+ R:R floor & 0.5% max risk cap.</div>
+          <div class="agent-box-role">Deterministic math gatekeeper. Enforces the configured R:R floor and server risk cap.</div>
         </div>
         <div class="agent-box">
           <div class="agent-box-num">AGENT 06</div>
@@ -647,7 +647,7 @@
         </div>
         <div class="feature-card">
           <h3 class="feature-title" style="color: #60A5FA;">⚡ Cryptocurrency Spot & Futures</h3>
-          <p class="feature-desc">24/7 autonomous monitoring on BTCUSDT, ETHUSDT, and SOLUSDT with Binance order flow metrics.</p>
+          <p class="feature-desc">Dashboard analysis for BTCUSDT, ETHUSDT, and SOLUSDT when market data providers are available.</p>
         </div>
       </div>
     </div>
@@ -659,7 +659,7 @@
       <div class="section-header">
         <div class="section-eyebrow" data-i18n="price_eyebrow">Transparent Membership</div>
         <h2 class="section-heading" data-i18n="price_heading">Simple, Transparent Pricing</h2>
-        <p class="section-subtext" data-i18n="price_subtext">Start free with our complete 14-day trial. Upgrade only when you are ready.</p>
+        <p class="section-subtext" data-i18n="price_subtext">The free trial is available. Paid plans and online checkout are not available yet; displayed paid prices are planned only.</p>
       </div>
       <div class="pricing-grid">
         <!-- FREE TRIAL -->
@@ -682,7 +682,7 @@
           <div class="pricing-badge">MOST POPULAR</div>
           <h3 class="pricing-title">Pro Trader</h3>
           <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0;">For active retail and proprietary traders.</p>
-          <div class="pricing-price">$29 <span class="pricing-interval">/ month</span></div>
+          <div class="pricing-price">Planned $29 <span class="pricing-interval">/ month</span></div>
           <ul class="pricing-features">
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 50 Daily AI Scans</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 20 Deep 7-Agent Analyses / Day</li>
@@ -691,23 +691,23 @@
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Agent Adversarial Debate View</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Priority Telegram Delivery</li>
           </ul>
-          <button onclick="openAuthModal('signup')" class="btn-hero-primary" style="width: 100%; justify-content: center;">Choose Pro</button>
+          <button class="btn-hero-primary" style="width: 100%; justify-content: center;" disabled>Paid plan coming soon</button>
         </div>
 
         <!-- PREMIUM -->
         <div class="pricing-card">
           <h3 class="pricing-title">Institutional Elite</h3>
           <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0;">For funds, prop desks, and volume traders.</p>
-          <div class="pricing-price">$79 <span class="pricing-interval">/ month</span></div>
+          <div class="pricing-price">Planned $79 <span class="pricing-interval">/ month</span></div>
           <ul class="pricing-features">
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 200 Daily AI Scans</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 100 Deep Analyses / Day</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Unlimited Watchlists (100)</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Dedicated Webhook Relay</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Custom Prompt Models</li>
-            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 24/7 VIP Account Support</li>
+            <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Account support through configured contact</li>
           </ul>
-          <button onclick="openAuthModal('signup')" class="btn-hero-secondary" style="width: 100%; justify-content: center;">Contact Sales</button>
+          <button class="btn-hero-secondary" style="width: 100%; justify-content: center;" disabled>Paid plan coming soon</button>
         </div>
       </div>
     </div>
@@ -736,7 +736,7 @@
             <span class="faq-icon">+</span>
           </div>
           <div class="faq-answer">
-            No! ZYROX AI runs entirely on our high-availability cloud infrastructure. The market scanners, AnyRouter inference engine, and Telegram notification bots run autonomously around the clock.
+            The service runs wherever you deploy it. Background scanning and Telegram notifications work only while the host, database, market feeds, and required credentials are available. Free hosting plans may sleep; continuous monitoring requires an always-on host.
           </div>
         </div>
         <div class="faq-item" onclick="toggleFaq(this)">
@@ -754,7 +754,7 @@
             <span class="faq-icon">+</span>
           </div>
           <div class="faq-answer">
-            No financial model can guarantee future market results. ZYROX AI enforces a strict 1:2.0+ risk-to-reward floor and 0.5% risk cap to manage downside, but past performance never guarantees future returns.
+            No financial model can guarantee future market results. Signals require configured validation rules; paper-ticket risk is selected in preferences and the server accepts at most 2%. Past performance never guarantees future returns.
           </div>
         </div>
       </div>
@@ -839,7 +839,7 @@
             <input type="password" class="saas-form-input" id="signup-password" minlength="8" placeholder="••••••••••••" required>
           </div>
           <div class="saas-form-group" style="display: flex; align-items: flex-start; gap: 8px;">
-            <input type="checkbox" id="signup-terms" checked required style="margin-top: 4px;">
+            <input type="checkbox" id="signup-terms" required style="margin-top: 4px;">
             <label for="signup-terms" style="font-size: 12px; color: var(--zyrox-muted, #87A99A); line-height: 1.4;">
               I agree to the <a href="javascript:void(0)" onclick="openLegalModal('terms')" style="color: var(--zyrox-emerald, #00D99A);">Terms of Service</a> and <a href="javascript:void(0)" onclick="openLegalModal('privacy')" style="color: var(--zyrox-emerald, #00D99A);">Privacy Policy</a>.
             </label>
@@ -967,7 +967,7 @@
 
     function openSupportModal() {
       openInfoModal("Contact Support", `
-        <p>Our team is available 24/7 to assist with accounts, 14-day trials, Telegram linking, and technical integration.</p>
+        <p>Contact support through an authenticated terminal ticket. Response times depend on operator availability.</p>
         <p><strong>Direct Telegram Support:</strong> <a href="https://t.me/zyrox_trading_bot" target="_blank" style="color: #00D99A;">@zyrox_trading_bot</a></p>
         <p><strong>Official Inquiries:</strong> support@zyrox.ai</p>
         <p>You can also open an authenticated ticket directly inside the terminal dashboard.</p>
@@ -1072,6 +1072,48 @@
       }
     }
 
+    async function handleAuthLinkTokens() {
+      const url = new URL(window.location.href);
+      const verificationToken = url.searchParams.get("verify_email");
+      const resetToken = url.searchParams.get("reset_password");
+      if (!verificationToken && !resetToken) return;
+
+      url.searchParams.delete("verify_email");
+      url.searchParams.delete("reset_password");
+      window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+
+      try {
+        if (verificationToken) {
+          const response = await fetch("/api/v1/auth/verify-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: verificationToken })
+          });
+          const result = await response.json();
+          alert(result.message || (response.ok ? "Email verified." : "Email verification failed."));
+          return;
+        }
+
+        const password = window.prompt("Enter a new password (at least 8 characters):");
+        if (!password) return;
+        if (password.length < 8) {
+          alert("The password must be at least 8 characters.");
+          return;
+        }
+        const response = await fetch("/api/v1/auth/reset-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: resetToken, new_password: password })
+        });
+        const result = await response.json();
+        alert(result.message || (response.ok ? "Password updated." : "Password reset failed."));
+      } catch (error) {
+        alert("Unable to complete the account request. Please try again.");
+      }
+    }
+
+    handleAuthLinkTokens();
+
     // Bilingual Translation Matrix for Landing Page
     let isKhmerLanding = false;
     const KHMER_DICT = {
@@ -1093,7 +1135,7 @@
       feat_smc_title: "Smart Money Concepts & ICT",
       feat_smc_desc: "ស្វែងរក Liquidity Sweeps, Fair Value Gaps (FVGs), Breaker Blocks, និងតំបន់ OTE ដោយស្វ័យប្រវត្តិ។",
       feat_risk_title: "Risk Guardian គណនាគណិតវិទ្យា ១០០%",
-      feat_risk_desc: "មិនប្រគល់ការគណនាហានិភ័យឱ្យ AI ឡើយ។ កំណត់ R:R អប្បបរមា 1:2.0+, ហានិភ័យអតិបរមា 0.5% និងត្រួតពិនិត្យ Spread។",
+      feat_risk_desc: "ការគណនាហានិភ័យត្រូវបានពិនិត្យតាមក្បួន និងអនុវត្តអនុបាត R:R កម្រិតហានិភ័យរបស់ Server និងលក្ខខណ្ឌ Spread ដែលបានកំណត់។",
       feat_tg_title: "សញ្ញា Telegram ផ្ទៀងផ្ទាត់ត្រឹមត្រូវ",
       feat_tg_desc: "ផ្ញើដំណឹងភ្លាមៗជាមួយ Entry, Stop Loss, TP1, TP2 ជាពីរភាសា៖ អង់គ្លេស និងខ្មែរផ្លូវការ។",
       agent_eyebrow: "ស្ថាបត្យកម្ម MULTI-AGENT",
@@ -1104,7 +1146,7 @@
       market_subtext: "គាំទ្រការតម្រឹមតម្លៃពិតប្រាកដតាមរយៈ Yahoo Finance, Binance, និង Exness MT5។",
       price_eyebrow: "កញ្ចប់សមាជិកភាព",
       price_heading: "តម្លៃសាមញ្ញ និងច្បាស់លាស់",
-      price_subtext: "ចាប់ផ្តើមដោយឥតគិតថ្លៃ ១៤ ថ្ងៃពេញលេញ។ គ្មានកាតឥណទាន គ្មានការកាត់លុយស្វ័យប្រវត្តិ។",
+      price_subtext: "អាចចាប់ផ្តើមសាកល្បងឥតគិតថ្លៃ។ កញ្ចប់បង់ប្រាក់ និងការទូទាត់អនឡាញមិនទាន់ដំណើរការទេ។ តម្លៃដែលបង្ហាញជាតម្លៃគ្រោងទុកប៉ុណ្ណោះ។",
       faq_eyebrow: "មានចម្ងល់ដែរឬទេ?",
       faq_heading: "សំណួរដែលសួរញឹកញាប់"
     };

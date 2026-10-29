@@ -35,7 +35,7 @@
       "module": "telegram:sendTextMessage",
       "name": "Send Immediate High-Priority Alert",
       "parameters": {
-        "chat_id": "{{if(1.chat_id; 1.chat_id; '-1004341134868')}}",
+        "chat_id": "{{1.chat_id}}",
         "parse_mode": "HTML",
         "text": "🚨 <b>TAIKRY PRO — CRITICAL SIGNAL ALERT</b>\n\n🎯 <b>Action:</b> {{if(1.direction == 'BUY'; '🟢 BUY'; '🔴 SELL')}} {{1.symbol}}\n💵 <b>Entry:</b> <code>{{1.entry_price}}</code>\n🛑 <b>Stop Loss:</b> <code>{{1.stop_loss}}</code>\n🎯 <b>TP 1:</b> <code>{{1.take_profit_1}}</code>\n🚀 <b>TP 2:</b> <code>{{1.take_profit_2}}</code>\n⚖️ <b>Risk/Reward:</b> <b>{{1.risk_reward}}</b>\n\n{{1.report_english}}"
       }
@@ -45,9 +45,9 @@
       "module": "http:ActionSendRequest",
       "name": "Acknowledge Delivery",
       "parameters": {
-        "url": "http://localhost:8000/api/v1/notifications/ack",
+        "url": "https://YOUR_PUBLIC_API_HOST/api/v1/notifications/ack",
         "method": "POST",
-        "headers": [{"name": "Content-Type", "value": "application/json"}],
+        "headers": [{"name": "Content-Type", "value": "application/json"}, {"name": "X-TAIKRY-API-KEY", "value": ""}],
         "body": "{\"event_id\": \"alert_{{1.symbol}}_{{1.timestamp}}\", \"channel\": \"webhook\", \"status\": \"SUCCESS\"}"
       }
     }

@@ -4428,6 +4428,12 @@ html, body {
   gap: 4px;
 }
 
+.ai-ctx-status {
+  color: #f59e0b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .pulse-dot-green {
   width: 5px;
   height: 5px;

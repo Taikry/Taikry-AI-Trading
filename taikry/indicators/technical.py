@@ -272,8 +272,8 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     data["ema_9"] = calculate_ema(close_series, 9)
     data["ema_20"] = calculate_ema(close_series, 20)
     data["ema_50"] = calculate_ema(close_series, 50)
-    data["ema_100"] = calculate_ema(close_series, 100 if len(data) >= 100 else len(data))
-    data["ema_200"] = calculate_ema(close_series, 200 if len(data) >= 200 else len(data))
+    data["ema_100"] = calculate_ema(close_series, 100) if len(data) >= 100 else np.nan
+    data["ema_200"] = calculate_ema(close_series, 200) if len(data) >= 200 else np.nan
 
     # 2. Simple Moving Averages
     data["sma_20"] = calculate_sma(close_series, 20)
@@ -316,7 +316,11 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def extract_technical_summary(df_ind: pd.DataFrame) -> Dict[str, Any]:
     """Generates a structured technical snapshot for Agent 1."""
-    if df_ind.empty or len(df_ind) < 20:
+    if df_ind is None or df_ind.empty or len(df_ind) < 50:
+        return {}
+
+    required = {"close", "high", "low", "ema_20", "ema_50", "rsi", "atr", "macd_hist"}
+    if not required.issubset(df_ind.columns):
         return {}
 
     latest = df_ind.iloc[-1]
@@ -325,18 +329,21 @@ def extract_technical_summary(df_ind: pd.DataFrame) -> Dict[str, Any]:
     curr_price = float(latest["close"])
     ema_20 = float(latest["ema_20"])
     ema_50 = float(latest["ema_50"])
-    ema_200 = float(latest["ema_200"])
-    rsi = float(latest["rsi"]) if not np.isnan(latest["rsi"]) else 50.0
-    atr = float(latest["atr"]) if not np.isnan(latest["atr"]) else curr_price * 0.005
+    ema_200 = float(latest["ema_200"]) if "ema_200" in latest and pd.notna(latest["ema_200"]) else None
+    rsi = float(latest["rsi"])
+    atr = float(latest["atr"])
     macd_hist = float(latest["macd_hist"])
     prev_macd_hist = float(prev["macd_hist"])
+    essential_values = [curr_price, ema_20, ema_50, rsi, atr, macd_hist, prev_macd_hist]
+    if not all(np.isfinite(value) for value in essential_values) or curr_price <= 0 or atr <= 0:
+        return {}
 
     # Trend calculation
-    if curr_price > ema_20 > ema_50 and (curr_price > ema_200 if len(df_ind) >= 100 else True):
+    if curr_price > ema_20 > ema_50 and (curr_price > ema_200 if ema_200 is not None else True):
         trend = "STRONG BULLISH"
     elif curr_price > ema_50:
         trend = "BULLISH"
-    elif curr_price < ema_20 < ema_50 and (curr_price < ema_200 if len(df_ind) >= 100 else True):
+    elif curr_price < ema_20 < ema_50 and (curr_price < ema_200 if ema_200 is not None else True):
         trend = "STRONG BEARISH"
     elif curr_price < ema_50:
         trend = "BEARISH"
@@ -355,7 +362,7 @@ def extract_technical_summary(df_ind: pd.DataFrame) -> Dict[str, Any]:
         "trend": trend,
         "ema_20": round(ema_20, 4),
         "ema_50": round(ema_50, 4),
-        "ema_200": round(ema_200, 4),
+        "ema_200": round(ema_200, 4) if ema_200 is not None else None,
         "rsi": round(rsi, 2),
         "atr": round(atr, 4),
         "macd_hist": round(macd_hist, 4),

@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, Boolean, Text, DateTime, JSON, ForeignKey
 )
 from sqlalchemy.orm import declarative_base, relationship
+from taikry.config import INITIAL_PAPER_BALANCE
 
 Base = declarative_base()
 
@@ -96,7 +97,7 @@ class BacktestJob(Base):
     id = Column(String(50), primary_key=True)
     symbol = Column(String(20), nullable=False)
     timeframe = Column(String(10), nullable=False)
-    initial_balance = Column(Float, default=100000.0)
+    initial_balance = Column(Float, default=INITIAL_PAPER_BALANCE)
     total_trades = Column(Integer, default=0)
     win_rate = Column(Float, default=0.0)
     net_profit = Column(Float, default=0.0)
@@ -158,6 +159,7 @@ class AgentLearningModel(Base):
     total_evaluations = Column(Integer, default=0)
     brier_score = Column(Float, default=0.18)
     learning_rate = Column(Float, default=0.05)
+    training_version = Column(Integer, default=2, nullable=False)
     last_trained_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class SystemAlertAutoFix(Base):
@@ -219,8 +221,8 @@ class SignalLifecycleModel(Base):
     stop_loss = Column(Float, nullable=False)
     take_profit_1 = Column(Float, nullable=False)
     take_profit_2 = Column(Float, nullable=True)
-    risk_reward = Column(String(20), default="1:2.0")
-    ai_score = Column(Integer, default=85)
+    risk_reward = Column(String(20), default="N/A")
+    ai_score = Column(Integer, nullable=True)
     invalidation_reason_en = Column(Text, nullable=True)
     invalidation_reason_kh = Column(Text, nullable=True)
     state_history = Column(JSON, nullable=False) # List of transition objects
@@ -300,7 +302,7 @@ class XAUUSDTelegramSignalModel(Base):
     broker_source = Column(String(50), default="EXNESS_MT5")
     setup_score_label = Column(String(100), default="Setup Score (out of 100, not win probability)")
     calibrated_probability = Column(Float, nullable=True)  # Distinct from setup score; only populated when statistically justified
-    spread_points = Column(Float, default=0.25)  # Observed broker spread at inception
+    spread_points = Column(Float, nullable=True)  # Observed broker spread at inception; None when unverified
     estimated_trading_costs = Column(Float, default=0.0)  # Estimated round-turn transaction cost in pts/$
     execution_mode = Column(String(30), default="SHADOW_PAPER", index=True)  # SHADOW_PAPER, BACKTEST, VERIFIED_BROKER_EXECUTION
     consensus_summary = Column(Text, nullable=False)

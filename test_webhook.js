@@ -8,12 +8,14 @@ const payload = {
   symbol: 'XAUUSD',
   timeframe: 'M5',
   action: 'analyze',
-  test: 'true',
-  chat_id: '-1004341134868'
+  test: true
 };
+if (process.env.TELEGRAM_CHAT_ID) {
+  payload.chat_id = process.env.TELEGRAM_CHAT_ID;
+}
 
 async function sendWebhook() {
-  console.log(`Sending POST to ${url}...`);
+  console.log('Sending POST to configured Make webhook...');
   console.log('Payload:', JSON.stringify(payload, null, 2));
 
   try {

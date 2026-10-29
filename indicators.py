@@ -32,7 +32,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     - ATR: 14
     - Bollinger Bands: (20, 2)
     """
-    if len(df) < 50:
+    if df is None or df.empty or len(df) < 30:
         return df
 
     data = df.copy()
@@ -44,7 +44,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if len(data) >= 200:
         data["ema_200"] = data["close"].ewm(span=200, adjust=False).mean()
     else:
-        data["ema_200"] = data["close"].ewm(span=len(data), adjust=False).mean()
+        data["ema_200"] = np.nan
 
     # RSI
     data["rsi"] = calculate_rsi(data["close"], period=14)
@@ -70,23 +70,30 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def extract_market_summary(df_with_indicators: pd.DataFrame) -> dict:
     """Extracts latest indicator metrics into a concise dictionary for AI agents."""
-    if df_with_indicators.empty or len(df_with_indicators) < 20:
+    if df_with_indicators is None or df_with_indicators.empty or len(df_with_indicators) < 30:
+        return {}
+
+    required = {"close", "high", "low", "atr", "rsi", "ema_9", "ema_21", "ema_50", "macd_hist"}
+    if not required.issubset(df_with_indicators.columns):
         return {}
 
     latest = df_with_indicators.iloc[-1]
     prev = df_with_indicators.iloc[-2]
 
     curr_price = float(latest["close"])
-    atr_val = float(latest["atr"]) if not np.isnan(latest["atr"]) else curr_price * 0.005
-    rsi_val = float(latest["rsi"]) if not np.isnan(latest["rsi"]) else 50.0
+    atr_val = float(latest["atr"])
+    rsi_val = float(latest["rsi"])
 
     ema_9 = float(latest["ema_9"])
     ema_21 = float(latest["ema_21"])
     ema_50 = float(latest["ema_50"])
-    ema_200 = float(latest["ema_200"])
+    ema_200 = float(latest["ema_200"]) if "ema_200" in latest and pd.notna(latest["ema_200"]) else None
 
     macd_hist = float(latest["macd_hist"])
     prev_macd_hist = float(prev["macd_hist"])
+    essential_values = [curr_price, atr_val, rsi_val, ema_9, ema_21, ema_50, macd_hist, prev_macd_hist]
+    if not all(np.isfinite(value) for value in essential_values) or curr_price <= 0 or atr_val <= 0:
+        return {}
 
     # Determine trend alignment
     bullish_ema = curr_price > ema_21 and ema_9 > ema_21
@@ -106,12 +113,12 @@ def extract_market_summary(df_with_indicators: pd.DataFrame) -> dict:
         "ema_9": round(ema_9, 4),
         "ema_21": round(ema_21, 4),
         "ema_50": round(ema_50, 4),
-        "ema_200": round(ema_200, 4),
+        "ema_200": round(ema_200, 4) if ema_200 is not None and np.isfinite(ema_200) else None,
         "macd_hist": round(macd_hist, 4),
         "macd_expanding": abs(macd_hist) > abs(prev_macd_hist),
         "atr": round(atr_val, 4),
         "swing_high": round(swing_high, 4),
         "swing_low": round(swing_low, 4),
-        "bb_upper": round(float(latest["bb_upper"]), 4) if not np.isnan(latest["bb_upper"]) else curr_price,
-        "bb_lower": round(float(latest["bb_lower"]), 4) if not np.isnan(latest["bb_lower"]) else curr_price,
+        "bb_upper": round(float(latest["bb_upper"]), 4) if "bb_upper" in latest and pd.notna(latest["bb_upper"]) else None,
+        "bb_lower": round(float(latest["bb_lower"]), 4) if "bb_lower" in latest and pd.notna(latest["bb_lower"]) else None,
     }

@@ -34,9 +34,9 @@ class AgentMetadata(BaseModel):
     timeout_seconds: float = 10.0
     retry_policy: Dict[str, Any] = Field(default_factory=lambda: {"max_retries": 2, "backoff_seconds": 1.0})
     concurrency_limits: int = 5
-    health_status: str = "HEALTHY"  # HEALTHY, DEGRADED, UNAVAILABLE, DISABLED
+    health_status: str = "NOT_RUN"  # NOT_RUN, HEALTHY, DEGRADED, UNAVAILABLE, DISABLED
     cost_metadata: Dict[str, Any] = Field(default_factory=lambda: {"tier": "FREE", "cost_per_call_usd": 0.0})
-    rate_limit_metadata: Dict[str, Any] = Field(default_factory=lambda: {"max_rpm": 60, "remaining_quota": "UNLIMITED"})
+    rate_limit_metadata: Dict[str, Any] = Field(default_factory=lambda: {"max_rpm": 60, "remaining_quota": "UNKNOWN"})
     version: str = "2.0.0"
     configuration: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
@@ -190,7 +190,7 @@ class AgentRegistry:
         meta = adapter.metadata
         if "enabled" in updates:
             meta.enabled = bool(updates["enabled"])
-            meta.health_status = "HEALTHY" if meta.enabled else "DISABLED"
+            meta.health_status = "NOT_RUN" if meta.enabled else "DISABLED"
         if "timeout_seconds" in updates:
             meta.timeout_seconds = float(updates["timeout_seconds"])
         if "model_provider" in updates:
@@ -213,13 +213,15 @@ class AgentRegistry:
         healthy = sum(1 for a in agents if a.metadata.health_status == "HEALTHY")
         degraded = sum(1 for a in agents if a.metadata.health_status == "DEGRADED")
         disabled = sum(1 for a in agents if a.metadata.health_status == "DISABLED")
+        not_run = sum(1 for a in agents if a.metadata.health_status == "NOT_RUN")
 
         return {
             "total_registered_agents": total,
             "healthy_count": healthy,
             "degraded_count": degraded,
             "disabled_count": disabled,
-            "system_status": "OPTIMAL" if healthy == total else ("DEGRADED" if degraded > 0 else "PARTIAL"),
+            "not_run_count": not_run,
+            "system_status": "OPTIMAL" if healthy == total else ("DEGRADED" if degraded > 0 else ("INITIALIZING" if not_run else "PARTIAL")),
             "agents": [a.metadata.model_dump() for a in agents],
             "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
@@ -240,7 +242,7 @@ class AgentRegistry:
             supported_instruments=["XAUUSD", "XAGUSD", "Forex", "Crypto"],
             timeout_seconds=5.0,
             concurrency_limits=10,
-            health_status="HEALTHY",
+            health_status="NOT_RUN",
             version="2.1.0"
         )
         def fallback_tech(reason: str, symbol: str, multi_tf_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -270,7 +272,7 @@ class AgentRegistry:
             supported_instruments=["XAUUSD", "XAGUSD", "Forex", "Crypto"],
             timeout_seconds=5.0,
             concurrency_limits=10,
-            health_status="HEALTHY",
+            health_status="NOT_RUN",
             version="2.1.0"
         )
         def fallback_smc(reason: str, symbol: str, multi_tf_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -291,8 +293,8 @@ class AgentRegistry:
         meta3 = AgentMetadata(
             agent_id="macro_analyst",
             name="Agent 3: Macroeconomic & Global News Analyst",
-            description="Evaluates US Dollar Index (DXY) momentum, High-Impact releases (FOMC, CPI, NFP), and Breaking News.",
-            specialization="Macro Catalyst Impact, DXY Trajectory, Pre-News Blackout Enforcement",
+            description="Evaluates available US Dollar Index (DXY) context, economic-calendar events, and macro news; reports missing feeds as unavailable.",
+            specialization="Available Macro Catalyst Context, DXY Direction, Pre-News Blackout Enforcement",
             model_provider="rss_xml_scraper",
             model_identifier="taikry_macro_feed_v2",
             execution_mode="hybrid",
@@ -300,7 +302,7 @@ class AgentRegistry:
             supported_instruments=["XAUUSD", "Forex", "Crypto"],
             timeout_seconds=8.0,
             concurrency_limits=5,
-            health_status="HEALTHY",
+            health_status="NOT_RUN",
             version="2.1.0"
         )
         def fallback_macro(reason: str, symbol: str) -> Dict[str, Any]:
@@ -308,22 +310,24 @@ class AgentRegistry:
                 "agent_id": "macro_analyst",
                 "agent_name": "Agent 3: Macroeconomic & Global News Analyst",
                 "bias": "NEUTRAL",
-                "confidence": 50,
-                "usd_index": {"dxy_price": 104.0, "dxy_change_pts": 0.0, "usd_bias": "NEUTRAL_USD"},
+                "confidence": 0,
+                "setup_eligible": False,
+                "usd_index": {"dxy_price": None, "dxy_change_pts": None, "usd_bias": "UNAVAILABLE"},
                 "high_impact_events": [],
                 "live_headlines": [],
-                "news_blackout": {"is_blackout": False, "upcoming_event": None, "advisory_en": "Normal Conditions"},
+                "news_blackout": {"is_blackout": False, "status": "UNAVAILABLE", "upcoming_event": None, "advisory_en": "Calendar unavailable; event risk could not be verified."},
                 "evidence": [f"Macro feed fallback: {reason}"],
-                "rationale": "Adopting neutral macro orientation during feed update."
+                "rationale": "Macro data is unavailable; no direction is inferred."
             }
         self.register(AgentAdapter(meta3, macro_analyst_agent.analyze, fallback_macro))
 
         # 4. Risk Validator (Chief Risk Officer)
         from taikry.agents.risk_validator import risk_validator_agent
+        from taikry.config import MIN_RISK_REWARD_RATIO, RISK_PER_TRADE_PERCENT
         meta4 = AgentMetadata(
             agent_id="risk_validator",
             name="Agent 4: Independent Risk Validator & Arbiter",
-            description="Chief Risk Officer: enforces >= 1:2.0 R:R, 0.5% max risk, market hours, and news lockout with absolute veto power.",
+            description=f"Risk validator: enforces configured R:R >= 1:{MIN_RISK_REWARD_RATIO}, risk <= {RISK_PER_TRADE_PERCENT}%, market-data freshness, market hours, and news-feed checks.",
             specialization="Capital Protection, Contradiction Veto, Position Sizing & Pre-News Lockout",
             model_provider="python_deterministic_strict",
             model_identifier="taikry_risk_gatekeeper_v2",
@@ -332,7 +336,7 @@ class AgentRegistry:
             supported_instruments=["ALL"],
             timeout_seconds=3.0,
             concurrency_limits=20,
-            health_status="HEALTHY",
+            health_status="NOT_RUN",
             version="2.1.0"
         )
         def fallback_risk(reason: str, *args, **kwargs) -> Dict[str, Any]:
@@ -362,7 +366,7 @@ class AgentRegistry:
             supported_instruments=["ALL"],
             timeout_seconds=15.0,
             concurrency_limits=10,
-            health_status="HEALTHY",
+            health_status="NOT_RUN",
             version="2.1.0"
         )
         self.register(AgentAdapter(meta5, ai_consensus_engine.analyze_symbol))
@@ -372,8 +376,8 @@ class AgentRegistry:
         meta6 = AgentMetadata(
             agent_id="debate_engine",
             name="Inter-Agent Round-Table Debate Engine",
-            description="Conducts 4-turn adversarial round-table dialogue between all 4 agents in English and Khmer.",
-            specialization="Multi-Turn Adversarial Dialogue & Cross-Agent Challenge",
+            description="Builds a structured bilingual summary from the four rule-based agent reports.",
+            specialization="Evidence Summary & Risk Review",
             model_provider="dialogue_state_machine",
             model_identifier="taikry_debate_v2",
             execution_mode="local",
@@ -381,7 +385,7 @@ class AgentRegistry:
             supported_instruments=["ALL"],
             timeout_seconds=10.0,
             concurrency_limits=5,
-            health_status="HEALTHY",
+            health_status="NOT_RUN",
             version="2.1.0"
         )
         self.register(AgentAdapter(meta6, agent_debate_engine.conduct_debate))
@@ -400,10 +404,48 @@ class AgentRegistry:
             supported_instruments=["ALL"],
             timeout_seconds=10.0,
             concurrency_limits=2,
-            health_status="HEALTHY",
+            health_status="NOT_RUN",
             version="2.1.0"
         )
         self.register(AgentAdapter(meta7, agent_self_trainer.train_epoch))
+
+        # 8. Order Flow & Liquidity Sentiment Analyst
+        from taikry.agents.orderflow_sentiment_analyst import orderflow_sentiment_agent
+        meta8 = AgentMetadata(
+            agent_id="orderflow_sentiment_analyst",
+            name="Agent 8: Order Flow, CVD & Liquidity Sentiment Analyst",
+            description="Analyzes Cumulative Volume Delta (CVD) divergences, order flow absorption, and stop-loss clusters.",
+            specialization="CVD Divergence, Liquidity Pools, Smart Money Absorption & Stop Hunts",
+            model_provider="python_deterministic_quant",
+            model_identifier="taikry_orderflow_v1",
+            execution_mode="local",
+            supported_tasks=["cvd_divergence", "liquidity_heatmaps", "retail_traps", "order_absorption"],
+            supported_instruments=["XAUUSD", "XAGUSD", "Forex", "Crypto"],
+            timeout_seconds=5.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta8, orderflow_sentiment_agent.analyze))
+
+        # 9. Multi-Timeframe Fractal Trend Analyst
+        from taikry.agents.fractal_mtf_analyst import fractal_mtf_agent
+        meta9 = AgentMetadata(
+            agent_id="fractal_mtf_analyst",
+            name="Agent 9: Multi-Timeframe Fractal Trend Analyst",
+            description="Checks Daily, 4H, 1H, and 15m fractal alignment and guards against higher-timeframe counter-trend traps.",
+            specialization="Multi-Timeframe Fractal Alignment, Trend Harmony & Counter-Trend Defense",
+            model_provider="python_deterministic_quant",
+            model_identifier="taikry_fractal_mtf_v1",
+            execution_mode="local",
+            supported_tasks=["fractal_alignment", "trap_detection", "htf_confluence", "trend_harmony"],
+            supported_instruments=["XAUUSD", "XAGUSD", "Forex", "Crypto"],
+            timeout_seconds=5.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta9, fractal_mtf_agent.analyze))
 
 
 # Global Singleton Registry Instance

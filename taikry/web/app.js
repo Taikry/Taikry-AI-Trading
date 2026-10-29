@@ -4,7 +4,7 @@
  * paper trading ledger, and real-time multi-agent polling.
  */
 
-const API_BASE = window.location.origin.includes(":8000") ? "" : "http://localhost:8000";
+const API_BASE = "";
 
 let currentSymbol = "XAUUSD";
 let currentTab = "ALL";
@@ -127,17 +127,17 @@ const I18N = {
     market_bias_label: "Consensus Bias",
     setup_status_label: "Setup Status",
     report_title: "Intelligence Report (English & Khmer)",
-    portfolio_title: "Paper Portfolio (0.5% Risk)",
+    portfolio_title: "Paper Portfolio (Configured Risk)",
     backtest_title: "Strategy Backtest Engine",
     health_title: "Service Health Audit",
     lang_btn: "ភាសាខ្មែរ (Khmer)",
     tab_signals: "Live Market & Signals",
-    tab_debate: "AI Agents Debate (និយាយគ្នា)",
+    tab_debate: "Agent Evidence Review",
     tab_training: "Self-Training & AI Learning (Train ខ្លួនឯង)",
     tab_autofix: "Alert-Auto-Fix & Sentinel",
-    debate_title: "AI Agents Round-Table Debate & Cross-Examination (AI ជជែកពិភាក្សាគ្នាទៅវិញទៅមក)",
-    debate_sub: "Dynamic multi-turn adversarial dialogue among Technical, SMC, Macro, and Risk Agents",
-    run_debate_btn: "Start Live AI Debate",
+    debate_title: "Agent Evidence Review & Risk Cross-Check",
+    debate_sub: "Structured summary of Technical, SMC, Macro, and Risk agent outputs",
+    run_debate_btn: "Review Agent Evidence",
     verdict_title: "Final Risk Arbiter Ruling & Decision:",
     train_title: "Autonomous Self-Training & Reinforcement Learning (ប្រព័ន្ធបណ្តុះបណ្តាលខ្លួនឯង)",
     train_sub: "Continuous Brier Score Calibration & Dynamic Agent Weight Matrix Optimization",
@@ -152,7 +152,7 @@ const I18N = {
     autofix_sub: "Zero-Downtime Autonomous Remediation for Feeds, Real LLMs & Drawdown Thresholds",
     run_autofix_btn: "Run Diagnostic & Auto-Fix",
     autofix_stream_title: "Live Incident Stream & Auto-Remediation Log",
-    cockpit_execute: "🚀 1-Click Execute & Dispatch to Telegram"
+    cockpit_execute: "🧾 Record Paper Trade & Send Manual Ticket"
   },
   kh: {
     brand_title: "ZYROX AI — ប្រព័ន្ធបញ្ញាសិប្បនិម្មិតវិភាគទីផ្សារ",
@@ -182,12 +182,12 @@ const I18N = {
     health_title: "សវនកម្មសុខភាពប្រព័ន្ធ",
     lang_btn: "English Mode",
     tab_signals: "ទីផ្សារ & សញ្ញាជួញដូរ",
-    tab_debate: "AI ជជែកពិភាក្សាគ្នាទៅវិញទៅមក",
+    tab_debate: "ពិនិត្យភស្តុតាងភ្នាក់ងារ",
     tab_training: "ប្រព័ន្ធរៀនសូត្រ (Train ខ្លួនឯង)",
     tab_autofix: "ប្រព័ន្ធជួសជុលស្វ័យប្រវត្ត (Auto-Fix)",
-    debate_title: "វេទិកា AI Agents ជជែកពិភាក្សាដេញដោលគ្នាទៅវិញទៅមក (Debate & Cross-Examination)",
-    debate_sub: "កិច្ចសន្ទនាវិភាគពហុទស្សនៈរវាងភ្នាក់ងារបច្ចេកទេស, ស្ថាប័ន SMC, ម៉ាក្រូសេដ្ឋកិច្ច និងគ្រប់គ្រងហានិភ័យ",
-    run_debate_btn: "ចាប់ផ្តើមការជជែកដេញដោល AI ផ្ទាល់",
+    debate_title: "ការពិនិត្យភស្តុតាង និងផ្ទៀងផ្ទាត់ហានិភ័យ",
+    debate_sub: "សេចក្តីសង្ខេបរចនាសម្ព័ន្ធពីលទ្ធផលភ្នាក់ងារបច្ចេកទេស SMC ម៉ាក្រូ និងហានិភ័យ",
+    run_debate_btn: "ពិនិត្យភស្តុតាងភ្នាក់ងារ",
     verdict_title: "សេចក្តីសម្រេចចុងក្រោយរបស់អាជ្ញាកណ្តាលហានិភ័យ (Ruling):",
     train_title: "ប្រព័ន្ធបណ្តុះបណ្តាលខ្លួនឯងស្វ័យប្រវត្ត និងរៀនសូត្របន្ត (Train ខ្លួនឯង)",
     train_sub: "ការកែសម្រួលពិន្ទុ Brier Score និងបង្កើនទម្ងន់បោះឆ្នោតរបស់ភ្នាក់ងារ AI តាមក្បួន PPMC",
@@ -202,7 +202,7 @@ const I18N = {
     autofix_sub: "ប្រព័ន្ធត្រួតពិនិត្យ និងជួសជុលស្វ័យប្រវត្ត មិនឱ្យមានការដាច់ចរន្តទិន្នន័យ ម៉ាស៊ីន AI ឬការខាតបង់លើសកម្រិត",
     run_autofix_btn: "ដំណើរការត្រួតពិនិត្យ និងជួសជុលភ្លាមៗ",
     autofix_stream_title: "កំណត់ត្រាព្រឹត្តិការណ៍ និងសកម្មភាពជួសជុលស្វ័យប្រវត្តផ្ទាល់",
-    cockpit_execute: "🚀 ចុច 1 ដងដើម្បី Execute & ផ្ញើទៅ Telegram"
+    cockpit_execute: "🧾 កត់ត្រាជួញដូរសាកល្បង និងផ្ញើសំបុត្រជូនដំណឹង"
   }
 };
 
@@ -343,6 +343,7 @@ function toggleLanguage() {
   setTxt("t-tab-autofix", dict.tab_autofix);
   setTxt("t-cockpit-analyze", isKhmer ? "វិភាគ" : "Analyze");
   setTxt("t-cockpit-best", isKhmer ? "ការរៀបចំល្អបំផុត" : "Best setup");
+  setTxt("t-top-trade", isKhmer ? "ជួញដូរសាកល្បង" : "Paper Trade");
 
   setTxt("t-debate-title", dict.debate_title);
   setTxt("t-debate-sub", dict.debate_sub);
@@ -396,7 +397,7 @@ function initTickerRibbon() {
     const isCrypto = item.symbol.includes("USDT") || item.symbol.includes("BTC");
     const isForex = !isCrypto && !item.symbol.includes("XAU") && !item.symbol.includes("XAG");
     const p = live ? (isForex ? Number(live.price).toFixed(4) : (Number(live.price) > 100 ? `$${Number(live.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${Number(live.price)}`)) : "---";
-    const c24 = live && live.change_24h !== undefined ? Number(live.change_24h) : null;
+    const c24 = live && live.change_24h !== undefined && live.change_24h !== null ? Number(live.change_24h) : null;
     const chg = c24 !== null ? (c24 > 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
     const isUp = c24 === null || c24 >= 0;
     const activeCls = item.symbol === currentSymbol ? "active" : "";
@@ -437,7 +438,7 @@ function renderWatchlist() {
     const isCrypto = item.symbol.includes("USDT") || item.symbol.includes("BTC");
     const isForex = !isCrypto && !item.symbol.includes("XAU") && !item.symbol.includes("XAG");
     const p = live ? (isForex ? Number(live.price).toFixed(4) : (Number(live.price) > 100 ? `$${Number(live.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${Number(live.price)}`)) : "---";
-    const c24 = live && live.change_24h !== undefined ? Number(live.change_24h) : null;
+    const c24 = live && live.change_24h !== undefined && live.change_24h !== null ? Number(live.change_24h) : null;
     const chg = c24 !== null ? (c24 > 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
     const isUp = c24 === null || c24 >= 0;
 
@@ -655,10 +656,15 @@ function updateLLMFleetStatus(data) {
   const prov = (meta.provider || currentLLMProvider || "auto").toLowerCase();
   const activeMetaEl = document.getElementById("llm-active-meta");
   if (activeMetaEl) {
-    if (meta.model) {
-      activeMetaEl.innerText = `🤖 Engine: ${meta.provider.toUpperCase()} (${meta.model}) [${meta.latency_ms || 1}ms]`;
+    if (meta.llm_call_made === false) {
+      activeMetaEl.innerText = "🤖 Deterministic agents · no cloud LLM call";
+    } else if (meta.model) {
+      const providerName = String(meta.provider || "provider not reported").toUpperCase();
+      const latency = Number(meta.latency_ms);
+      const latencyLabel = Number.isFinite(latency) && latency > 0 ? ` [${latency}ms]` : "";
+      activeMetaEl.innerText = `🤖 LLM call: ${providerName} (${meta.model})${latencyLabel}`;
     } else {
-      activeMetaEl.innerText = `🤖 Engine: ${currentLLMProvider.toUpperCase()}`;
+      activeMetaEl.innerText = `🤖 LLM call status: ${meta.status || "not reported"}`;
     }
   }
 
@@ -724,7 +730,7 @@ function updateSmartCauseHub(data) {
   setChecklistPill("chk-trend", chk.trend_confluence, isKhmer ? "ទំនោរទីផ្សារ HTF" : "HTF Trend Alignment");
   setChecklistPill("chk-smc", chk.smc_confluence, isKhmer ? "រចនាសម្ព័ន្ធ SMC/OTE" : "SMC Liquidity / OTE");
   setChecklistPill("chk-macro", chk.macro_confluence, isKhmer ? "ឥទ្ធិពលប្រាក់ដុល្លារ" : "Macro Dollar Bias");
-  setChecklistPill("chk-rr", chk.risk_reward_confluence, isKhmer ? "អនុបាត 1:2.0+ R:R" : "1:2.0+ R:R Verified");
+  setChecklistPill("chk-rr", chk.risk_reward_confluence, isKhmer ? "អនុបាតតាមការកំណត់" : "Configured R:R Floor Verified");
 }
 
 function renderBullets(id, items) {
@@ -1037,33 +1043,66 @@ async function fetchHealthAndPaper() {
     // 1. Health
     const hr = await fetch(`${API_BASE}/health`);
     const hData = await hr.json();
-    document.getElementById("h-cycles").innerText = hData.monitoring_engine?.cycles_completed || 0;
+    const cyclesEl = document.getElementById("h-cycles");
+    if (cyclesEl) cyclesEl.innerText = hData.monitoring_engine?.cycles_completed ?? "N/A";
+    const feedEl = document.getElementById("h-feeds");
+    if (feedEl) feedEl.innerText = hData.status === "HEALTHY" ? "FRESH DATA" : "DEGRADED / STALE";
+    const subsystemFeeds = document.getElementById("subsys-feeds");
+    if (subsystemFeeds) subsystemFeeds.innerText = hData.status || "UNKNOWN";
+    const llmProviders = hData.llm_providers || {};
+    const providerStatuses = Object.values(llmProviders);
+    const configuredProviders = providerStatuses.filter(provider => provider && provider.configured).length;
+    const subsystemLlm = document.getElementById("subsys-llm");
+    if (subsystemLlm) subsystemLlm.innerText = `${configuredProviders} provider(s) configured · not probed`;
+    const llmStatus = document.getElementById("ai-chat-provider-status");
+    const selectedProvider = document.getElementById("ai-chat-provider-select")?.value || "auto";
+    const selectedInfo = selectedProvider === "auto"
+      ? null
+      : llmProviders[selectedProvider];
+    if (llmStatus) {
+      if (selectedInfo) {
+        llmStatus.innerText = selectedInfo.configured ? "Key configured · not probed" : "No provider key configured";
+      } else if (configuredProviders > 0) {
+        llmStatus.innerText = `${configuredProviders} provider(s) configured · not probed`;
+      } else {
+        llmStatus.innerText = "No cloud LLM key configured";
+      }
+    }
 
     // 2. Paper Trades
     const pr = await fetch(`${API_BASE}/api/v1/paper-trades`);
-    const pData = await pr.json();
+    const pData = pr.ok ? await pr.json() : {};
     const acct = pData.account_summary || {};
-
-    document.getElementById("paper-balance").innerText = `$${(acct.current_balance || 100000).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-    const pnl = acct.realized_pnl || 0;
+    const balanceEl = document.getElementById("paper-balance");
+    if (balanceEl) balanceEl.innerText = acct.current_balance != null && Number.isFinite(Number(acct.current_balance))
+      ? `$${Number(acct.current_balance).toLocaleString('en-US', {minimumFractionDigits: 2})}`
+      : "Unavailable";
+    const pnl = acct.realized_pnl == null ? NaN : Number(acct.realized_pnl);
     const pnlEl = document.getElementById("paper-pnl");
-    pnlEl.innerText = `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
-    pnlEl.className = pnl >= 0 ? "metric-value val-green" : "metric-value val-red";
+    if (pnlEl) {
+      pnlEl.innerText = Number.isFinite(pnl) ? `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString('en-US', {minimumFractionDigits: 2})}` : "Unavailable";
+      pnlEl.className = Number.isFinite(pnl) ? (pnl >= 0 ? "metric-value val-green" : "metric-value val-red") : "metric-value";
+    }
 
     const tbody = document.getElementById("paper-trades-body");
-    if (pData.trades && pData.trades.length > 0) {
+    if (!pr.ok) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">Paper ledger requires administrator access.</td></tr>`;
+    } else if (tbody && pData.trades && pData.trades.length > 0) {
       tbody.innerHTML = "";
       pData.trades.slice(0, 5).forEach(t => {
         const row = document.createElement("tr");
+        const pnlValue = t.pnl == null ? NaN : Number(t.pnl);
         row.innerHTML = `
-          <td><b>${t.symbol}</b></td>
-          <td style="color: ${t.direction === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)'}">${t.direction}</td>
-          <td>${t.lot_size}</td>
-          <td style="color: ${t.pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">$${t.pnl}</td>
-          <td><span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: rgba(255,255,255,0.08);">${t.status}</span></td>
+          <td><b>${escapeHtml(String(t.symbol || "N/A"))}</b></td>
+          <td style="color: ${t.direction === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)'}">${escapeHtml(String(t.direction || "N/A"))}</td>
+          <td>${t.lot_size != null && Number.isFinite(Number(t.lot_size)) ? Number(t.lot_size) : "N/A"}</td>
+          <td style="color: ${Number.isFinite(pnlValue) && pnlValue >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${Number.isFinite(pnlValue) ? `$${pnlValue.toFixed(2)}` : "N/A"}</td>
+          <td><span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: rgba(255,255,255,0.08);">${escapeHtml(String(t.status || "N/A"))}</span></td>
         `;
         tbody.appendChild(row);
       });
+    } else if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No paper trades recorded.</td></tr>`;
     }
   } catch (e) {}
 }
@@ -1077,7 +1116,7 @@ function updateMacroCatalystUI(catalyst) {
 
   const rawBadge = isKhmer ? (catalyst.badge_kh || catalyst.badge_en) : (catalyst.badge_en || catalyst.badge_kh);
   // Strip leading emoji if present, since .macro-fire-icon already holds the icon
-  const cleanText = rawBadge ? rawBadge.replace(/^[⚡🔥✅]\s*/, "") : "FOMC in 1d 3h · High Impact";
+  const cleanText = rawBadge ? rawBadge.replace(/^[⚡🔥✅]\s*/, "") : (isKhmer ? "មិនមានទិន្នន័យប្រតិទិនដែលបានផ្ទៀងផ្ទាត់" : "No verified calendar data");
   textEl.innerText = cleanText;
 
   const iconEl = badgeEl.querySelector(".macro-fire-icon");
@@ -1168,6 +1207,7 @@ function renderCockpitNewsQuickList(catalyst, events) {
 
   let html = "";
   if (catalyst) {
+    const safe = value => escapeHtml(String(value ?? ""));
     const isBlackout = catalyst.is_blackout || (catalyst.countdown_seconds >= -1800 && catalyst.countdown_seconds <= 1800);
     const catBadge = isKhmer ? (catalyst.badge_kh || catalyst.badge_en) : (catalyst.badge_en || catalyst.badge_kh);
     const goldTxt = isKhmer ? (catalyst.gold_impact_kh || catalyst.gold_impact_en) : (catalyst.gold_impact_en || catalyst.gold_impact_kh);
@@ -1175,18 +1215,18 @@ function renderCockpitNewsQuickList(catalyst, events) {
       <div class="cockpit-catalyst-hero ${isBlackout ? 'card-blackout-active' : ''}" onclick="toggleMacroDrawer()" title="Click to view full Macro Calendar">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span style="font-size:10px; font-weight:800; color:#fb7185; letter-spacing:0.4px;">🥇 XAUUSD HIGH-IMPACT CATALYST</span>
-          <span style="font-size:10px; font-weight:800; padding:2px 6px; border-radius:10px; background:rgba(239,68,68,0.2); color:#fca5a5; border:1px solid rgba(239,68,68,0.4);">${catalyst.volatility_risk}</span>
+          <span style="font-size:10px; font-weight:800; padding:2px 6px; border-radius:10px; background:rgba(239,68,68,0.2); color:#fca5a5; border:1px solid rgba(239,68,68,0.4);">${safe(catalyst.volatility_risk)}</span>
         </div>
         <div style="font-size:12px; font-weight:800; color:#fff; margin-bottom:3px;">
-          ${catalyst.title}
+          ${safe(catalyst.title)}
         </div>
-        ${catalyst.title_kh ? `<div style="font-size:11px; color:#fce79f; margin-bottom:4px; font-family:var(--font-khmer);">${catalyst.title_kh}</div>` : ''}
+        ${catalyst.title_kh ? `<div style="font-size:11px; color:#fce79f; margin-bottom:4px; font-family:var(--font-khmer);">${safe(catalyst.title_kh)}</div>` : ''}
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:10.5px; color:#cbd5e1; margin-bottom:4px;">
-          <span>⏱️ ${catBadge}</span>
-          <span>Forecast: <b>${catalyst.forecast || 'N/A'}</b></span>
+          <span>⏱️ ${safe(catBadge)}</span>
+          <span>Forecast: <b>${safe(catalyst.forecast || 'N/A')}</b></span>
         </div>
         <div style="font-size:10px; color:#94a3b8; line-height:1.35; border-top:1px solid rgba(255,255,255,0.08); padding-top:4px;">
-          ${goldTxt}
+          ${safe(goldTxt)}
         </div>
       </div>
     `;
@@ -1196,13 +1236,13 @@ function renderCockpitNewsQuickList(catalyst, events) {
     html += `<div style="font-size:10px; font-weight:700; color:#94a3b8; margin:6px 0 4px 0; text-transform:uppercase; letter-spacing:0.3px;">Upcoming Macro Releases</div>`;
     events.slice(0, 4).forEach(ev => {
       const isBlk = ev.blackout_active;
-      const title = ev.title;
-      const titleKh = ev.title_kh;
-      const timeUntil = ev.time_until;
+      const title = escapeHtml(String(ev.title ?? ""));
+      const titleKh = escapeHtml(String(ev.title_kh ?? ""));
+      const timeUntil = escapeHtml(String(ev.time_until ?? "N/A"));
       html += `
         <div class="cockpit-news-card ${isBlk ? 'card-blackout-active' : ''}" onclick="toggleMacroDrawer()" title="Click to view macro details">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
-            <span style="font-size:9.5px; font-weight:800; color:#fca5a5; background:rgba(239,68,68,0.18); padding:1px 5px; border-radius:4px;">🔴 ${ev.country} HIGH</span>
+            <span style="font-size:9.5px; font-weight:800; color:#fca5a5; background:rgba(239,68,68,0.18); padding:1px 5px; border-radius:4px;">🔴 ${escapeHtml(String(ev.country ?? 'N/A'))} HIGH</span>
             <span style="font-size:10px; font-weight:700; color:#ffd700;">${timeUntil}</span>
           </div>
           <div style="font-size:11px; font-weight:700; color:#e2e8f0;">${title}</div>
@@ -1211,7 +1251,7 @@ function renderCockpitNewsQuickList(catalyst, events) {
       `;
     });
   } else if (!catalyst) {
-    html = `<div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">No high-impact macro releases scheduled today.</div>`;
+    html = `<div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">No verified high-impact event data is available in this response.</div>`;
   }
 
   container.innerHTML = html;
@@ -1241,10 +1281,12 @@ async function fetchMacroEvents(forceRefresh = false) {
     // 1. Audit News Blackout
     const blackout = data.blackout_status || {};
     if (blackoutBanner) {
-      if (blackout.is_blackout) {
+      if (blackout.is_blackout || blackout.status === "UNAVAILABLE") {
         blackoutBanner.style.display = "block";
         if (blackoutHeadline) {
-          blackoutHeadline.innerText = isKhmer ? "⚠️ បំរាមជួញដូរពេលចេញព័ត៌មាន (News Lockout)" : "⚠️ PRE-NEWS BLACKOUT ACTIVE";
+          blackoutHeadline.innerText = blackout.status === "UNAVAILABLE"
+            ? (isKhmer ? "⚠️ មិនអាចផ្ទៀងផ្ទាត់ប្រតិទិនព័ត៌មានបានទេ" : "⚠️ CALENDAR FEED UNAVAILABLE")
+            : (isKhmer ? "⚠️ បំរាមជួញដូរពេលចេញព័ត៌មាន (News Lockout)" : "⚠️ PRE-NEWS BLACKOUT ACTIVE");
         }
         if (blackoutDesc) {
           blackoutDesc.innerText = isKhmer ? blackout.advisory_kh : blackout.advisory_en;
@@ -1258,7 +1300,7 @@ async function fetchMacroEvents(forceRefresh = false) {
     const events = data.events || [];
     if (container) {
       if (events.length === 0) {
-        container.innerHTML = `<div class="text-center text-muted" style="padding: 12px; font-size: 11px;">No high-impact releases scheduled today.</div>`;
+        container.innerHTML = `<div class="text-center text-muted" style="padding: 12px; font-size: 11px;">No verified calendar events were returned.</div>`;
       } else {
         container.innerHTML = "";
         events.slice(0, 6).forEach(ev => {
@@ -1270,22 +1312,23 @@ async function fetchMacroEvents(forceRefresh = false) {
             ? "event-countdown-pill pill-active-now"
             : "event-countdown-pill";
 
+          const safeEventText = value => escapeHtml(String(value ?? "N/A"));
           card.innerHTML = `
             <div class="event-header-row">
               <div class="event-title-badge">
-                <span class="event-impact-pill">🔴 ${ev.country} HIGH</span>
-                <span>${ev.title}</span>
+                <span class="event-impact-pill">🔴 ${safeEventText(ev.country)} HIGH</span>
+                <span>${safeEventText(ev.title)}</span>
               </div>
-              <span class="${countdownClass}">${ev.time_until}</span>
+              <span class="${countdownClass}">${safeEventText(ev.time_until)}</span>
             </div>
-            <div class="event-khmer-title">🇰🇭 ${ev.title_kh}</div>
+            <div class="event-khmer-title">🇰🇭 ${safeEventText(ev.title_kh)}</div>
             <div class="event-metrics-row">
-              <span>Forecast: <b class="event-metric-val">${ev.forecast}</b></span>
-              <span>Previous: <b class="event-metric-val">${ev.previous}</b></span>
-              <span>Gold Risk: <b class="event-metric-val" style="color: var(--gold-bright);">${ev.volatility_risk}</b></span>
+              <span>Forecast: <b class="event-metric-val">${safeEventText(ev.forecast)}</b></span>
+              <span>Previous: <b class="event-metric-val">${safeEventText(ev.previous)}</b></span>
+              <span>Gold Risk: <b class="event-metric-val" style="color: var(--gold-bright);">${safeEventText(ev.volatility_risk)}</b></span>
             </div>
             <div class="event-impact-explanation ${isKhmer ? 'khmer-text' : ''}">
-              ${isKhmer ? ev.gold_impact_kh : ev.gold_impact_en}
+              ${safeEventText(isKhmer ? ev.gold_impact_kh : ev.gold_impact_en)}
             </div>
           `;
           container.appendChild(card);
@@ -1305,12 +1348,17 @@ async function fetchMacroEvents(forceRefresh = false) {
       nData.news.forEach(item => {
         const itemDiv = document.createElement("div");
         itemDiv.className = "live-news-item";
+        let safeNewsLink = "#";
+        try {
+          const parsedLink = new URL(item.link || "");
+          if (["http:", "https:"].includes(parsedLink.protocol)) safeNewsLink = parsedLink.href;
+        } catch (_) {}
         itemDiv.innerHTML = `
           <div class="live-news-meta">
-            <span class="live-news-source">${item.source}</span>
-            <span>${item.published_at}</span>
+            <span class="live-news-source">${escapeHtml(String(item.source || "Unknown source"))}</span>
+            <span>${escapeHtml(String(item.published_at || ""))}</span>
           </div>
-          <a class="live-news-title" href="${item.link}" target="_blank" rel="noopener noreferrer">${item.title}</a>
+          <a class="live-news-title" href="${escapeHtml(safeNewsLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(String(item.title || "Untitled"))}</a>
         `;
         newsContainer.appendChild(itemDiv);
       });
@@ -1401,7 +1449,7 @@ async function fetchAgentsDebate(symbol = "XAUUSD") {
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<span>⏳ ${isKhmer ? "កំពុងដំណើរការជជែកដេញដោល..." : "Agents Debating Live..."}</span>`;
+    btn.innerHTML = `<span>⏳ ${isKhmer ? "កំពុងពិនិត្យភស្តុតាងភ្នាក់ងារ..." : "Reviewing agent evidence..."}</span>`;
   }
 
   if (chatStream) {
@@ -1424,24 +1472,25 @@ async function fetchAgentsDebate(symbol = "XAUUSD") {
         card.className = "debate-turn-card";
 
         const stanceClass = turn.stance === "BULLISH" ? "bias-bullish" : (turn.stance === "BEARISH" ? "bias-bearish" : "bias-wait");
-        const stanceBadge = `<span class="badge ${stanceClass}" style="font-size: 10px; padding: 2px 8px;">${turn.stance}</span>`;
+        const stanceBadge = `<span class="badge ${stanceClass}" style="font-size: 10px; padding: 2px 8px;">${escapeHtml(String(turn.stance || "NEUTRAL"))}</span>`;
+        const badgeColor = /^#[0-9a-fA-F]{3,8}$/.test(turn.badge_color || "") ? turn.badge_color : "var(--accent-gold)";
 
         card.innerHTML = `
           <div class="turn-header">
             <div style="display: flex; align-items: center; gap: 10px;">
-              <div class="agent-avatar-circle" style="border-color: ${turn.badge_color || 'var(--accent-gold)'};">
-                ${turn.agent_avatar || '🤖'}
+              <div class="agent-avatar-circle" style="border-color: ${badgeColor};">
+                ${escapeHtml(String(turn.agent_avatar || '🤖'))}
               </div>
               <div>
-                <span class="agent-speaker-name">${turn.agent_name}</span>
-                <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">${turn.timestamp || ''}</span>
+                <span class="agent-speaker-name">${escapeHtml(String(turn.agent_name || "Agent"))}</span>
+                <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">${escapeHtml(String(turn.timestamp || ''))}</span>
               </div>
             </div>
             <div>${stanceBadge}</div>
           </div>
           <div class="turn-body">
-            <div class="turn-msg-en">${turn.message_en}</div>
-            <div class="turn-msg-kh">🇰🇭 ${turn.message_kh}</div>
+            <div class="turn-msg-en">${escapeHtml(String(turn.message_en || ""))}</div>
+            <div class="turn-msg-kh">🇰🇭 ${escapeHtml(String(turn.message_kh || ""))}</div>
           </div>
         `;
         chatStream.appendChild(card);
@@ -1449,7 +1498,7 @@ async function fetchAgentsDebate(symbol = "XAUUSD") {
     }
 
     if (verdictCard && verdictText) {
-      const decision = data.consensus_decision || "WAIT";
+      const decision = ["APPROVE", "REJECT", "WAIT"].includes(data.consensus_decision) ? data.consensus_decision : "WAIT";
       let statusColor = "var(--accent-yellow)";
       let verdictIcon = "⏸️";
 
@@ -1465,22 +1514,22 @@ async function fetchAgentsDebate(symbol = "XAUUSD") {
       verdictText.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: ${statusColor}; font-size: 15px; margin-bottom: 6px;">
           <span>${verdictIcon}</span>
-          <span>${isKhmer ? `សេចក្តីសម្រេច៖ ${decision}` : `Binding Ruling: ${decision}`}</span>
-          <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;">(${data.outcome_status || 'CONSENSUS_REACHED'})</span>
+          <span>${isKhmer ? `សេចក្តីសម្រេច៖ ${decision}` : `Consensus result: ${decision}`}</span>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: 400;">(${escapeHtml(String(data.outcome_status || 'N/A'))})</span>
         </div>
-        <div style="margin-bottom: 6px; color: var(--text-main);">${data.debate_summary_en || ''}</div>
-        <div style="color: var(--text-muted); font-size: 13px;">🇰🇭 ${data.debate_summary_kh || ''}</div>
+        <div style="margin-bottom: 6px; color: var(--text-main);">${escapeHtml(String(data.debate_summary_en || ''))}</div>
+        <div style="color: var(--text-muted); font-size: 13px;">🇰🇭 ${escapeHtml(String(data.debate_summary_kh || ''))}</div>
       `;
     }
   } catch (err) {
     if (chatStream) {
-      chatStream.innerHTML = `<div class="text-center text-muted" style="padding: 20px;">Debate round-table ready. Click "Start Live AI Debate" to trigger.</div>`;
+      chatStream.innerHTML = `<div class="text-center text-muted" style="padding: 20px;">Agent evidence review ready. Run it to inspect current analyses.</div>`;
     }
   } finally {
     isDebateLoading = false;
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = `🎙️ <span id="t-run-debate-btn">${isKhmer ? "ចាប់ផ្តើមការជជែកដេញដោល AI ផ្ទាល់" : "Start Live AI Debate"}</span>`;
+      btn.innerHTML = `📋 <span id="t-run-debate-btn">${isKhmer ? "ពិនិត្យភស្តុតាងភ្នាក់ងារ" : "Review Agent Evidence"}</span>`;
     }
   }
 }
@@ -1505,8 +1554,8 @@ async function fetchSelfTrainingData() {
     const statLr = document.getElementById("stat-lr");
     const statPolicy = document.getElementById("stat-policy");
 
-    if (statEpochs) statEpochs.innerText = data.total_epochs || 14;
-    if (statAcc) statAcc.innerText = `${data.overall_accuracy || 79.9}%`;
+    if (statEpochs) statEpochs.innerText = data.total_epochs ?? 0;
+    if (statAcc) statAcc.innerText = data.overall_accuracy != null && Number.isFinite(Number(data.overall_accuracy)) ? `${Number(data.overall_accuracy)}%` : "N/A";
     if (statLr) statLr.innerText = data.learning_rate || 0.05;
     if (statPolicy) statPolicy.innerText = data.reinforcement_policy || "PPMC Calibration";
 
@@ -1547,13 +1596,13 @@ async function fetchSelfTrainingData() {
       data.agents_scorecard.forEach(item => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td style="font-family: monospace; font-weight: 600; color: var(--accent-gold);">${item.agent_id}</td>
-          <td>${item.specialization}</td>
-          <td style="font-weight: 700;">${Math.round(item.weight * 100)}%</td>
-          <td style="color: var(--accent-green); font-weight: 700;">${item.accuracy}%</td>
-          <td>${item.win_count}W / ${item.loss_count}L</td>
-          <td style="font-family: monospace;">${item.brier_score}</td>
-          <td><span class="badge ${item.status === 'OPTIMIZED' ? 'bias-bullish' : 'bias-wait'}" style="font-size: 10px; padding: 2px 6px;">${item.status}</span></td>
+          <td style="font-family: monospace; font-weight: 600; color: var(--accent-gold);">${escapeHtml(String(item.agent_id || "N/A"))}</td>
+          <td>${escapeHtml(String(item.specialization || "N/A"))}</td>
+          <td style="font-weight: 700;">${Number.isFinite(Number(item.weight)) ? `${Math.round(Number(item.weight) * 100)}%` : "N/A"}</td>
+          <td style="color: var(--accent-green); font-weight: 700;">${item.accuracy != null && Number.isFinite(Number(item.accuracy)) ? `${Number(item.accuracy)}%` : "N/A"}</td>
+          <td>${Number(item.win_count) || 0}W / ${Number(item.loss_count) || 0}L</td>
+          <td style="font-family: monospace;">${item.brier_score != null && Number.isFinite(Number(item.brier_score)) ? Number(item.brier_score) : "N/A"}</td>
+          <td><span class="badge ${item.status === 'CALIBRATED' ? 'bias-bullish' : 'bias-wait'}" style="font-size: 10px; padding: 2px 6px;">${escapeHtml(String(item.status || "N/A"))}</span></td>
         `;
         scorecardBody.appendChild(tr);
       });
@@ -1606,7 +1655,7 @@ async function fetchAutoFixAlerts() {
     if (logBody) {
       logBody.innerHTML = "";
       if (incidents.length === 0) {
-        logBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">No incidents detected. All subsystems operational.</td></tr>`;
+        logBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding: 20px;">No diagnostic records are available.</td></tr>`;
       } else {
         incidents.forEach(inc => {
           const tr = document.createElement("tr");
@@ -1617,13 +1666,13 @@ async function fetchAutoFixAlerts() {
           else sevClass = "bias-bullish";
 
           tr.innerHTML = `
-            <td style="font-family: monospace; font-weight: 600; color: var(--accent-gold);">${inc.incident_id}</td>
-            <td><span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06);">${inc.subsystem}</span></td>
-            <td><span class="badge ${sevClass}" style="font-size: 10px; padding: 2px 6px;">${inc.severity}</span></td>
-            <td style="max-width: 260px; font-size: 12px; color: var(--text-main);">${inc.description}</td>
-            <td style="max-width: 280px; font-size: 12px; color: var(--accent-cyan); font-family: monospace;">${inc.auto_fix_action}</td>
-            <td><span class="autofix-status-resolved">✓ ${inc.status}</span></td>
-            <td style="font-size: 11px; color: var(--text-muted);">${inc.resolved_at}</td>
+            <td style="font-family: monospace; font-weight: 600; color: var(--accent-gold);">${escapeHtml(String(inc.incident_id || ""))}</td>
+            <td><span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06);">${escapeHtml(String(inc.subsystem || ""))}</span></td>
+            <td><span class="badge ${sevClass}" style="font-size: 10px; padding: 2px 6px;">${escapeHtml(String(inc.severity || ""))}</span></td>
+            <td style="max-width: 260px; font-size: 12px; color: var(--text-main);">${escapeHtml(String(inc.description || ""))}</td>
+            <td style="max-width: 280px; font-size: 12px; color: var(--accent-cyan); font-family: monospace;">${escapeHtml(String(inc.auto_fix_action || ""))}</td>
+            <td><span>${escapeHtml(String(inc.status || ""))}</span></td>
+            <td style="font-size: 11px; color: var(--text-muted);">${escapeHtml(String(inc.resolved_at || ""))}</td>
           `;
           logBody.appendChild(tr);
         });
@@ -1649,24 +1698,25 @@ async function triggerSystemAutoFixAction() {
       method: "POST"
     });
     const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || result.message || "Diagnostic request failed.");
 
-    // Flash subsystems
+    const checks = result.checks || {};
     const elFeeds = document.getElementById("subsys-feeds");
     const elLlm = document.getElementById("subsys-llm");
     const elRisk = document.getElementById("subsys-risk");
     const elDb = document.getElementById("subsys-db");
     const elWebhook = document.getElementById("subsys-webhook");
 
-    if (elFeeds) elFeeds.innerText = "HEALTHY (Verified)";
-    if (elLlm) elLlm.innerText = "ONLINE (All Models)";
-    if (elRisk) elRisk.innerText = "ARMED (0.5% Hard Cap)";
-    if (elDb) elDb.innerText = "CHECKPOINT OPTIMIZED";
-    if (elWebhook) elWebhook.innerText = "CONNECTED (Make/TG)";
+    if (elFeeds) elFeeds.innerText = checks.market_data?.status || "Not checked";
+    if (elLlm) elLlm.innerText = checks.llm?.status || "Not checked";
+    if (elRisk) elRisk.innerText = "Not checked by this diagnostic";
+    if (elDb) elDb.innerText = checks.database?.status || "Not checked";
+    if (elWebhook) elWebhook.innerText = "Not checked by this diagnostic";
 
     await fetchAutoFixAlerts();
     alert(isKhmer ? result.message_kh : result.message);
   } catch (err) {
-    alert("Self-healing routine completed.");
+    alert(err.message || "Diagnostic request failed.");
   } finally {
     isAutoFixRunning = false;
     if (btn) {
@@ -1728,13 +1778,32 @@ async function fetchCockpitBotData() {
   const symEl = document.getElementById("cockpit-debate-active-sym");
   if (symEl) symEl.innerText = currentSymbol;
   try {
-    const res = await fetch(`${API_BASE}/api/v1/paper-trades`);
+    const [res, quotaRes] = await Promise.all([
+      fetch(`${API_BASE}/api/v1/paper-trades`),
+      fetch(`${API_BASE}/api/v1/xauusd/signals/daily-quota`)
+    ]);
+    const quotaEl = document.getElementById("cockpit-bot-quota");
+    if (quotaEl) {
+      if (quotaRes.ok) {
+        const quota = await quotaRes.json();
+        const sent = quota.signals_reserved_or_sent_today ?? quota.signals_sent_today;
+        const limit = quota.daily_hard_limit;
+        quotaEl.innerText = sent != null && limit != null ? `${sent} / ${limit} reserved or sent today` : "Unavailable";
+      } else {
+        quotaEl.innerText = "Unavailable";
+      }
+    }
     if (res.ok) {
       const data = await res.json();
       const openEl = document.getElementById("cockpit-bot-open");
       if (openEl && data.account_summary) {
-        openEl.innerText = `${data.account_summary.open_positions || 0} / 3 max`;
+        openEl.innerText = data.account_summary.open_trades_count != null
+          ? `${data.account_summary.open_trades_count} open paper position(s)`
+          : "Unavailable";
       }
+    } else {
+      const openEl = document.getElementById("cockpit-bot-open");
+      if (openEl) openEl.innerText = "Admin access required";
     }
   } catch (e) {
     console.warn("Bot data fetch error:", e);
@@ -1750,17 +1819,22 @@ async function fetchCockpitHistory() {
       const data = await res.json();
       const trades = data.trades || [];
       if (trades.length === 0) {
-        container.innerHTML = `<div class="bot-debate-placeholder"><span>No closed signals yet. High-probability setups will be recorded here automatically.</span></div>`;
+        container.innerHTML = `<div class="bot-debate-placeholder"><span>No paper trades are recorded in the ledger.</span></div>`;
         return;
       }
-      container.innerHTML = trades.slice(0, 10).map(t => `
+      container.innerHTML = trades.slice(0, 10).map(t => {
+        const pnl = t.pnl == null || !Number.isFinite(Number(t.pnl)) ? null : Number(t.pnl);
+        const rValue = t.r_multiple == null || !Number.isFinite(Number(t.r_multiple)) ? null : Number(t.r_multiple);
+        const result = rValue != null ? `${rValue.toFixed(2)}R` : (pnl != null ? `$${pnl.toFixed(2)}` : "N/A");
+        return `
         <div class="history-item-row">
-          <span class="history-sym">${t.symbol}</span>
-          <span class="history-dir ${t.direction === 'BUY' ? 'dir-buy' : 'dir-sell'}">${t.direction} PLAN</span>
-          <span class="history-price">$${Number(t.entry_price).toLocaleString()}</span>
-          <span class="history-status ${t.status === 'CLOSED' ? 'status-pass' : 'status-pending'}">${t.status} (${t.r_multiple ? t.r_multiple + 'R' : (t.pnl ? '$' + t.pnl : 'ACTIVE')})</span>
+          <span class="history-sym">${escapeHtml(String(t.symbol || "N/A"))}</span>
+          <span class="history-dir ${t.direction === 'BUY' ? 'dir-buy' : 'dir-sell'}">${escapeHtml(String(t.direction || "N/A"))} PAPER</span>
+          <span class="history-price">${t.entry_price != null && Number.isFinite(Number(t.entry_price)) ? `$${Number(t.entry_price).toLocaleString()}` : "N/A"}</span>
+          <span class="history-status ${t.status === 'CLOSED' ? 'status-pass' : 'status-pending'}">${escapeHtml(String(t.status || "N/A"))} (${result})</span>
         </div>
-      `).join("");
+      `;
+      }).join("");
     }
   } catch (e) {
     console.warn("History fetch error:", e);
@@ -1813,7 +1887,7 @@ async function runCockpitLiveDebate() {
     container.innerHTML = `<div class="bot-debate-placeholder"><span style="color:#ef4444">⚠️ Live debate failed to complete. Please try again.</span></div>`;
   } finally {
     if (btn) {
-      btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
+      btn.innerHTML = `📋 Review Agent Evidence (ពិនិត្យភស្តុតាង)`;
       btn.disabled = false;
     }
   }
@@ -1840,9 +1914,11 @@ async function pollRealtimePrices() {
 
     requestAnimationFrame(() => {
       const pulseText = document.getElementById("cockpit-live-status-text");
-      if (pulseText) {
+      if (pulseText && Object.keys(prices).length > 0) {
         const sec = new Date().getSeconds();
         pulseText.innerText = `LIVE · ${sec % 2 === 0 ? 'REALTIME' : 'STREAMING'}`;
+      } else if (pulseText) {
+        pulseText.innerText = "MARKET FEED UNAVAILABLE";
       }
 
       if (prices[currentSymbol]) {
@@ -1903,13 +1979,29 @@ async function pollRealtimePrices() {
         if (ovPrice) ovPrice.innerText = formatted;
         const ovChg = document.getElementById("ov-active-change");
         if (ovChg) {
-          const c = activeData.change_24h !== undefined ? Number(activeData.change_24h) : 0.0;
-          ovChg.innerText = `24h Change: ${c >= 0 ? '+' : ''}${c.toFixed(2)}%`;
-          ovChg.className = `section-kpi-sub ${c >= 0 ? 'text-green' : 'text-red'}`;
+          const c = activeData.change_24h !== undefined && activeData.change_24h !== null ? Number(activeData.change_24h) : null;
+          ovChg.innerText = c === null ? "24h Change: --" : `24h Change: ${c >= 0 ? '+' : ''}${c.toFixed(2)}%`;
+          if (c !== null) ovChg.className = `section-kpi-sub ${c >= 0 ? 'text-green' : 'text-red'}`;
         }
+      } else {
+        ["cockpit-asset-live-price", "top-active-price", "ft-price-display", "chart-verified-price", "display-verified-price", "ov-active-price"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.innerText = "N/A";
+        });
+        const sourceEl = document.getElementById("top-active-source");
+        if (sourceEl) sourceEl.innerText = "Market feed unavailable";
+        const changeEl = document.getElementById("ov-active-change");
+        if (changeEl) changeEl.innerText = "24h Change: --";
       }
 
       window.lastKnownMarketData = prices;
+      WATCHLIST.forEach(item => {
+        if (prices[item.symbol]) return;
+        const priceEl = document.getElementById(`price-${item.symbol}`);
+        if (priceEl) priceEl.innerText = "---";
+        document.querySelectorAll(`[data-price-sym="${item.symbol}"]`).forEach(el => { el.innerText = "---"; });
+        document.querySelectorAll(`[data-chg-sym="${item.symbol}"], [data-watch-chg-sym="${item.symbol}"]`).forEach(el => { el.innerText = "--"; });
+      });
 
       Object.keys(prices).forEach(sym => {
         const pInfo = prices[sym];
@@ -1918,7 +2010,7 @@ async function pollRealtimePrices() {
         const isCrypto = sym.includes("USDT") || sym.includes("BTC");
         const isForex = !isCrypto && !sym.includes("XAU") && !sym.includes("XAG");
         const fmtPrice = isForex ? newPrice.toFixed(4) : (newPrice > 100 ? `$${newPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${newPrice}`);
-        const c24 = pInfo.change_24h !== undefined ? Number(pInfo.change_24h) : null;
+        const c24 = pInfo.change_24h !== undefined && pInfo.change_24h !== null ? Number(pInfo.change_24h) : null;
         const chgText = c24 !== null ? (c24 > 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
         const isUp = c24 === null || c24 >= 0;
 
@@ -2310,19 +2402,16 @@ function updateCockpitPlanCard(data) {
   const narrTip = document.getElementById("cockpit-narrative-tip");
   const narrRung = document.getElementById("cockpit-narrative-rung");
 
-  const bias = data.market_bias || "NEUTRAL";
-  const isBullish = bias.includes("BULLISH");
-  const isBearish = bias.includes("BEARISH");
-
   if (narrMain) {
     if (data.setup_status === "APPROVE") {
-      narrMain.innerText = `${currentSymbol}: institutional confirmation confirmed on ${tfText} — high probability setup active with verified R:R ${data.risk_reward_ratio || "1:2.4"}.`;
+      narrMain.innerText = `${currentSymbol}: setup approved on ${tfText}. Reported R:R: ${data.risk_reward_ratio || "N/A"}. Review the source and price levels before acting.`;
     } else {
-      narrMain.innerText = `${currentSymbol}: nothing on 5m or 15m is ready to enter yet — here is the plan to watch. Most scans end with a plan.`;
+      narrMain.innerText = `${currentSymbol}: no approved trade setup is available. Wait for a fresh scan with valid market data.`;
     }
   }
   if (narrWarn) {
-    narrWarn.innerText = `⚠️ 1 of 2 timeframes could not be scanned — this read is partial.`;
+    const warning = data.error || data.data_quality?.warning || "";
+    narrWarn.innerText = warning ? `⚠️ ${warning}` : "";
   }
   if (narrTip) {
     narrTip.innerHTML = `💡 Try: <b>BTCUSDT</b> · <b>${currentSymbol}</b> · or wait for the London/NY session open.`;
@@ -2339,41 +2428,45 @@ function updateCockpitPlanCard(data) {
 
   const a1Val = document.getElementById("c-agent-1-status");
   const a1Sub = document.getElementById("c-agent-1-sub");
-  if (a1Val) a1Val.innerText = `${a1.bias || (isBullish ? "BULLISH" : (isBearish ? "BEARISH" : "NEUTRAL"))} (${a1.confidence || 82}%)`;
+  if (a1Val) {
+    const confidence = Number(a1.confidence);
+    a1Val.innerText = `${a1.bias || "N/A"} (${Number.isFinite(confidence) ? `${confidence}%` : "confidence N/A"})`;
+  }
   if (a1Sub) {
-    const rsi = a1.key_price_levels?.rsi || 52;
-    const atr = a1.key_price_levels?.atr || 6.5;
-    a1Sub.innerText = `RSI ${rsi} · ATR ${atr} · EMA Confluence`;
+    const rsi = a1.key_price_levels?.rsi ?? "N/A";
+    const atr = a1.key_price_levels?.atr ?? "N/A";
+    a1Sub.innerText = `RSI ${rsi} · ATR ${atr}`;
   }
 
   const a2Val = document.getElementById("c-agent-2-status");
   const a2Sub = document.getElementById("c-agent-2-sub");
-  if (a2Val) a2Val.innerText = `${a2.bias || (isBullish ? "OTE DISCOUNT" : (isBearish ? "OTE PREMIUM" : "EQUILIBRIUM"))}`;
+  if (a2Val) a2Val.innerText = `${a2.bias || "N/A"}`;
   if (a2Sub) {
-    const zone = a2.key_price_zones?.current_zone || (isBullish ? "DISCOUNT" : "PREMIUM");
-    a2Sub.innerText = `Zone: ${zone} · Liquidity Swept`;
+    const zone = a2.key_price_zones?.current_zone || "N/A";
+    a2Sub.innerText = `Zone: ${zone}`;
   }
 
   const a3Val = document.getElementById("c-agent-3-status");
   const a3Sub = document.getElementById("c-agent-3-sub");
-  if (a3Val) a3Val.innerText = `${a3.bias || "MACD & DXY STABLE"}`;
+  if (a3Val) a3Val.innerText = `${a3.bias || "N/A"}`;
   if (a3Sub) {
-    const dxy = a3.usd_index?.dxy_price || 104.2;
-    a3Sub.innerText = `DXY ${dxy} · News Blackout: Clear`;
+    const dxy = a3.usd_index?.dxy_price ?? "N/A";
+    const blackout = typeof a3.news_blackout_active === "boolean" ? (a3.news_blackout_active ? "Active" : "Clear") : "N/A";
+    a3Sub.innerText = `DXY ${dxy} · News Blackout: ${blackout}`;
   }
 
   const a4Val = document.getElementById("c-agent-4-status");
   const a4Sub = document.getElementById("c-agent-4-sub");
   if (a4Val) {
     if (data.setup_status === "APPROVE") {
-      a4Val.innerText = `APPROVED (R:R ${data.risk_reward_ratio || "1:2.0"})`;
+      a4Val.innerText = `APPROVED (R:R ${data.risk_reward_ratio || "N/A"})`;
       a4Val.className = "agent-mini-val val-green";
     } else {
       a4Val.innerText = `LOCKED (${data.setup_status || "WAIT"})`;
       a4Val.className = "agent-mini-val val-red";
     }
   }
-  if (a4Sub) a4Sub.innerText = `0.5% Hard Risk Cap Armed`;
+  if (a4Sub) a4Sub.innerText = "Risk size uses configured paper account";
 
   // The Plan Card
   const planCard = document.getElementById("cockpit-plan-card");
@@ -2390,71 +2483,81 @@ function updateCockpitPlanCard(data) {
   const btnPairTf = document.getElementById("btn-analyze-pair-tf");
   const toastText = document.getElementById("cockpit-toast-text");
 
-  const vPrice = Number(data.verified_price) || 0.0;
-  const entryPrice = Number(data.entry_price) || vPrice;
-  const decimals = currentSymbol.includes("JPY") ? 3 : (currentSymbol.includes("USDT") && vPrice > 500 ? 2 : (vPrice > 100 ? 2 : 4));
-  const spreadDelta = vPrice * 0.0004;
-
-  let action = isBearish ? "SELL" : (isBullish ? "BUY" : "HOLD");
-  if (data.proposed_direction && data.proposed_direction !== "HOLD") {
-    action = data.proposed_direction;
-  }
-
-  const rangeLow = Math.min(entryPrice, entryPrice - spreadDelta).toFixed(decimals);
-  const rangeHigh = Math.max(entryPrice, entryPrice + spreadDelta).toFixed(decimals);
+  const statusApproved = data.setup_status === "APPROVE";
+  const vPrice = Number(data.verified_price);
+  const entryPrice = Number(data.entry_price);
+  const referencePrice = Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : vPrice;
+  const decimals = currentSymbol.includes("JPY") ? 3 : (currentSymbol.includes("USDT") && referencePrice > 500 ? 2 : (referencePrice > 100 ? 2 : 4));
+  const rawDirection = String(data.proposed_direction || "").toUpperCase();
+  const action = statusApproved && ["BUY", "SELL"].includes(rawDirection)
+    ? rawDirection
+    : (statusApproved && rawDirection === "LONG" ? "BUY" : (statusApproved && rawDirection === "SHORT" ? "SELL" : "WAIT"));
+  const stopLoss = Number(data.stop_loss);
+  const takeProfit = Number(data.take_profit_1);
+  const approved = statusApproved && action !== "WAIT"
+    && [entryPrice, stopLoss, takeProfit].every(value => Number.isFinite(value) && value > 0)
+    && (action === "BUY" ? stopLoss < entryPrice && entryPrice < takeProfit : stopLoss > entryPrice && entryPrice > takeProfit);
+  const hasEntry = approved && Number.isFinite(entryPrice) && entryPrice > 0;
+  const rangeLow = hasEntry ? entryPrice.toFixed(decimals) : "N/A";
+  const rangeHigh = hasEntry ? entryPrice.toFixed(decimals) : "N/A";
 
   if (planCard) {
-    planCard.className = `cockpit-plan-card ${action === 'BUY' ? 'plan-buy' : 'plan-sell'}`;
+    planCard.className = `cockpit-plan-card ${action === 'BUY' ? 'plan-buy' : (action === 'SELL' ? 'plan-sell' : '')}`;
   }
 
   if (titleBadge) {
-    titleBadge.innerText = `PLAN · ${action} ${Number(rangeLow).toLocaleString()} – ${Number(rangeHigh).toLocaleString()}`;
+    titleBadge.innerText = approved && action !== "WAIT"
+      ? `PLAN · ${action} ${Number(rangeLow).toLocaleString()}`
+      : `WAIT · ${data.setup_status || "NO APPROVED SETUP"}`;
   }
 
   const scoreBadge = document.getElementById("plan-score-badge");
   if (scoreBadge) {
-    const s = data.ai_score || data.confidence_score || 88;
-    scoreBadge.innerText = `⭐ ${s}% SCORE`;
-    scoreBadge.className = s >= 88 ? "plan-score-badge score-a-plus" : "plan-score-badge";
+    const score = Number(data.ai_score ?? data.confidence_score);
+    const hasScore = Number.isFinite(score);
+    scoreBadge.innerText = hasScore ? `⭐ ${score}% SCORE` : "⭐ SCORE N/A";
+    scoreBadge.className = hasScore && score >= 88 ? "plan-score-badge score-a-plus" : "plan-score-badge";
   }
 
   if (subDesc) {
-    if (action === "SELL") {
-      subDesc.innerText = `Sell on rejection at the bearish FVG.`;
+    if (!approved || action === "WAIT") {
+      subDesc.innerText = "No approved trade setup is available.";
+    } else if (action === "SELL") {
+      subDesc.innerText = data.smart_analysis?.synthesized_cause_en || "Approved sell setup; review reported levels and risk.";
     } else {
-      subDesc.innerText = `Buy on bounce from bullish Order Block at OTE 0.705.`;
+      subDesc.innerText = data.smart_analysis?.synthesized_cause_en || "Approved buy setup; review reported levels and risk.";
     }
   }
 
   // Calculate SL
-  const sl = data.stop_loss ? Number(data.stop_loss).toFixed(decimals) : (action === "SELL" ? (vPrice * 1.0025).toFixed(decimals) : (vPrice * 0.9975).toFixed(decimals));
+  const sl = approved && Number.isFinite(stopLoss) && stopLoss > 0 ? stopLoss.toFixed(decimals) : "N/A";
   if (slVal) slVal.innerText = sl;
-  if (invalPrice) invalPrice.innerText = sl;
+  if (invalPrice) invalPrice.innerText = approved ? sl : "N/A";
 
-  // Calculate TP1
-  const tp = data.take_profit_1 ? Number(data.take_profit_1).toFixed(decimals) : (action === "SELL" ? (vPrice * 0.994).toFixed(decimals) : (vPrice * 1.006).toFixed(decimals));
+  const tp = approved && Number.isFinite(takeProfit) && takeProfit > 0 ? takeProfit.toFixed(decimals) : "N/A";
   if (tpVal) {
-    tpVal.innerText = data.setup_status === "APPROVE" ? `${tp} (${data.risk_reward_ratio || "1:2.4"})` : "Set by the confirming scan";
+    tpVal.innerText = approved ? `${tp} (${data.risk_reward_ratio || "R:R N/A"})` : "N/A · Awaiting approved scan";
   }
 
   // Valid Until in GMT+7
   const now = new Date();
-  const validUntil = new Date(now.getTime() + 4 * 60 * 60 * 1000);
-  const hh = String(validUntil.getHours()).padStart(2, "0");
-  const mm = String(validUntil.getMinutes()).padStart(2, "0");
-  if (validVal) validVal.innerText = `${hh}:${mm} (GMT+7)`;
+  const expiryRaw = data.valid_until || data.expires_at;
+  const expiry = expiryRaw ? new Date(expiryRaw) : null;
+  if (validVal) validVal.innerText = approved && expiry && Number.isFinite(expiry.getTime())
+    ? `${expiry.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone})`
+    : "N/A";
 
   // Invalidation & Why
   if (whyText) {
-    whyText.innerText = data.smart_analysis?.synthesized_cause_en || (action === "SELL" ? "The analysis leans bearish due to higher timeframe distribution and DXY momentum." : "The analysis leans bullish due to liquidity sweep into discount OTE zone.");
+    whyText.innerText = data.smart_analysis?.synthesized_cause_en || (approved ? "Approved setup; review the reported levels and risk before acting." : "No approved setup. Wait for a fresh market scan.");
   }
   if (whyKh) {
-    whyKh.innerText = data.smart_analysis?.synthesized_cause_kh || (action === "SELL" ? "រចនាសម្ព័ន្ធទីផ្សារកម្រិតខ្ពស់បង្ហាញពីសម្ពាធលក់ និងមានការដកថយទៅរកតំបន់ FVG។" : "រចនាសម្ព័ន្ធទីផ្សារកម្រិតខ្ពស់បង្ហាញពីសម្ពាធទិញ និងមានការដកថយចូលតំបន់ OTE Discount។");
+    whyKh.innerText = data.smart_analysis?.synthesized_cause_kh || (approved ? "សញ្ញានេះត្រូវបានអនុម័ត។ សូមពិនិត្យតម្លៃ និងហានិភ័យមុនធ្វើសកម្មភាព។" : "មិនមានសញ្ញាដែលបានអនុម័តទេ។ សូមរង់ចាំការស្កេនទីផ្សារថ្មី។");
   }
 
   // Armed alert banner
   if (armedText) {
-    armedText.innerText = `Alert armed at ${Number(rangeLow).toLocaleString()} — we re-check the moment price gets there ✓`;
+    armedText.innerText = approved && hasEntry ? `Approved entry reference: ${Number(rangeLow).toLocaleString()}` : "No approved entry level available.";
   }
 
   // Next check candle
@@ -2467,10 +2570,10 @@ function updateCockpitPlanCard(data) {
 
   // Toast
   if (toastText) {
-    if (data.setup_status === "APPROVE") {
-      toastText.innerText = `⚡ High-probability institutional setup active — execution levels verified.`;
+    if (approved) {
+      toastText.innerText = `⚡ Approved setup loaded. Review its levels before recording a paper trade.`;
     } else {
-      toastText.innerText = `Nothing new — the same no-setup read as a moment ago.`;
+      toastText.innerText = `No approved setup is available from this scan.`;
     }
   }
 
@@ -2502,25 +2605,53 @@ let currentCalculatedLots = "0.08 Lots";
 
 async function executePlanTradeBridge() {
   const btn = document.getElementById("btn-cockpit-execute");
+  const ticketButtonLabel = () => isKhmer
+    ? "🧾 កត់ត្រាជួញដូរសាកល្បង និងផ្ញើសំបុត្រជូនដំណឹង"
+    : "🧾 Record Paper Trade & Send Manual Ticket";
+  const restoreButton = () => {
+    if (!btn) return;
+    btn.disabled = false;
+    btn.innerHTML = `<span id="t-cockpit-execute">${ticketButtonLabel()}</span>`;
+  };
+  const reportError = (message) => {
+    alert(message);
+    restoreButton();
+  };
+
+  const analysis = latestAnalysisData;
+  const rawDirection = String(analysis?.proposed_direction || "").toUpperCase();
+  const dir = rawDirection === "LONG" ? "BUY" : (rawDirection === "SHORT" ? "SELL" : rawDirection);
+  const entry = Number(analysis?.entry_price);
+  const sl = Number(analysis?.stop_loss);
+  const tp1 = Number(analysis?.take_profit_1);
+  const riskPct = Number(localStorage.getItem("zyrox_risk_cap") || "0.5");
+  const rrFloor = Number(localStorage.getItem("zyrox_risk_floor") || "2.0");
+  if (analysis?.setup_status !== "APPROVE" || !["BUY", "SELL"].includes(dir)) {
+    reportError("No approved BUY/SELL setup is available. Run a fresh scan and wait for approval.");
+    return;
+  }
+  if (![entry, sl, tp1].every(value => Number.isFinite(value) && value > 0)) {
+    reportError("The approved setup is missing a valid entry, stop-loss, or take-profit level.");
+    return;
+  }
+  if ((dir === "BUY" && !(sl < entry && entry < tp1)) || (dir === "SELL" && !(sl > entry && entry > tp1))) {
+    reportError("The approved setup has price levels that do not match its direction. No ticket was sent.");
+    return;
+  }
+  if (!Number.isFinite(riskPct) || riskPct < 0.1 || riskPct > 2 || !Number.isFinite(rrFloor) || rrFloor < 2 || rrFloor > 3) {
+    reportError("Saved paper-trading risk preferences are invalid. Update the risk settings before continuing.");
+    return;
+  }
+  const actualRR = Math.abs(tp1 - entry) / Math.abs(entry - sl);
+  if (actualRR < rrFloor) {
+    reportError(`This setup's calculated R:R (1:${actualRR.toFixed(2)}) is below your saved 1:${rrFloor.toFixed(1)} paper-ticket minimum.`);
+    return;
+  }
+
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<span>⏳ Dispatching to MT5 / Telegram...</span>`;
+    btn.innerHTML = `<span>⏳ Recording paper trade & sending manual ticket...</span>`;
   }
-
-  const slEl = document.getElementById("plan-sl-val");
-  const tpEl = document.getElementById("plan-tp-val");
-  const planBadge = document.getElementById("plan-title-badge");
-
-  let dir = "BUY";
-  if (planBadge && planBadge.innerText.includes("SELL")) {
-    dir = "SELL";
-  } else if (latestAnalysisData?.proposed_direction) {
-    dir = latestAnalysisData.proposed_direction;
-  }
-
-  const entry = latestAnalysisData?.entry_price || latestAnalysisData?.verified_price || 2740.0;
-  const sl = slEl ? parseFloat(slEl.innerText.replace(/[^0-9.]/g, '')) || (entry * 0.9975) : (entry * 0.9975);
-  const tp1 = tpEl ? parseFloat(tpEl.innerText.replace(/[^0-9.]/g, '')) || (entry * 1.006) : (entry * 1.006);
 
   try {
     const res = await fetch(`${API_BASE}/api/v1/trade/execute-bridge`, {
@@ -2532,39 +2663,34 @@ async function executePlanTradeBridge() {
         entry_price: entry,
         stop_loss: sl,
         take_profit_1: tp1,
-        lot_size: currentCalculatedLots,
-        risk_percentage: calcRiskPct,
-        account_balance: calcBalance,
-        source: "Cockpit 1-Click Bridge"
+        risk_percentage: riskPct,
+        source: "Cockpit paper-trade ticket"
       })
     });
 
     const data = await res.json();
     if (data.success) {
+      const paperStatus = data.telegram_dispatched
+        ? (data.paper_trade?.success ? "Telegram ticket sent · paper trade recorded" : "Telegram ticket sent · no paper trade opened")
+        : (data.paper_trade?.success ? "Paper trade recorded · Telegram not sent" : "Ticket not sent");
       const toast = document.getElementById("cockpit-status-toast");
       if (toast) {
-        toast.innerHTML = `<span class="toast-clock">⚡</span> <b>Ticket ${data.ticket_id} Executed · Risk Guard Active · Ledger Synced</b>`;
+        toast.innerHTML = `<span class="toast-clock">⚡</span> <b>Ticket ${escapeHtml(String(data.ticket_id || ""))} sent · ${paperStatus}</b>`;
       }
       if (btn) {
-        btn.innerHTML = `<span>✓ Ticket ${data.ticket_id} Sent (-1004341134868)</span>`;
+        btn.innerHTML = `<span>✓ ${escapeHtml(paperStatus)} · ${escapeHtml(String(data.ticket_id || ""))}</span>`;
         setTimeout(() => {
-          btn.innerHTML = `<svg class="btn-svg-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg> <span id="t-cockpit-execute">🚀 1-Click Execute & Dispatch to Telegram</span>`;
-          btn.disabled = false;
+          restoreButton();
         }, 3500);
       }
       // Refresh paper trading ledger
       fetchHealthAndPaper();
     } else {
-      alert("Trade execution returned unexpected status.");
-      if (btn) btn.disabled = false;
+      reportError(data.detail || data.message || "The paper-trade ticket could not be created.");
     }
   } catch (err) {
     console.error("Execute bridge error:", err);
-    alert("Connection error executing trade bridge. Ensure server is running.");
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `<span>🚀 1-Click Execute & Dispatch to Telegram</span>`;
-    }
+    reportError("Connection error creating the paper-trade ticket. Check the server and try again.");
   }
 }
 
@@ -2586,17 +2712,21 @@ async function broadcastDailyDigest() {
       method: "POST"
     });
     const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Telegram dispatch failed.");
 
     const toast = document.getElementById("cockpit-status-toast");
     if (toast) {
-      toast.innerHTML = `<span class="toast-clock">📢</span> <b>Daily Intelligence Briefing Dispatched to Telegram (-1004341134868) · ${data.setups_included} Setups Included</b>`;
+      const dispatchMessage = data.success
+        ? `Briefing sent · ${Number(data.setups_included) || 0} approved setups`
+        : "Telegram delivery is not configured or did not succeed.";
+      toast.innerHTML = `<span class="toast-clock">📢</span> <b>${escapeHtml(dispatchMessage)}</b>`;
     }
 
     btns.forEach(b => {
       if (b) {
-        b.innerText = "✓ Dispatched to Telegram!";
+        b.innerText = data.success ? "✓ Sent to Telegram" : "Delivery unavailable";
         setTimeout(() => {
-          b.innerText = b.id && b.id.includes("pane") ? "🚀 Broadcast Digest to Telegram Now" : "📢 Daily Digest (-1004341134868)";
+          b.innerText = b.id && b.id.includes("pane") ? "🚀 Broadcast Digest to Telegram Now" : "📢 Daily Digest";
           b.disabled = false;
         }, 3000);
       }
@@ -2606,7 +2736,7 @@ async function broadcastDailyDigest() {
     btns.forEach(b => {
       if (b) {
         b.disabled = false;
-        b.innerText = "📢 Daily Digest (-1004341134868)";
+        b.innerText = "📢 Daily Digest";
       }
     });
   }
@@ -2714,18 +2844,24 @@ async function loadOverviewData() {
       const bData = await bridgeRes.json();
       const provEl = document.getElementById("ov-feed-provider");
       const latEl = document.getElementById("ov-feed-latency");
-      if (bData.status === "CONNECTED") {
+      if (bData.status === "CONNECTED" && bData.is_active_for_signals) {
         if (provEl) {
-          provEl.innerText = `${bData.broker || "Exness"} MT5 (Live)`;
+          provEl.innerText = `${bData.broker || "MT5"} · fresh ticks received`;
           provEl.className = "section-kpi-val text-green";
         }
-        if (latEl) latEl.innerText = `Ping: ${bData.terminal_ping_ms || 12}ms · Fresh`;
-      } else {
+        if (latEl) latEl.innerText = Number(bData.terminal_ping_ms) > 0 ? `Terminal ping: ${bData.terminal_ping_ms}ms` : "Fresh quote received; ping not reported";
+      } else if (bData.status === "CONNECTED") {
         if (provEl) {
-          provEl.innerText = "Yahoo / Binance (Fallback)";
+          provEl.innerText = "MT5 bridge connected · no fresh ticks";
           provEl.className = "section-kpi-val text-gold";
         }
-        if (latEl) latEl.innerText = "MT5 Standby · Awaiting Bridge";
+        if (latEl) latEl.innerText = "Waiting for a verified bid/ask quote";
+      } else {
+        if (provEl) {
+          provEl.innerText = `MT5 bridge ${String(bData.status || "DISCONNECTED").toLowerCase()}`;
+          provEl.className = "section-kpi-val text-muted";
+        }
+        if (latEl) latEl.innerText = bData.status === "CONNECTED" ? "Waiting for a verified market tick" : "Broker feed not connected";
       }
     }
 
@@ -2734,15 +2870,35 @@ async function loadOverviewData() {
     if (pRes.ok) {
       const pData = await pRes.json();
       const gold = pData.prices && pData.prices["XAUUSD"];
+      const feedEl = document.getElementById("ov-feed-provider");
+      const feedDetailEl = document.getElementById("ov-feed-latency");
       if (gold) {
+        const goldSource = gold.provider || gold.source || "Unknown provider";
+        if (feedEl) {
+          feedEl.innerText = gold.verified ? goldSource : `Unverified / ${goldSource}`;
+          feedEl.className = `section-kpi-val ${gold.verified && gold.source === "EXNESS_MT5" ? "text-green" : "text-gold"}`;
+        }
+        if (feedDetailEl) {
+          feedDetailEl.innerText = gold.timestamp ? `Quote timestamp: ${new Date(gold.timestamp).toLocaleString()}` : `Feed status: ${gold.freshness || "unknown"}`;
+        }
         const ap = document.getElementById("ov-active-price");
         if (ap) ap.innerText = `$${Number(gold.price).toFixed(2)}`;
         const achg = document.getElementById("ov-active-change");
         if (achg) {
-          const c = gold.change_24h || 0.0;
-          achg.innerText = `24h Change: ${c >= 0 ? '+' : ''}${c.toFixed(2)}%`;
-          achg.className = `section-kpi-sub ${c >= 0 ? 'text-green' : 'text-red'}`;
+          const c = gold.change_24h !== undefined && gold.change_24h !== null ? Number(gold.change_24h) : null;
+          achg.innerText = c === null ? "24h Change: --" : `24h Change: ${c >= 0 ? '+' : ''}${c.toFixed(2)}%`;
+          if (c !== null) achg.className = `section-kpi-sub ${c >= 0 ? 'text-green' : 'text-red'}`;
         }
+      } else {
+        if (feedEl) {
+          feedEl.innerText = "No verified XAUUSD quote";
+          feedEl.className = "section-kpi-val text-muted";
+        }
+        if (feedDetailEl) feedDetailEl.innerText = "Waiting for a connected market-data provider";
+        const ap = document.getElementById("ov-active-price");
+        const achg = document.getElementById("ov-active-change");
+        if (ap) ap.innerText = "--";
+        if (achg) achg.innerText = "24h Change: --";
       }
 
       // Quick tape table
@@ -2754,13 +2910,14 @@ async function loadOverviewData() {
           if (!it) return "";
           const isForex = k.includes("USD") && !k.includes("XAU") && !k.includes("USDT") && !k.includes("BTC");
           const pFmt = isForex ? Number(it.price).toFixed(4) : (Number(it.price) > 100 ? `$${Number(it.price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${Number(it.price)}`);
-          const c24 = it.change_24h !== undefined ? Number(it.change_24h) : 0.0;
+          const c24 = it.change_24h !== undefined && it.change_24h !== null ? Number(it.change_24h) : null;
+          const c24Text = c24 === null ? "--" : `${c24 >= 0 ? '+' : ''}${c24.toFixed(2)}%`;
           return `
             <tr>
               <td><b>${k}</b></td>
               <td>${pFmt}</td>
-              <td class="${c24 >= 0 ? 'text-green' : 'text-red'}"><b>${c24 >= 0 ? '+' : ''}${c24.toFixed(2)}%</b></td>
-              <td><span class="provider-pill">${it.provider || it.source}</span></td>
+              <td class="${c24 === null ? 'text-muted' : (c24 >= 0 ? 'text-green' : 'text-red')}"><b>${c24Text}</b></td>
+              <td><span class="provider-pill">${escapeHtml(String(it.provider || it.source || "N/A"))}</span></td>
               <td><button class="btn btn-outline btn-xs" onclick="selectSymbol('${k}', 'OANDA:${k}'); switchNavPane('charts');">Chart</button></td>
             </tr>
           `;
@@ -2817,7 +2974,7 @@ async function loadOverviewData() {
         if (spotContainer) {
           spotContainer.innerHTML = `
             <div class="text-muted text-sm" style="padding:16px 0;">
-              No qualified setups meet the strict institutional risk filter (R:R ≥ 1:2.0) at this moment.
+              No qualified setups meet the server-configured risk filter at this moment.
               System is continuously scanning order blocks and liquidity sweeps.
             </div>
             <button class="btn btn-gold btn-sm" onclick="triggerScan()">⚡ Run Market Scan</button>
@@ -2884,10 +3041,10 @@ function renderMarketsTable() {
     const fmtPrice = p !== null ? (isForex ? p.toFixed(4) : (p > 100 ? `$${p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${p}`)) : "---";
     const bid = pInfo && pInfo.bid ? (isForex ? Number(pInfo.bid).toFixed(4) : `$${Number(pInfo.bid).toFixed(2)}`) : "---";
     const ask = pInfo && pInfo.ask ? (isForex ? Number(pInfo.ask).toFixed(4) : `$${Number(pInfo.ask).toFixed(2)}`) : "---";
-    const spread = pInfo && pInfo.spread !== undefined ? `${pInfo.spread} pts` : "---";
-    const c24 = pInfo && pInfo.change_24h !== undefined ? Number(pInfo.change_24h) : 0.0;
-    const chgText = pInfo ? (c24 >= 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`) : "--";
-    const source = pInfo ? (pInfo.provider || pInfo.source) : "Awaiting data";
+    const spread = pInfo && pInfo.spread !== undefined && pInfo.spread !== null ? `${pInfo.spread} pts` : "---";
+    const c24 = pInfo && pInfo.change_24h !== undefined && pInfo.change_24h !== null ? Number(pInfo.change_24h) : null;
+    const chgText = c24 === null ? "--" : (c24 >= 0 ? `+${c24.toFixed(2)}%` : `${c24.toFixed(2)}%`);
+    const source = pInfo ? (pInfo.provider || pInfo.source || "N/A") : "Awaiting data";
     const isLive = pInfo && pInfo.source === "EXNESS_MT5";
     const statusPill = isLive ? `<span class="badge-active">MT5 LIVE</span>` : `<span class="provider-pill">${pInfo ? 'FALLBACK' : 'OFFLINE'}</span>`;
 
@@ -2903,8 +3060,8 @@ function renderMarketsTable() {
         <td>${bid}</td>
         <td>${ask}</td>
         <td><span class="text-muted">${spread}</span></td>
-        <td class="${c24 >= 0 ? 'text-green' : 'text-red'}"><b>${chgText}</b></td>
-        <td><span class="provider-pill">${source}</span></td>
+        <td class="${c24 === null ? 'text-muted' : (c24 >= 0 ? 'text-green' : 'text-red')}"><b>${chgText}</b></td>
+        <td><span class="provider-pill">${escapeHtml(String(source))}</span></td>
         <td>${statusPill}</td>
         <td>
           <button class="btn btn-outline btn-xs" onclick="selectSymbol('${item.symbol}', '${item.tv}'); switchNavPane('charts');">📈 Chart</button>
@@ -2934,7 +3091,7 @@ async function loadSignalsCenterData() {
           <div style="font-size:32px; margin-bottom:12px;">🛡️</div>
           <div style="font-size:16px; font-weight:700; color:var(--zyrox-text);">No Qualified Active Signals</div>
           <div style="color:var(--zyrox-text-secondary); max-width:480px; margin:8px auto 20px auto; font-size:13px; line-height:1.6;">
-            The quantitative engine enforces strict R:R ≥ 1:2.0, multi-timeframe liquidity sweep confirmation, and MT5 feed alignment before issuing any signal.
+            No active signal records are currently available. Check that a verified market-data source is configured before generating a new analysis.
           </div>
           <button class="btn btn-gold btn-sm" onclick="triggerGenerateSignalAction()">⚡ Run Signal Generator Now</button>
         </div>
@@ -2946,48 +3103,56 @@ async function loadSignalsCenterData() {
       const isBuy = s.direction === "BUY";
       const sideCls = isBuy ? "side-buy" : "side-sell";
       const createdStr = s.created_at ? new Date(s.created_at).toLocaleString() : "Just now";
+      const fmtPrice = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "N/A";
+      const rrValue = s.risk_reward_ratio == null || !Number.isFinite(Number(s.risk_reward_ratio)) ? "N/A" : Number(s.risk_reward_ratio).toFixed(1);
+      const rawScore = s.setup_score ?? s.confidence;
+      const scoreNumber = rawScore == null ? NaN : Number(rawScore);
+      const scoreDisplay = Number.isFinite(scoreNumber) ? `${Math.round(scoreNumber > 1 ? scoreNumber : scoreNumber * 100)}%` : "N/A";
+      const rawSymbol = String(s.symbol || "");
+      const safeSymbol = /^[A-Z0-9._-]{1,20}$/.test(rawSymbol) ? rawSymbol : "";
+      const safeDirection = escapeHtml(String(s.direction || "N/A"));
       return `
         <div class="signal-card ${sideCls}">
           <div class="signal-card-header">
             <div style="display:flex; align-items:center; gap:8px;">
-              ${getAssetRealLogoHTML(s.symbol)}
-              <span style="font-weight:700; font-size:16px;">${s.symbol}</span>
-              <span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${s.direction}</span>
+              ${getAssetRealLogoHTML(safeSymbol)}
+              <span style="font-weight:700; font-size:16px;">${escapeHtml(safeSymbol || "N/A")}</span>
+              <span class="badge-side ${isBuy ? 'badge-buy' : 'badge-sell'}">${safeDirection}</span>
             </div>
-            <span class="provider-pill">${s.status}</span>
+            <span class="provider-pill">${escapeHtml(String(s.status || "N/A"))}</span>
           </div>
 
           <div class="signal-card-body">
             <div class="sig-level-row">
               <span class="sig-lvl-label">Entry Range:</span>
-              <span class="sig-lvl-val">$${Number(s.entry_zone_min).toFixed(2)} – $${Number(s.entry_zone_max).toFixed(2)}</span>
+              <span class="sig-lvl-val">$${fmtPrice(s.entry_zone_min)} – $${fmtPrice(s.entry_zone_max)}</span>
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Stop Loss (SL):</span>
-              <span class="sig-lvl-val text-red">$${Number(s.stop_loss).toFixed(2)}</span>
+              <span class="sig-lvl-val text-red">$${fmtPrice(s.stop_loss)}</span>
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Take Profit 1:</span>
-              <span class="sig-lvl-val text-green">$${Number(s.take_profit_1).toFixed(2)}</span>
+              <span class="sig-lvl-val text-green">$${fmtPrice(s.take_profit_1)}</span>
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Risk-to-Reward:</span>
-              <span class="sig-lvl-val text-gold">1:${Number(s.risk_reward_ratio).toFixed(1)}</span>
+              <span class="sig-lvl-val text-gold">${rrValue === "N/A" ? "N/A" : `1:${rrValue}`}</span>
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Setup Confidence:</span>
-              <span class="sig-lvl-val text-cyan">${Math.round((s.setup_score || s.confidence || 0.8) * 100)}%</span>
+              <span class="sig-lvl-val text-cyan">${scoreDisplay}</span>
             </div>
             <div class="sig-level-row">
               <span class="sig-lvl-label">Mode / Source:</span>
-              <span class="sig-lvl-val text-muted">${s.execution_mode || 'PAPER'} · ${s.data_source || 'DATABASE'}</span>
+              <span class="sig-lvl-val text-muted">${escapeHtml(String(s.execution_mode || 'N/A'))} · ${escapeHtml(String(s.data_source || 'N/A'))}</span>
             </div>
           </div>
 
           <div class="signal-card-footer">
-            <span class="text-muted" style="font-size:11px;">${createdStr}</span>
+            <span class="text-muted" style="font-size:11px;">${escapeHtml(createdStr)}</span>
             <div style="display:flex; gap:6px;">
-              <button class="btn btn-outline btn-xs" onclick="selectSymbol('${s.symbol}', 'OANDA:${s.symbol}'); switchNavPane('charts');">📈 Chart</button>
+              <button class="btn btn-outline btn-xs" onclick="selectSymbol('${safeSymbol}', 'OANDA:${safeSymbol}'); switchNavPane('charts');">📈 Chart</button>
               <button class="btn btn-gold btn-xs" onclick="sendTelegramTestSignalAction()">✈ Dispatch</button>
             </div>
           </div>
@@ -2995,7 +3160,7 @@ async function loadSignalsCenterData() {
       `;
     }).join("");
   } catch (err) {
-    container.innerHTML = `<div class="error-banner">Failed to load signals: ${err.message}</div>`;
+    container.innerHTML = `<div class="error-banner">Failed to load signals: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -3062,40 +3227,42 @@ async function loadSignalsHistoryData() {
     }
 
     tbody.innerHTML = sigs.map(s => {
+      const rawSymbol = String(s.symbol || "");
+      const safeSymbol = /^[A-Z0-9._-]{1,20}$/.test(rawSymbol) ? rawSymbol : "";
       const isBuy = s.direction === "BUY";
       const statusPill = s.status === "TP_HIT" 
         ? `<span class="badge-active" style="background:rgba(0,217,154,0.15); color:var(--zyrox-primary);">TP HIT</span>`
         : (s.status === "SL_HIT" 
           ? `<span class="badge-expired" style="background:rgba(255,100,124,0.15); color:var(--zyrox-danger);">SL HIT</span>`
-          : `<span class="provider-pill">${s.status}</span>`);
+          : `<span class="provider-pill">${escapeHtml(String(s.status || "N/A"))}</span>`);
 
       const rReturn = s.outcome_r !== undefined && s.outcome_r !== null 
         ? (Number(s.outcome_r) > 0 ? `+${Number(s.outcome_r).toFixed(1)}R` : `${Number(s.outcome_r).toFixed(1)}R`) 
-        : (s.status === "TP_HIT" ? `+${Number(s.risk_reward_ratio || 2.0).toFixed(1)}R` : (s.status === "SL_HIT" ? "-1.0R" : "--"));
+        : "N/A";
 
       const rCls = rReturn.startsWith("+") ? "text-green" : (rReturn.startsWith("-") ? "text-red" : "text-muted");
       const dt = s.created_at ? new Date(s.created_at).toLocaleString() : "N/A";
 
       return `
         <tr>
-          <td><code style="color:var(--zyrox-primary);">${s.id || s.signal_id || '--'}</code></td>
-          <td><b>${s.symbol}</b></td>
-          <td><span class="${isBuy ? 'text-green' : 'text-red'} font-bold">${s.direction}</span></td>
+          <td><code style="color:var(--zyrox-primary);">${escapeHtml(String(s.id || s.signal_id || '--'))}</code></td>
+          <td><b>${escapeHtml(safeSymbol || "N/A")}</b></td>
+          <td><span class="${isBuy ? 'text-green' : 'text-red'} font-bold">${escapeHtml(String(s.direction || "N/A"))}</span></td>
           <td>$${Number(s.entry_zone_min).toFixed(2)} – $${Number(s.entry_zone_max).toFixed(2)}</td>
           <td class="text-red">$${Number(s.stop_loss).toFixed(2)}</td>
           <td class="text-green">$${Number(s.take_profit_1).toFixed(2)}</td>
           <td class="${rCls} font-bold">${rReturn}</td>
           <td>${statusPill}</td>
-          <td><span class="text-secondary" style="font-size:11px;">${dt}</span></td>
-          <td><span class="provider-pill">${s.execution_mode || 'PAPER'}</span></td>
+          <td><span class="text-secondary" style="font-size:11px;">${escapeHtml(dt)}</span></td>
+          <td><span class="provider-pill">${escapeHtml(String(s.execution_mode || 'N/A'))}</span></td>
           <td>
-            <button class="btn btn-outline btn-xs" onclick="selectSymbol('${s.symbol}', 'OANDA:${s.symbol}'); switchNavPane('charts');">Chart</button>
+            <button class="btn btn-outline btn-xs" onclick="selectSymbol('${safeSymbol}', 'OANDA:${safeSymbol}'); switchNavPane('charts');">Chart</button>
           </td>
         </tr>
       `;
     }).join("");
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red" style="padding:20px;">Error loading history: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red" style="padding:20px;">Error loading history: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -3142,22 +3309,18 @@ async function loadPerformanceAnalyticsData() {
     // Populate strategy breakdown table
     const breakdownBody = document.getElementById("analytics-breakdown-body");
     if (breakdownBody) {
-      const rows = data.breakdown || [
-        { symbol: "XAUUSD", tf: "M15", version: "ZYROX-SMC-v2.1", count: data.total_signals || 0, winrate: data.win_rate_percent, pf: data.profit_factor, r: data.expectancy_r, status: "ACTIVE" },
-        { symbol: "EURUSD", tf: "H1", version: "ZYROX-ICT-v1.4", count: 0, winrate: null, pf: null, r: null, status: "AWAITING_DATA" },
-        { symbol: "BTCUSDT", tf: "M15", version: "ZYROX-CRYPTO-v2.0", count: 0, winrate: null, pf: null, r: null, status: "AWAITING_DATA" }
-      ];
+      const rows = Array.isArray(data.breakdown) ? data.breakdown : [];
 
       breakdownBody.innerHTML = rows.map(r => `
         <tr>
-          <td><b>${r.symbol}</b></td>
-          <td><span class="provider-pill">${r.tf}</span></td>
-          <td><code style="color:var(--zyrox-text-secondary);">${r.version}</code></td>
-          <td>${r.count}</td>
-          <td class="text-green">${r.winrate !== null ? `${r.winrate}%` : '--'}</td>
-          <td class="text-gold">${r.pf !== null ? r.pf : '--'}</td>
-          <td class="text-cyan">${r.r !== null ? `${r.r} R` : '--'}</td>
-          <td><span class="provider-pill">${r.status}</span></td>
+          <td><b>${escapeHtml(String(r.symbol || "N/A"))}</b></td>
+          <td><span class="provider-pill">${escapeHtml(String(r.tf || "N/A"))}</span></td>
+          <td><code style="color:var(--zyrox-text-secondary);">${escapeHtml(String(r.version || "N/A"))}</code></td>
+          <td>${Number.isFinite(Number(r.count)) ? Number(r.count) : "N/A"}</td>
+          <td class="text-green">${r.winrate != null && Number.isFinite(Number(r.winrate)) ? `${Number(r.winrate)}%` : '--'}</td>
+          <td class="text-gold">${r.pf != null && Number.isFinite(Number(r.pf)) ? Number(r.pf) : '--'}</td>
+          <td class="text-cyan">${r.r != null && Number.isFinite(Number(r.r)) ? `${Number(r.r)} R` : '--'}</td>
+          <td><span class="provider-pill">${escapeHtml(String(r.status || "N/A"))}</span></td>
         </tr>
       `).join("");
     }
@@ -3179,21 +3342,22 @@ async function loadTelegramStatusData() {
       const chatEl = document.getElementById("tg-chat-id");
       const healthEl = document.getElementById("tg-delivery-health");
 
-      if (data.connected) {
+      if (data.configured) {
         if (statusEl) {
-          statusEl.innerText = "CONNECTED (Online)";
-          statusEl.className = "section-kpi-val text-green";
-        }
-        if (userEl) userEl.innerText = `Bot: @${data.bot_username || "TaikryTradingBot"}`;
-        if (chatEl) chatEl.innerText = data.chat_id || "-1004341134868";
-        if (healthEl) healthEl.innerText = "100% OK · Operational";
-      } else {
-        if (statusEl) {
-          statusEl.innerText = "STANDBY (Configured)";
+          statusEl.innerText = "CONFIGURED (connectivity not checked)";
           statusEl.className = "section-kpi-val text-gold";
         }
-        if (userEl) userEl.innerText = `Bot: @${data.bot_username || "TaikryTradingBot"}`;
-        if (chatEl) chatEl.innerText = data.chat_id || "Configured via ENV";
+        if (userEl) userEl.innerText = data.bot_username ? `Bot: @${data.bot_username}` : "Bot username: not configured";
+        if (chatEl) chatEl.innerText = data.default_chat_id || "Chat ID: not configured";
+        if (healthEl) healthEl.innerText = "Delivery health not verified";
+      } else {
+        if (statusEl) {
+          statusEl.innerText = "NOT CONFIGURED";
+          statusEl.className = "section-kpi-val text-muted";
+        }
+        if (userEl) userEl.innerText = data.bot_username ? `Bot: @${data.bot_username}` : "Bot username: not configured";
+        if (chatEl) chatEl.innerText = data.default_chat_id || "Chat ID: not configured";
+        if (healthEl) healthEl.innerText = "Not available";
       }
     }
   } catch (err) {
@@ -3244,14 +3408,22 @@ async function loadMT5BridgeData() {
     const topDot = document.getElementById("top-bridge-dot");
     const topLabel = document.getElementById("top-bridge-label");
 
-    if (data.status === "CONNECTED") {
+    if (data.status === "CONNECTED" && data.is_active_for_signals) {
       if (heroState) {
         heroState.innerText = "CONNECTED";
         heroState.className = "section-kpi-val text-green";
       }
-      if (heroDesc) heroDesc.innerText = `Active Feed · ${data.active_symbols?.length || 1} Symbols Streaming`;
+      if (heroDesc) heroDesc.innerText = `Fresh ticks · ${(data.fresh_tick_symbols || []).join(", ") || "symbol unavailable"}`;
       if (topDot) topDot.className = "bridge-status-dot bridge-connected";
-      if (topLabel) topLabel.innerText = "MT5: LIVE";
+      if (topLabel) topLabel.innerText = "MT5: FRESH TICKS";
+    } else if (data.status === "CONNECTED") {
+      if (heroState) {
+        heroState.innerText = "BRIDGE CONNECTED";
+        heroState.className = "section-kpi-val text-gold";
+      }
+      if (heroDesc) heroDesc.innerText = "Heartbeat is active; waiting for a fresh bid/ask tick.";
+      if (topDot) topDot.className = "bridge-status-dot bridge-stale";
+      if (topLabel) topLabel.innerText = "MT5: NO FRESH TICK";
     } else if (data.status === "STALE") {
       if (heroState) {
         heroState.innerText = "FEED STALE";
@@ -3270,8 +3442,9 @@ async function loadMT5BridgeData() {
       if (topLabel) topLabel.innerText = "MT5: STANDBY";
     }
 
-    if (brokerEl) brokerEl.innerText = data.broker || "Exness";
-    if (serverEl) serverEl.innerText = data.server || "Exness-Real";
+    const bridgeReported = data.status !== "DISCONNECTED";
+    if (brokerEl) brokerEl.innerText = bridgeReported ? (data.broker || "Not reported") : "Not connected";
+    if (serverEl) serverEl.innerText = bridgeReported ? (data.server || "Not reported") : "No server reported";
     if (ageEl) ageEl.innerText = data.seconds_since_last_activity !== null && data.seconds_since_last_activity !== undefined ? `${data.seconds_since_last_activity}s ago` : "--";
   } catch (err) {
     console.warn("loadMT5BridgeData error:", err);
@@ -3651,7 +3824,11 @@ function openImageZoom(src) {
   const overlay = document.createElement("div");
   overlay.className = "chart-img-modal-overlay";
   overlay.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;";
-  overlay.innerHTML = `<img src="${src}" style="max-width:92vw;max-height:92vh;border-radius:10px;border:2px solid rgba(56,189,248,0.5);box-shadow:0 0 30px rgba(0,0,0,0.9);object-fit:contain;">`;
+  const image = document.createElement("img");
+  image.src = src;
+  image.alt = "Uploaded chart preview";
+  image.style.cssText = "max-width:92vw;max-height:92vh;border-radius:10px;border:2px solid rgba(56,189,248,0.5);box-shadow:0 0 30px rgba(0,0,0,0.9);object-fit:contain;";
+  overlay.appendChild(image);
   overlay.onclick = () => {
     if (document.body.contains(overlay)) {
       document.body.removeChild(overlay);
@@ -3688,7 +3865,7 @@ function applySetupToFastTrade(action, entry, sl, tp1) {
 
   const toast = document.getElementById("cockpit-status-toast");
   if (toast) {
-    toast.innerHTML = `<span class="toast-clock">⚡</span> <b>Trade setup applied to Fast Trade (${action} @ ${entry}) ✓</b>`;
+    toast.innerHTML = `<span class="toast-clock">⚡</span> <b>Trade setup applied to Fast Trade (${escapeHtml(String(action))} @ ${escapeHtml(String(entry))}) ✓</b>`;
   }
 }
 
@@ -3802,17 +3979,24 @@ async function submitChatMessage() {
     const sl = trade.stop_loss !== null && trade.stop_loss !== undefined ? trade.stop_loss : "---";
     const tp1 = trade.take_profit_1 !== null && trade.take_profit_1 !== undefined ? trade.take_profit_1 : "---";
     const tp2 = trade.take_profit_2 !== null && trade.take_profit_2 !== undefined ? trade.take_profit_2 : "---";
-    const rr = trade.risk_reward_ratio || "1:2.0";
-    const confidence = trade.confidence || 85;
+    const rr = trade.risk_reward_ratio || "N/A";
+    const confidenceValue = Number(trade.confidence);
+    const confidence = Number.isFinite(confidenceValue) && confidenceValue >= 0 && confidenceValue <= 100
+      ? `${confidenceValue}%`
+      : "N/A";
 
     const actionBadgeClass = action === "BUY" ? "chat-action-buy" : (action === "SELL" ? "chat-action-sell" : "chat-action-hold");
     const actionIcon = action === "BUY" ? "🟢 BUY" : (action === "SELL" ? "🔴 SELL" : "🟡 HOLD");
-    const providerTag = `${data.provider ? data.provider.toUpperCase() : "REAL AI"} · ${data.model || "Frontier"} · ${data.latency_ms ? data.latency_ms + "ms" : ""}`;
+    const providerTag = [
+      data.provider ? data.provider.toUpperCase() : "Provider not reported",
+      data.model || "Model not reported",
+      data.latency_ms ? `${data.latency_ms}ms` : null
+    ].filter(Boolean).join(" · ");
 
     const khmerSummary = analysis.synthesis_summary_kh || "";
     const enSummary = analysis.synthesis_summary_en || "";
 
-    const copyText = `⚡ TAIKRY AI REAL SETUP
+    const copyText = `⚡ TAIKRY AI ANALYSIS OUTPUT — PAPER ONLY
 Asset: ${currentSymbol} (${currentTimeframe || "15m"})
 Action: ${action}
 Entry: ${entry}
@@ -3820,7 +4004,7 @@ Stop Loss: ${sl}
 Take Profit 1: ${tp1}
 Take Profit 2: ${tp2}
 Risk/Reward: ${rr}
-Confidence: ${confidence}%
+Confidence: ${confidence}
 Model: ${providerTag}
 វិភាគមើល: ${khmerSummary}`;
 
@@ -3858,7 +4042,7 @@ Model: ${providerTag}
               <span class="chat-setup-lbl">Risk:Reward Floor</span>
               <span style="font-weight:800; color:#38bdf8; font-size:12px;">${rr}</span>
               <span class="chat-setup-lbl" style="margin-left:12px;">Confidence</span>
-              <span style="font-weight:800; color:#ffd700; font-size:12px;">${confidence}%</span>
+              <span style="font-weight:800; color:#ffd700; font-size:12px;">${confidence}</span>
             </div>
           </div>
         </div>
@@ -3893,7 +4077,7 @@ Model: ${providerTag}
     console.error("AI Chat Error:", err);
     typingMsg.querySelector(".chat-text").innerHTML = `
       <div style="color:var(--accent-red); font-size:11.5px;">
-        ⚠️ Real AI temporarily unavailable (${escapeHtml(err.message)}). Please check connection or select another provider.
+        ⚠️ The selected cloud LLM provider is unavailable (${escapeHtml(err.message)}). Check its configuration or choose another provider.
       </div>
     `;
     stream.scrollTop = stream.scrollHeight;
@@ -3903,7 +4087,7 @@ Model: ${providerTag}
 
 function escapeHtml(text) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-  return text.replace(/[&<>"']/g, m => map[m]);
+  return String(text ?? "").replace(/[&<>"']/g, m => map[m]);
 }
 
 function setFastTradeDir(dir) {
@@ -3920,10 +4104,11 @@ function setFastTradeDir(dir) {
 
 function armCurrentAlert() {
   const price = document.getElementById("top-active-price")?.innerText || "---";
-  alert(`🔔 Alert armed for ${currentSymbol} at ${price}! Sentinel will monitor real-time ticks.`);
+  const message = "Price alerts are not connected yet. No background alert has been armed.";
+  alert(message);
   const toast = document.getElementById("cockpit-status-toast");
   if (toast) {
-    toast.innerHTML = `<span class="toast-clock">🔔</span> <b>Alert armed for ${currentSymbol} at ${price} ✓</b>`;
+    toast.innerHTML = `<span class="toast-clock">🔔</span> <b>${message}</b>`;
   }
 }
 
@@ -3962,7 +4147,7 @@ async function loadSignalLifecycles() {
     const signals = data.signals || [];
 
     if (signals.length === 0) {
-      container.innerHTML = `<div style="font-size:12px; color:#94a3b8; text-align:center; padding:14px; background:rgba(0,0,0,0.25); border-radius:8px;">No signals recorded yet. Trigger a market scan or wait for 24/7 Sentinel to detect an institutional setup.</div>`;
+      container.innerHTML = `<div style="font-size:12px; color:#94a3b8; text-align:center; padding:14px; background:rgba(0,0,0,0.25); border-radius:8px;">No signal history is available yet. Run a scan when verified market data is configured.</div>`;
       return;
     }
 
@@ -3981,31 +4166,33 @@ async function loadSignalLifecycles() {
       }[sig.current_state] || "badge-state-gray";
 
       const dirClass = sig.direction === "BUY" ? "val-green" : "val-red";
+      const fmtLifecyclePrice = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "N/A";
+      const updatedAt = sig.updated_at && !Number.isNaN(Date.parse(sig.updated_at)) ? new Date(sig.updated_at).toLocaleString() : "N/A";
       const reasonHtml = sig.invalidation_reason_en ? `
         <div class="lifecycle-reason">
-          <b>Reason (EN):</b> ${escapeHtml(sig.invalidation_reason_en)}<br>
-          ${sig.invalidation_reason_kh ? `<b>🇰🇭 មូលហេតុ:</b> ${escapeHtml(sig.invalidation_reason_kh)}` : ''}
+          <b>Reason (EN):</b> ${escapeHtml(String(sig.invalidation_reason_en))}<br>
+          ${sig.invalidation_reason_kh ? `<b>🇰🇭 មូលហេតុ:</b> ${escapeHtml(String(sig.invalidation_reason_kh))}` : ''}
         </div>
       ` : '';
 
       card.innerHTML = `
         <div class="lifecycle-header">
           <div>
-            <span style="font-weight:700; color:#fff;">${sig.symbol}</span>
-            <span class="${dirClass}" style="font-weight:700; margin-left:6px;">${sig.direction}</span>
-            <span style="color:#ffd700; font-size:11px; margin-left:8px;">⭐ ${sig.ai_score}%</span>
+            <span style="font-weight:700; color:#fff;">${escapeHtml(String(sig.symbol || "N/A"))}</span>
+            <span class="${dirClass}" style="font-weight:700; margin-left:6px;">${escapeHtml(String(sig.direction || "N/A"))}</span>
+            <span style="color:#ffd700; font-size:11px; margin-left:8px;">⭐ ${sig.ai_score != null && Number.isFinite(Number(sig.ai_score)) ? `${Number(sig.ai_score)}%` : "N/A"}</span>
           </div>
-          <span class="${stateBadgeClass}">${sig.current_state}</span>
+          <span class="${stateBadgeClass}">${escapeHtml(String(sig.current_state || "N/A"))}</span>
         </div>
         <div class="lifecycle-levels">
-          <span>Entry: <b>${sig.entry_price}</b></span>
-          <span>SL: <b style="color:#f87171;">${sig.stop_loss}</b></span>
-          <span>TP1: <b style="color:#34d399;">${sig.take_profit_1}</b></span>
-          <span>R:R: <b>${sig.risk_reward}</b></span>
+          <span>Entry: <b>${fmtLifecyclePrice(sig.entry_price)}</b></span>
+          <span>SL: <b style="color:#f87171;">${fmtLifecyclePrice(sig.stop_loss)}</b></span>
+          <span>TP1: <b style="color:#34d399;">${fmtLifecyclePrice(sig.take_profit_1)}</b></span>
+          <span>R:R: <b>${escapeHtml(String(sig.risk_reward ?? "N/A"))}</b></span>
         </div>
         ${reasonHtml}
         <div style="font-size:10px; color:#64748b; margin-top:2px;">
-          ID: <code>${sig.signal_id}</code> · Updated: ${sig.updated_at ? sig.updated_at.split('T')[1].split('.')[0] : ''} UTC
+          ID: <code>${escapeHtml(String(sig.signal_id || "N/A"))}</code> · Updated: ${escapeHtml(updatedAt)}
         </div>
       `;
       container.appendChild(card);
@@ -4035,8 +4222,8 @@ async function loadAgentRegistryStatus() {
     let html = `
       <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(56,189,248,0.25); border-radius:8px; padding:10px; margin-bottom:8px; font-size:11.5px;">
         <div style="font-weight:700; color:#38bdf8; margin-bottom:4px;">⚡ Hybrid AI Routing Cascade</div>
-        <div style="color:#cbd5e1;"><b>Order:</b> ${routerData.routing_policy?.priority_order?.join(" ➔ ") || "Groq ➔ Gemini ➔ DeepSeek ➔ Claude ➔ OpenAI"}</div>
-        <div style="color:#94a3b8; font-size:10.5px; margin-top:3px;">Circuit Breakers: All Operational · Failover Ready</div>
+        <div style="color:#cbd5e1;"><b>Order:</b> ${escapeHtml((Array.isArray(routerData.routing_policy?.priority_order) ? routerData.routing_policy.priority_order : []).join(" ➔ ") || "Not reported")}</div>
+        <div style="color:#94a3b8; font-size:10.5px; margin-top:3px;">Provider availability is checked per request.</div>
       </div>
     `;
 
@@ -4049,11 +4236,11 @@ async function loadAgentRegistryStatus() {
         <div class="registry-agent-row">
           <div>
             <div class="registry-agent-name">${escapeHtml(ag.agent_name)}</div>
-            <div style="font-size:10.5px; color:#64748b;">ID: <code>${ag.agent_id}</code> · Fallback: ${ag.fallback_policy}</div>
+            <div style="font-size:10.5px; color:#64748b;">ID: <code>${escapeHtml(String(ag.agent_id || "N/A"))}</code> · Fallback: ${escapeHtml(String(ag.fallback_policy || "N/A"))}</div>
           </div>
           <div class="registry-agent-meta">
             <span style="font-size:11px; color:#94a3b8; font-family:monospace;">${execCount} runs · ${avgMs}</span>
-            <span class="${statusClass}">${ag.status}</span>
+            <span class="${statusClass}">${escapeHtml(String(ag.status || "N/A"))}</span>
           </div>
         </div>
       `;
@@ -4097,13 +4284,14 @@ async function fetchXAUUSDSignalsAndStats() {
     const wrText = (allStats.win_rate_percent !== null && allStats.win_rate_percent !== undefined) ? `${allStats.win_rate_percent}%` : "N/A";
     const tp2Rate = (allStats.tp2_attainment_rate !== null && allStats.tp2_attainment_rate !== undefined) ? `${allStats.tp2_attainment_rate}%` : "N/A";
     const tp3Rate = (allStats.tp3_attainment_rate !== null && allStats.tp3_attainment_rate !== undefined) ? `${allStats.tp3_attainment_rate}%` : "N/A";
-    const netR = allStats.net_r_multiple !== undefined ? `${allStats.net_r_multiple > 0 ? '+' : ''}${allStats.net_r_multiple}R` : "+0.00R";
+    const netRValue = allStats.net_r_multiple == null ? NaN : Number(allStats.net_r_multiple);
+    const netR = Number.isFinite(netRValue) ? `${netRValue > 0 ? '+' : ''}${netRValue}R` : "N/A";
     const streak = stats.streaks?.current_streak || "None";
     const sentCount = quota.signals_sent_today !== undefined ? quota.signals_sent_today : 0;
-    const hardLimit = quota.daily_hard_limit !== undefined ? quota.daily_hard_limit : 4;
+    const hardLimit = quota.daily_hard_limit !== undefined ? quota.daily_hard_limit : "N/A";
 
     let quotaBadgeClass = "badge-neutral-soft";
-    if (sentCount >= 4) quotaBadgeClass = "badge-reject-soft";
+    if (Number.isFinite(Number(hardLimit)) && Number(hardLimit) > 0 && sentCount >= Number(hardLimit)) quotaBadgeClass = "badge-reject-soft";
     else if (sentCount >= 2) quotaBadgeClass = "badge-approve-soft";
 
     let html = `
@@ -4112,7 +4300,7 @@ async function fetchXAUUSDSignalsAndStats() {
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">
           <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${isKhmer ? "កូតាសញ្ញាថ្ងៃនេះ" : "Signals Today"}</div>
           <div style="font-size:18px; font-weight:800; color:#fbbf24; margin:2px 0;">${sentCount} / ${hardLimit}</div>
-          <div style="font-size:10px; color:#cbd5e1;">Target: 2–4 Daily</div>
+          <div style="font-size:10px; color:#cbd5e1;">Configured daily limit</div>
         </div>
 
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">
@@ -4130,7 +4318,7 @@ async function fetchXAUUSDSignalsAndStats() {
         <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">
           <div style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:700;">${isKhmer ? "ផលចំណេញសុទ្ធ" : "Net R-Multiple"}</div>
           <div style="font-size:16px; font-weight:800; color:#fbbf24; margin:2px 0;">${netR}</div>
-          <div style="font-size:10px; color:#94a3b8;">Streak: ${streak}</div>
+          <div style="font-size:10px; color:#94a3b8;">Streak: ${escapeHtml(String(streak))}</div>
         </div>
       </div>
 
@@ -4159,7 +4347,7 @@ async function fetchXAUUSDSignalsAndStats() {
         <div style="text-align:center; padding:24px 12px; background:rgba(0,0,0,0.2); border-radius:8px; border:1px dashed rgba(255,255,255,0.08);">
           <div style="font-size:24px; margin-bottom:6px;">🥇</div>
           <div style="font-weight:700; color:#cbd5e1; font-size:12px;">No XAUUSD signals sent yet today</div>
-          <div style="font-size:11px; color:#64748b; margin-top:4px;">The 24/7 AI multi-agent fleet targets 2–4 high-confluence setups (80%–95% score) without forcing trades.</div>
+          <div style="font-size:11px; color:#64748b; margin-top:4px;">Signal generation runs only while the service is running and data passes validation.</div>
         </div>
       `;
     } else {
@@ -4169,28 +4357,30 @@ async function fetchXAUUSDSignalsAndStats() {
         const dirColor = isBuy ? "#22c55e" : "#ef4444";
         const dirIcon = isBuy ? "🟢 BUY" : "🔴 SELL";
 
-        let outcomeBadge = `<span style="background:rgba(148,163,184,0.15); color:#94a3b8; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">${s.outcome || s.signal_status}</span>`;
-        if (s.outcome === "WIN") outcomeBadge = `<span style="background:rgba(34,197,94,0.15); color:#22c55e; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">🏆 WIN (+${s.pnl_r_multiple}R)</span>`;
-        else if (s.outcome === "LOSS") outcomeBadge = `<span style="background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">❌ LOSS (-1.0R)</span>`;
+        const pnlR = s.pnl_r_multiple == null || !Number.isFinite(Number(s.pnl_r_multiple)) ? "N/A" : `${Number(s.pnl_r_multiple) > 0 ? "+" : ""}${Number(s.pnl_r_multiple)}R`;
+        let outcomeBadge = `<span style="background:rgba(148,163,184,0.15); color:#94a3b8; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">${escapeHtml(String(s.outcome || s.signal_status || "N/A"))}</span>`;
+        if (s.outcome === "WIN") outcomeBadge = `<span style="background:rgba(34,197,94,0.15); color:#22c55e; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">🏆 WIN (${pnlR})</span>`;
+        else if (s.outcome === "LOSS") outcomeBadge = `<span style="background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">❌ LOSS (${pnlR})</span>`;
         else if (s.outcome === "AMBIGUOUS") outcomeBadge = `<span style="background:rgba(234,179,8,0.15); color:#eab308; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">⚠️ AMBIGUOUS</span>`;
         else if (s.outcome === "EXPIRED_NO_ENTRY") outcomeBadge = `<span style="background:rgba(100,116,139,0.15); color:#64748b; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">🚫 EXPIRED</span>`;
 
         const tgStatus = s.telegram_delivery_status === "SENT"
-          ? `<span style="color:#38bdf8;" title="Message ID: ${s.telegram_message_id || 'N/A'}">✈️ Sent #${s.telegram_message_id || ''}</span>`
-          : `<span style="color:#94a3b8;">⏳ ${s.telegram_delivery_status}</span>`;
+          ? `<span style="color:#38bdf8;" title="Message ID: ${escapeHtml(String(s.telegram_message_id || 'N/A'))}">✈️ Sent #${escapeHtml(String(s.telegram_message_id || ''))}</span>`
+          : `<span style="color:#94a3b8;">⏳ ${escapeHtml(String(s.telegram_delivery_status || "N/A"))}</span>`;
+        const fmtSignalPrice = value => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "N/A";
 
         html += `
           <div style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:8px 10px; font-size:11px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <div>
-                <b style="color:${dirColor};">${dirIcon}</b> · <code style="color:#fbbf24;">${s.entry_price.toFixed(2)}</code>
-                <span style="color:#64748b; font-size:10px; margin-left:4px;">SL: ${s.stop_loss.toFixed(2)} | TP1: ${s.take_profit_1.toFixed(2)}</span>
+                <b style="color:${dirColor};">${dirIcon}</b> · <code style="color:#fbbf24;">${fmtSignalPrice(s.entry_price)}</code>
+                <span style="color:#64748b; font-size:10px; margin-left:4px;">SL: ${fmtSignalPrice(s.stop_loss)} | TP1: ${fmtSignalPrice(s.take_profit_1)}</span>
               </div>
               <div>${outcomeBadge}</div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#94a3b8;">
-              <div>Confluence: <b style="color:#cbd5e1;">${s.ai_score}%</b> · R:R 1:${s.risk_reward_1}</div>
-              <div>${tgStatus} · <span style="color:#64748b;">${s.cambodia_date || ''}</span></div>
+              <div>Confluence: <b style="color:#cbd5e1;">${s.ai_score != null && Number.isFinite(Number(s.ai_score)) ? `${Number(s.ai_score)}%` : "N/A"}</b> · R:R ${escapeHtml(String(s.risk_reward_1 ?? "N/A"))}</div>
+              <div>${tgStatus} · <span style="color:#64748b;">${escapeHtml(String(s.cambodia_date || ''))}</span></div>
             </div>
           </div>
         `;
@@ -4201,7 +4391,7 @@ async function fetchXAUUSDSignalsAndStats() {
     container.innerHTML = html;
   } catch (err) {
     console.error("Fetch XAUUSD signals error:", err);
-    container.innerHTML = `<div style="font-size:12px; color:#f87171; text-align:center; padding:10px;">Failed to load XAUUSD signals data: ${err.message}</div>`;
+    container.innerHTML = `<div style="font-size:12px; color:#f87171; text-align:center; padding:10px;">Failed to load XAUUSD signals data: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -4287,7 +4477,11 @@ function showCyberToast(msg) {
   const toast = document.createElement("div");
   toast.id = "cyber-toast-notification";
   toast.className = "cyber-toast";
-  toast.innerHTML = `<span>✨</span><span>${msg}</span>`;
+  const icon = document.createElement("span");
+  icon.textContent = "✨";
+  const text = document.createElement("span");
+  text.textContent = String(msg ?? "");
+  toast.append(icon, text);
   document.body.appendChild(toast);
   setTimeout(() => {
     if (toast.parentNode) toast.remove();
@@ -4336,10 +4530,14 @@ function updateBridgeStatusUI(data) {
 
   if (topDot && topLabel) {
     topDot.className = "bridge-status-dot";
-    if (status === "CONNECTED") {
+    if (status === "CONNECTED" && data.is_active_for_signals) {
       topDot.classList.add("bridge-connected");
-      topLabel.innerText = "MT5: CONNECTED";
+      topLabel.innerText = "MT5: FRESH TICKS";
       topLabel.style.color = "#00D99A";
+    } else if (status === "CONNECTED") {
+      topDot.classList.add("bridge-stale");
+      topLabel.innerText = "MT5: NO FRESH TICK";
+      topLabel.style.color = "#FFC76B";
     } else if (status === "STALE") {
       topDot.classList.add("bridge-stale");
       topLabel.innerText = "MT5: STALE";
@@ -4352,12 +4550,13 @@ function updateBridgeStatusUI(data) {
   }
 
   if (modalBadge) {
-    modalBadge.innerText = `● ${status}`;
+    modalBadge.innerText = `● ${status === "CONNECTED" && !data.is_active_for_signals ? "CONNECTED · NO FRESH TICK" : status}`;
     modalBadge.className = "bridge-hero-badge " + (status === "CONNECTED" ? "text-green" : (status === "STALE" ? "text-gold" : "text-muted"));
   }
 
-  if (bmcBroker && data.broker) bmcBroker.innerText = data.broker;
-  if (bmcServer && data.server) bmcServer.innerText = data.server;
+  const bridgeReported = status !== "DISCONNECTED";
+  if (bmcBroker) bmcBroker.innerText = bridgeReported ? (data.broker || "Not reported") : "Not connected";
+  if (bmcServer) bmcServer.innerText = bridgeReported ? (data.server || "Not reported") : "No server reported";
   if (bmcAge) {
     bmcAge.innerText = data.seconds_since_last_activity != null ? `${data.seconds_since_last_activity}s ago` : "No ticks yet";
   }
@@ -4452,27 +4651,34 @@ async function loadVipSubscribers() {
       const badgeCls = s.tier === "VIP" ? "badge-vip" : (s.tier === "LIFETIME" ? "badge-lifetime" : "badge-pro");
       const statusCls = s.status === "ACTIVE" ? "vip-status-active" : (s.status === "EXPIRED" ? "vip-status-expired" : "vip-status-revoked");
       const expiresStr = s.is_lifetime ? "👑 Lifetime" : (s.expires_at ? new Date(s.expires_at).toLocaleDateString() : "N/A");
-      const linkDisp = s.invite_link ? `<a href="${s.invite_link}" target="_blank" style="color: #38bdf8; text-decoration: underline;">Join Link</a>` : "N/A";
+      let safeInviteLink = "";
+      try {
+        const parsedInvite = new URL(s.invite_link || "");
+        if (parsedInvite.protocol === "https:" && ["t.me", "telegram.me"].includes(parsedInvite.hostname.toLowerCase())) safeInviteLink = parsedInvite.href;
+      } catch (_) {}
+      const linkDisp = safeInviteLink ? `<a href="${escapeHtml(safeInviteLink)}" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: underline;">Join Link</a>` : "N/A";
+      const safeUserId = String(s.user_id ?? "");
+      const encodedUserId = encodeURIComponent(safeUserId);
       const revokeBtn = s.status === "ACTIVE"
-        ? `<button class="btn btn-outline btn-xs" style="color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="revokeVipSubscriber('${s.user_id}')">Revoke</button>`
+        ? `<button class="btn btn-outline btn-xs" style="color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="revokeVipSubscriber(decodeURIComponent('${encodedUserId}'))">Revoke</button>`
         : `<span style="color: #64748b;">—</span>`;
 
       return `
         <tr>
           <td>
-            <div style="font-weight: 700; color: #f8fafc;">${s.user_id}</div>
-            <div style="font-size: 11px; color: #94a3b8;">${s.username ? '@' + s.username : (s.full_name || '')}</div>
+            <div style="font-weight: 700; color: #f8fafc;">${escapeHtml(safeUserId)}</div>
+            <div style="font-size: 11px; color: #94a3b8;">${escapeHtml(s.username ? '@' + s.username : (s.full_name || ''))}</div>
           </td>
-          <td><span class="vip-card-badge ${badgeCls}">${s.tier}</span></td>
-          <td><span class="vip-status-pill ${statusCls}">${s.status}</span></td>
-          <td style="font-size: 11px;">${expiresStr}</td>
+          <td><span class="vip-card-badge ${badgeCls}">${escapeHtml(String(s.tier || ""))}</span></td>
+          <td><span class="vip-status-pill ${statusCls}">${escapeHtml(String(s.status || ""))}</span></td>
+          <td style="font-size: 11px;">${escapeHtml(expiresStr)}</td>
           <td>${linkDisp}</td>
           <td>${revokeBtn}</td>
         </tr>
       `;
     }).join("");
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #f87171; padding: 15px;">Error: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #f87171; padding: 15px;">Error: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -4603,20 +4809,24 @@ async function loadAnyRouterCatalog(forceRefresh = false) {
 
     if (tbody) {
       if (!data.models || data.models.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-15">${data.error_message || "No models returned from catalog."}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted p-15">${escapeHtml(String(data.error_message || "No models returned from catalog."))}</td></tr>`;
       } else {
-        tbody.innerHTML = data.models.map(m => `
+        tbody.innerHTML = data.models.map(m => {
+          const modelId = String(m.id || "");
+          const modelArg = encodeURIComponent(modelId).replace(/'/g, "%27");
+          return `
           <tr>
-            <td><code class="text-gold font-mono">${escapeHtml(m.id)}</code></td>
-            <td>${escapeHtml(m.provider)}</td>
+            <td><code class="text-gold font-mono">${escapeHtml(modelId)}</code></td>
+            <td>${escapeHtml(String(m.provider || "N/A"))}</td>
             <td>${m.context_window ? m.context_window.toLocaleString() : "Auto"}</td>
             <td>${(m.capabilities || []).map(c => `<span class="badge badge-xs mr-5">${escapeHtml(c)}</span>`).join("")}</td>
             <td><span class="badge badge-xs ${m.status === 'AVAILABLE' ? 'badge-success' : 'badge-muted'}">${escapeHtml(m.status)}</span></td>
             <td>
-              <button class="btn btn-outline btn-xs" onclick="runAnyRouterSmokeTest('${escapeHtml(m.id)}')">⚡ Probe</button>
+              <button class="btn btn-outline btn-xs" onclick="runAnyRouterSmokeTest(decodeURIComponent('${modelArg}'))">⚡ Probe</button>
             </td>
           </tr>
-        `).join("");
+        `;
+        }).join("");
       }
     }
 
@@ -4769,7 +4979,7 @@ async function triggerDeepMultiAgentAnalysis() {
     const res = await fetch(`${API_BASE}/api/v1/agents/deep-analysis`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: symbol, account_equity: 100000.0 })
+      body: JSON.stringify({ symbol: symbol })
     });
     const trace = await res.json();
 
@@ -4783,11 +4993,12 @@ async function triggerDeepMultiAgentAnalysis() {
     };
 
     updateChip(1, `${trace.execution_time_ms} ms`);
-    updateChip(2, `${trace.market_structure.trend} (${trace.market_structure.regime})`);
-    updateChip(3, `${trace.multi_timeframe.dominant_bias} (${trace.multi_timeframe.confluence_score}%)`);
-    updateChip(4, trace.macro_news.is_blackout ? "BLACKOUT" : "CLEAR");
+    updateChip(2, trace.market_structure.status === "COMPLETED" ? `${trace.market_structure.trend} (${trace.market_structure.regime})` : "UNAVAILABLE", trace.market_structure.status === "COMPLETED");
+    updateChip(3, trace.multi_timeframe.status === "COMPLETED" ? `${trace.multi_timeframe.dominant_bias} (${trace.multi_timeframe.confluence_score ?? "N/A"}%)` : "UNAVAILABLE", trace.multi_timeframe.status === "COMPLETED");
+    const calendarVerified = Boolean(trace.macro_news.calendar_available);
+    updateChip(4, !calendarVerified ? "CALENDAR N/A" : (trace.macro_news.is_blackout ? "BLACKOUT" : "CLEAR"), calendarVerified && !trace.macro_news.is_blackout);
     updateChip(5, trace.risk_guardian.approved ? "APPROVED" : "VETOED", trace.risk_guardian.approved);
-    updateChip(6, `Score: ${trace.critic.critic_score}/100`);
+    updateChip(6, `Score: ${trace.critic.critic_score ?? "N/A"}/100`, trace.critic.critic_score != null);
     updateChip(7, trace.final_synthesis.action);
 
     // Populate Trace Inspector
@@ -4812,27 +5023,27 @@ async function triggerDeepMultiAgentAnalysis() {
       riskGrid.innerHTML = `
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Verified Entry</div>
-          <div class="trace-risk-item-val">${r.entry_price}</div>
+          <div class="trace-risk-item-val">${r.entry_price ?? "N/A"}</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Stop Loss</div>
-          <div class="trace-risk-item-val">${r.stop_loss}</div>
+          <div class="trace-risk-item-val">${r.stop_loss ?? "N/A"}</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Take Profit</div>
-          <div class="trace-risk-item-val">${r.take_profit}</div>
+          <div class="trace-risk-item-val">${r.take_profit ?? "N/A"}</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Risk:Reward Ratio</div>
-          <div class="trace-risk-item-val text-gold">${r.risk_reward_ratio}:1 (Min 2.0)</div>
+          <div class="trace-risk-item-val text-gold">${r.risk_reward_ratio == null ? "N/A" : `${r.risk_reward_ratio}:1`} (Min ${r.min_required_rr ?? "N/A"})</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Max Risk Cap</div>
-          <div class="trace-risk-item-val">${r.max_risk_percent}% ($${r.risk_amount_usd})</div>
+          <div class="trace-risk-item-val">${r.max_risk_percent ?? "N/A"}% (${r.risk_amount_usd == null ? "N/A" : `$${r.risk_amount_usd}`})</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Calculated Lot Size</div>
-          <div class="trace-risk-item-val">${r.recommended_lot_size} Lots</div>
+          <div class="trace-risk-item-val">${r.recommended_lot_size == null ? "N/A" : `${r.recommended_lot_size} Lots`}</div>
         </div>
       `;
     }
@@ -4841,9 +5052,9 @@ async function triggerDeepMultiAgentAnalysis() {
     const criticDiv = document.getElementById("trace-critic-content");
     if (criticDiv) {
       criticDiv.innerHTML = `
-        <div><strong>Counter-Trend Risk:</strong> ${trace.critic.counter_trend_risk} | <strong>Trapped Traders Risk:</strong> ${trace.critic.trapped_traders_risk}</div>
-        <div><strong>Objections:</strong> ${trace.critic.objections.length > 0 ? trace.critic.objections.join("; ") : "None. Clean setup geometry."}</div>
-        <div><strong>Opposing Evidence:</strong> ${trace.critic.opposing_evidence.join("; ") || "None."}</div>
+        <div><strong>Counter-Trend Risk:</strong> ${escapeHtml(String(trace.critic.counter_trend_risk ?? "N/A"))} | <strong>Trapped Traders Risk:</strong> ${escapeHtml(String(trace.critic.trapped_traders_risk ?? "N/A"))}</div>
+        <div><strong>Objections:</strong> ${trace.critic.objections.length > 0 ? escapeHtml(trace.critic.objections.join("; ")) : "No objections recorded."}</div>
+        <div><strong>Opposing Evidence:</strong> ${escapeHtml(trace.critic.opposing_evidence.join("; ")) || "None."}</div>
       `;
     }
 
@@ -5226,12 +5437,12 @@ async function loadSupportTickets() {
       const badgeClass = t.status === "RESOLVED" || t.status === "CLOSED" ? "text-green" : (t.status === "IN_PROGRESS" ? "text-gold" : "text-cyan");
       return `
         <tr>
-          <td><strong style="color: #16E6AB;">${t.ticket_number}</strong></td>
-          <td>${t.subject}</td>
-          <td>${t.category}</td>
-          <td>${t.priority.toUpperCase()}</td>
-          <td><span class="${badgeClass}">● ${t.status}</span></td>
-          <td style="font-size: 11px; color: #87A99A;">${(t.created_at || "").slice(0, 16)}</td>
+          <td><strong style="color: #16E6AB;">${escapeHtml(String(t.ticket_number || ""))}</strong></td>
+          <td>${escapeHtml(String(t.subject || ""))}</td>
+          <td>${escapeHtml(String(t.category || ""))}</td>
+          <td>${escapeHtml(String(t.priority || "").toUpperCase())}</td>
+          <td><span class="${badgeClass}">● ${escapeHtml(String(t.status || ""))}</span></td>
+          <td style="font-size: 11px; color: #87A99A;">${escapeHtml(String(t.created_at || "").slice(0, 16))}</td>
         </tr>
       `;
     }).join("");
@@ -5348,17 +5559,20 @@ function renderAdminUsersTable(users) {
   tbody.innerHTML = users.map(u => {
     const isSuspended = u.status === "suspended";
     const statusColor = isSuspended ? "text-danger" : (u.trial_status === "trial_active" ? "text-green" : "text-cyan");
+    const rawUserId = String(u.id || "");
+    const safeUserId = /^[a-f0-9-]{1,64}$/i.test(rawUserId) ? rawUserId : "";
+    const statusArgument = isSuspended ? "suspended" : "active";
     return `
       <tr>
-        <td><strong>${u.email}</strong></td>
-        <td>${u.full_name || "--"}</td>
-        <td><span class="badge">${u.role}</span></td>
-        <td><span class="text-gold">${(u.subscription_tier || "free_trial").toUpperCase()}</span></td>
-        <td><span class="${statusColor}">● ${u.status} (${u.trial_status || "n/a"})</span></td>
+        <td><strong>${escapeHtml(String(u.email || ""))}</strong></td>
+        <td>${escapeHtml(String(u.full_name || "--"))}</td>
+        <td><span class="badge">${escapeHtml(String(u.role || ""))}</span></td>
+        <td><span class="text-gold">${escapeHtml(String(u.subscription_tier || "free_trial").toUpperCase())}</span></td>
+        <td><span class="${statusColor}">● ${escapeHtml(String(u.status || ""))} (${escapeHtml(String(u.trial_status || "n/a"))})</span></td>
         <td>
           <div style="display: flex; gap: 4px;">
-            <button class="btn btn-outline btn-xs" onclick="promptOverridePlan('${u.id}')">Plan</button>
-            <button class="btn ${isSuspended ? 'btn-gold' : 'btn-danger'} btn-xs" onclick="toggleUserSuspension('${u.id}', '${u.status}')">
+            <button class="btn btn-outline btn-xs" ${safeUserId ? `onclick="promptOverridePlan('${safeUserId}')"` : "disabled"}>Plan</button>
+            <button class="btn ${isSuspended ? 'btn-gold' : 'btn-danger'} btn-xs" ${safeUserId ? `onclick="toggleUserSuspension('${safeUserId}', '${statusArgument}')"` : "disabled"}>
               ${isSuspended ? 'Activate' : 'Suspend'}
             </button>
           </div>
@@ -5488,11 +5702,15 @@ async function discoverFreeLLMAPIModels() {
     if (data.models && data.models.length > 0) {
       if (countSpan) countSpan.textContent = data.count || data.models.length;
       if (listDiv) {
-        listDiv.innerHTML = data.models.map(m => `
-          <button type="button" class="btn btn-outline btn-xs" style="margin: 2px;" onclick="selectFreeLLMAPIModel('${escapeHtml(m.id || m)}')">
-            ${escapeHtml(m.id || m)}
+        listDiv.innerHTML = data.models.map(m => {
+          const modelId = String(m.id || m);
+          const modelArg = encodeURIComponent(modelId).replace(/'/g, "%27");
+          return `
+          <button type="button" class="btn btn-outline btn-xs" style="margin: 2px;" onclick="selectFreeLLMAPIModel(decodeURIComponent('${modelArg}'))">
+            ${escapeHtml(modelId)}
           </button>
-        `).join("");
+        `;
+        }).join("");
       }
       if (label) label.textContent = `Discovered ${data.count} models available in pool`;
     } else {

@@ -4,10 +4,8 @@ import urllib.error
 import sys
 import os
 
-URL = os.getenv("MAKE_WEBHOOK_URL", "")
-
 def send_webhook(symbol="XAUUSD", timeframe="M5", action="analyze", test="true"):
-    url = os.getenv("MAKE_WEBHOOK_URL", URL)
+    url = os.getenv("MAKE_WEBHOOK_URL", "").strip()
     if not url:
         print("[ERROR] MAKE_WEBHOOK_URL is not configured in environment. Please set MAKE_WEBHOOK_URL.")
         return 1, "MAKE_WEBHOOK_URL not configured"
@@ -16,17 +14,19 @@ def send_webhook(symbol="XAUUSD", timeframe="M5", action="analyze", test="true")
         "symbol": symbol,
         "timeframe": timeframe,
         "action": action,
-        "test": test,
-        "chat_id": "-1004341134868"
+        "test": str(test).lower() in ("1", "true", "yes")
     }
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if chat_id:
+        payload["chat_id"] = chat_id
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        URL,
+        url,
         data=data,
         headers={"Content-Type": "application/json"}
     )
 
-    print(f"Sending POST to {URL}...")
+    print("Sending POST to configured Make webhook...")
     print(f"Payload: {json.dumps(payload, indent=2)}")
 
     try:

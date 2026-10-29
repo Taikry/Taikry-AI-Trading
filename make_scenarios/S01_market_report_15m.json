@@ -13,13 +13,13 @@
     {
       "id": 2,
       "module": "http:ActionSendRequest",
-      "name": "POST /api/v1/analyze",
+      "name": "POST /api/v1/admin/analyze",
       "parameters": {
-        "url": "http://localhost:8000/api/v1/analyze",
+        "url": "https://YOUR_PUBLIC_API_HOST/api/v1/admin/analyze",
         "method": "POST",
         "headers": [
           {"name": "Content-Type", "value": "application/json"},
-          {"name": "X-TAIKRY-API-KEY", "value": "taikry_admin_access_token_2026"}
+          {"name": "X-TAIKRY-API-KEY", "value": ""}
         ],
         "body": "{\"symbol\": \"XAUUSD\", \"timeframe\": \"M15\"}"
       }
@@ -56,7 +56,7 @@
       "module": "telegram:sendTextMessage",
       "name": "Send Bilingual Telegram Report",
       "parameters": {
-        "chat_id": "{{if(1.chat_id; 1.chat_id; '-1004341134868')}}",
+        "chat_id": "",
         "parse_mode": "HTML",
         "text": "{{3.report_english}}\n\n==============================\n\n{{3.report_khmer}}"
       }
@@ -66,10 +66,11 @@
       "module": "http:ActionSendRequest",
       "name": "POST /api/v1/notifications/ack",
       "parameters": {
-        "url": "http://localhost:8000/api/v1/notifications/ack",
+        "url": "https://YOUR_PUBLIC_API_HOST/api/v1/notifications/ack",
         "method": "POST",
         "headers": [
-          {"name": "Content-Type", "value": "application/json"}
+          {"name": "Content-Type", "value": "application/json"},
+          {"name": "X-TAIKRY-API-KEY", "value": ""}
         ],
         "body": "{\"event_id\": \"15m_report_{{3.timestamp_utc}}\", \"channel\": \"telegram\", \"status\": \"DELIVERED\"}"
       }

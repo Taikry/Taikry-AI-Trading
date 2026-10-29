@@ -7,11 +7,12 @@ Agents:
 2. Market Structure Agent (ICT/SMC, liquidity sweeps, order blocks, FVG, regime)
 3. Multi-Timeframe Agent (EMA 20/50/200, RSI, ATR confluence across M5/M15/H1/H4)
 4. Macro/News Agent (real sources: economic calendar, news blackout, sentiment)
-5. Risk Guardian (100% deterministic risk arithmetic, min R:R 1:2.0, max 0.5% risk cap, spread check)
+5. Risk Guardian (deterministic risk arithmetic, configured R:R floor and risk cap, spread check)
 6. Independent Critic (devil's advocate, contrarian objections, trapped trader risk, invalidation)
 7. Final Synthesis Agent (bilingual English & Natural Khmer thesis, structured execution levels)
 """
 
+import math
 import time
 import uuid
 import datetime
@@ -34,6 +35,7 @@ from taikry.indicators.technical import compute_technical_indicators, extract_te
 from taikry.indicators.ict_smc import extract_ict_smc_summary
 from taikry.data.validator import is_market_open, check_data_freshness, validate_dataframe
 from taikry.data.economic_calendar import economic_calendar_provider
+from taikry.data.mt5_receiver import mt5_receiver
 from taikry.data.providers import market_data_engine
 from taikry.translation.khmer_translator import translate_to_khmer
 
@@ -48,11 +50,11 @@ class MarketStructureOutput(BaseModel):
     """Structured output for Agent 2: Market Structure."""
     agent_id: str = "market_structure"
     agent_name: str = "Market Structure Agent"
-    status: str = "COMPLETED"  # COMPLETED, FAILED, SKIPPED
-    trend: str = "RANGING"  # BULLISH, BEARISH, RANGING
-    regime: str = "CHOPPY"  # TRENDING, ACCUMULATION, DISTRIBUTION, CHOPPY
-    swing_high: float = 0.0
-    swing_low: float = 0.0
+    status: str = "UNAVAILABLE"  # COMPLETED, FAILED, SKIPPED
+    trend: str = "UNAVAILABLE"  # BULLISH, BEARISH, RANGING
+    regime: str = "UNAVAILABLE"  # TRENDING, ACCUMULATION, DISTRIBUTION, CHOPPY
+    swing_high: Optional[float] = None
+    swing_low: Optional[float] = None
     order_blocks_count: int = 0
     fair_value_gaps_count: int = 0
     recent_sweeps: List[str] = Field(default_factory=list)
@@ -67,16 +69,16 @@ class MultiTimeframeOutput(BaseModel):
     """Structured output for Agent 3: Multi-Timeframe Alignment."""
     agent_id: str = "multi_timeframe"
     agent_name: str = "Multi-Timeframe Agent"
-    status: str = "COMPLETED"
-    m5_bias: str = "NEUTRAL"
-    m15_bias: str = "NEUTRAL"
-    h1_bias: str = "NEUTRAL"
-    h4_bias: str = "NEUTRAL"
-    alignment: str = "MIXED"  # STRONG ALIGNMENT, MODERATE ALIGNMENT, MIXED
-    confluence_score: int = 50  # 0 to 100
-    dominant_bias: str = "NEUTRAL"  # BULLISH, BEARISH, NEUTRAL
-    rsi_14: float = 50.0
-    atr_val: float = 0.0
+    status: str = "UNAVAILABLE"
+    m5_bias: str = "UNAVAILABLE"
+    m15_bias: str = "UNAVAILABLE"
+    h1_bias: str = "UNAVAILABLE"
+    h4_bias: str = "UNAVAILABLE"
+    alignment: str = "UNAVAILABLE"  # STRONG ALIGNMENT, MODERATE ALIGNMENT, MIXED
+    confluence_score: Optional[int] = None  # 0 to 100 when measured
+    dominant_bias: str = "UNAVAILABLE"  # BULLISH, BEARISH, NEUTRAL
+    rsi_14: Optional[float] = None
+    atr_val: Optional[float] = None
     evidence: List[str] = Field(default_factory=list)
     model_used: Optional[str] = None
     latency_ms: float = 0.0
@@ -87,12 +89,14 @@ class MacroNewsOutput(BaseModel):
     """Structured output for Agent 4: Macro & Breaking News."""
     agent_id: str = "macro_news"
     agent_name: str = "Macro/News Agent"
-    status: str = "COMPLETED"
+    status: str = "UNAVAILABLE"
     is_connected: bool = False
     is_blackout: bool = False
+    calendar_available: bool = False
+    dxy_available: bool = False
     blackout_reason: Optional[str] = None
-    news_sentiment: str = "NEUTRAL"  # BULLISH_FOR_ASSET, BEARISH_FOR_ASSET, NEUTRAL
-    dxy_bias: str = "NEUTRAL"
+    news_sentiment: str = "UNAVAILABLE"  # BULLISH_FOR_ASSET, BEARISH_FOR_ASSET, NEUTRAL
+    dxy_bias: str = "UNAVAILABLE"
     upcoming_events_count: int = 0
     active_sources: List[str] = Field(default_factory=list)
     evidence: List[str] = Field(default_factory=list)
@@ -105,19 +109,20 @@ class RiskGuardianOutput(BaseModel):
     """Structured output for Agent 5: Risk Guardian (100% Deterministic)."""
     agent_id: str = "risk_guardian"
     agent_name: str = "Risk Guardian"
-    status: str = "COMPLETED"
+    status: str = "UNAVAILABLE"
     approved: bool = False
     veto_reasons: List[str] = Field(default_factory=list)
-    entry_price: float = 0.0
-    stop_loss: float = 0.0
-    take_profit: float = 0.0
-    risk_reward_ratio: float = 0.0
-    min_required_rr: float = 2.0
-    max_risk_percent: float = 0.5
-    account_equity: float = 100000.0
-    risk_amount_usd: float = 500.0
-    recommended_lot_size: float = 0.1
-    spread_points: float = 0.0
+    entry_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    risk_reward_ratio: Optional[float] = None
+    min_required_rr: float = MIN_RISK_REWARD_RATIO
+    max_risk_percent: float = RISK_PER_TRADE_PERCENT
+    account_equity: Optional[float] = None
+    risk_amount_usd: Optional[float] = None
+    recommended_lot_size: Optional[float] = None
+    spread_points: Optional[float] = None
+    spread_price: Optional[float] = None
     latency_ms: float = 0.0
 
 
@@ -125,14 +130,14 @@ class CriticOutput(BaseModel):
     """Structured output for Agent 6: Independent Critic (Devil's Advocate)."""
     agent_id: str = "independent_critic"
     agent_name: str = "Independent Critic"
-    status: str = "COMPLETED"
-    approved: bool = True
+    status: str = "UNAVAILABLE"
+    approved: bool = False
     counter_trend_risk: str = "LOW"  # LOW, MEDIUM, HIGH
     trapped_traders_risk: str = "LOW"
     objections: List[str] = Field(default_factory=list)
     opposing_evidence: List[str] = Field(default_factory=list)
     invalidation_triggers: List[str] = Field(default_factory=list)
-    critic_score: int = 80  # 0 (severe objection) to 100 (clean setup)
+    critic_score: Optional[int] = None  # 0 (severe objection) to 100 (clean setup)
     model_used: Optional[str] = None
     latency_ms: float = 0.0
     error: Optional[str] = None
@@ -171,6 +176,8 @@ class WorkflowTrace(BaseModel):
     risk_guardian: RiskGuardianOutput
     critic: CriticOutput
     final_synthesis: FinalSynthesisOutput
+    orderflow_sentiment: Optional[Dict[str, Any]] = None
+    fractal_mtf: Optional[Dict[str, Any]] = None
 
 
 # =============================================================================
@@ -283,20 +290,44 @@ class MultiTimeframeAgent:
     def analyze(self, symbol: str, multi_tf_data: Dict[str, pd.DataFrame]) -> MultiTimeframeOutput:
         t0 = time.time()
         tf_biases = {}
-        rsi_val = 50.0
+        rsi_val = None
         atr_val = 0.0
+        unavailable = []
 
         for tf in ["M5", "M15", "H1", "H4"]:
             df = multi_tf_data.get(tf)
-            if df is not None and not df.empty and len(df) >= 20:
+            if df is not None and not df.empty and len(df) >= 50:
                 ind = compute_technical_indicators(df)
                 summary = extract_technical_summary(ind)
-                tf_biases[tf] = summary.get("trend", "NEUTRAL")
+                if not summary:
+                    unavailable.append(tf)
+                    tf_biases[tf] = "UNAVAILABLE"
+                    continue
+                tf_biases[tf] = summary["trend"]
                 if tf == "M15":
-                    rsi_val = float(summary.get("rsi", 50.0))
-                    atr_val = float(summary.get("atr", 0.0))
+                    rsi_val = float(summary["rsi"])
+                    atr_val = float(summary["atr"])
             else:
-                tf_biases[tf] = "NEUTRAL"
+                unavailable.append(tf)
+                tf_biases[tf] = "UNAVAILABLE"
+
+        if unavailable or rsi_val is None or atr_val <= 0:
+            reason = f"Verified multi-timeframe metrics unavailable: {', '.join(unavailable) or 'M15 RSI/ATR'}"
+            return MultiTimeframeOutput(
+                status="DATA_UNAVAILABLE",
+                m5_bias=tf_biases.get("M5", "UNAVAILABLE"),
+                m15_bias=tf_biases.get("M15", "UNAVAILABLE"),
+                h1_bias=tf_biases.get("H1", "UNAVAILABLE"),
+                h4_bias=tf_biases.get("H4", "UNAVAILABLE"),
+                alignment="UNAVAILABLE",
+                confluence_score=0,
+                dominant_bias="UNAVAILABLE",
+                rsi_14=None,
+                atr_val=0.0,
+                evidence=[reason],
+                error=reason,
+                latency_ms=round((time.time() - t0) * 1000, 2),
+            )
 
         m5_b = tf_biases.get("M5", "NEUTRAL")
         m15_b = tf_biases.get("M15", "NEUTRAL")
@@ -365,22 +396,33 @@ class MacroNewsAgent:
         blackout_info = economic_calendar_provider.check_news_blackout(symbol)
         is_blackout = blackout_info.get("is_blackout", False)
         blackout_reason = blackout_info.get("event_title") if is_blackout else None
+        calendar_available = blackout_info.get("status") != "UNAVAILABLE"
 
         # Upcoming High-Impact Events & Live News
-        events = economic_calendar_provider.get_upcoming_high_impact_events(symbol)
+        events = economic_calendar_provider.get_upcoming_high_impact_events()
         news = economic_calendar_provider.get_live_macro_news()
-        is_conn = bool(events or news)
-        active_sources = ["ForexFactory", "YahooFinance", "Investing.com"] if is_conn else []
+        dxy_context = economic_calendar_provider.get_usd_strength_context()
+        dxy_available = dxy_context.get("status") == "AVAILABLE"
+        is_conn = bool(calendar_available or events or news or dxy_available)
+        active_sources = []
+        if calendar_available or events:
+            active_sources.append("FairEconomy")
+        if news:
+            active_sources.append("RSS News")
+        if dxy_available:
+            active_sources.append("Yahoo Finance DXY")
 
         evidence = []
         if is_blackout:
             evidence.append(f"CRITICAL NEWS BLACKOUT: {blackout_reason}")
+        elif not calendar_available:
+            evidence.append("Economic calendar is unavailable; event risk could not be verified.")
         if events:
             for ev in events[:2]:
                 title = ev.get("title") or ev.get("event", "High Impact Event")
                 time_until = ev.get("minutes_until", ev.get("time_until_minutes", 0))
                 evidence.append(f"Upcoming {title} (in {time_until}m)")
-        else:
+        elif calendar_available:
             evidence.append("No imminent high-impact macro blackouts detected.")
 
         if news:
@@ -388,12 +430,14 @@ class MacroNewsAgent:
 
         latency = round((time.time() - t0) * 1000, 2)
         return MacroNewsOutput(
-            status="COMPLETED",
+            status="COMPLETED" if is_conn else "UNAVAILABLE",
             is_connected=is_conn,
             is_blackout=is_blackout,
+            calendar_available=calendar_available,
+            dxy_available=dxy_available,
             blackout_reason=blackout_reason,
             news_sentiment="NEUTRAL",
-            dxy_bias="NEUTRAL",
+            dxy_bias=dxy_context.get("usd_bias", "UNAVAILABLE"),
             upcoming_events_count=len(events),
             active_sources=active_sources,
             evidence=evidence,
@@ -410,9 +454,9 @@ class RiskGuardian:
     Chief Risk Officer.
     CRITICAL: Never delegates arithmetic, sizing, R:R, or final approval to an LLM.
     Strictly deterministic execution rules:
-    - Min R:R: 1:2.0
-    - Max Risk: 0.5% of equity
-    - Sizing: equity * (0.005) / stop_distance
+    - Configured minimum Risk-to-Reward ratio
+    - Configured maximum risk as a percentage of equity
+    - Sizing: equity * (risk percentage / 100) / stop distance
     - Spread tolerance: spread <= 20% of stop distance
     - Geometric validity: SL below entry for BUY, SL above entry for SELL
     """
@@ -427,23 +471,53 @@ class RiskGuardian:
         mtf_output: MultiTimeframeOutput,
         macro_output: MacroNewsOutput,
         account_equity: float = INITIAL_PAPER_BALANCE,
-        spread_points: float = 0.25
+        spread_points: Optional[float] = None,
+        spread_price: Optional[float] = None
     ) -> RiskGuardianOutput:
         t0 = time.time()
         veto_reasons = []
 
         # 1. Macro Blackout Check
-        if macro_output.is_blackout:
+        if not macro_output.calendar_available:
+            veto_reasons.append("Economic calendar is unavailable; event risk cannot be verified.")
+        elif macro_output.is_blackout:
             veto_reasons.append(f"High-impact news blackout active: {macro_output.blackout_reason}")
 
         # 2. Derive Stop Loss & Take Profit Levels using deterministic structure & ATR
-        atr = max(mtf_output.atr_val, current_price * 0.001)
+        try:
+            current_price = float(current_price)
+        except (TypeError, ValueError):
+            current_price = 0.0
+        try:
+            atr = float(mtf_output.atr_val)
+        except (TypeError, ValueError):
+            atr = 0.0
+        try:
+            account_equity = float(account_equity)
+        except (TypeError, ValueError):
+            account_equity = 0.0
+        if not math.isfinite(current_price) or current_price <= 0:
+            veto_reasons.append("Verified market price is unavailable or invalid.")
+        if not math.isfinite(account_equity) or account_equity <= 0:
+            veto_reasons.append("Account equity is unavailable or invalid; sizing cannot be verified.")
+        if not math.isfinite(atr) or atr <= 0:
+            veto_reasons.append("Measured ATR is unavailable; stop distance cannot be verified.")
+            atr = 0.0
         cfg = get_symbol_config(symbol)
         min_sl_dist = atr * 1.2
+        try:
+            swing_high = float(structure_output.swing_high or 0.0)
+            swing_low = float(structure_output.swing_low or 0.0)
+        except (TypeError, ValueError):
+            swing_high = swing_low = 0.0
+        if not math.isfinite(swing_high):
+            swing_high = 0.0
+        if not math.isfinite(swing_low):
+            swing_low = 0.0
 
         if direction == "BUY":
             # SL placed below recent swing low or ATR buffer
-            sl_candidate = structure_output.swing_low - (atr * 0.2) if structure_output.swing_low > 0 else (current_price - min_sl_dist)
+            sl_candidate = swing_low - (atr * 0.2) if swing_low > 0 else (current_price - min_sl_dist)
             # Ensure minimum SL distance
             if (current_price - sl_candidate) < min_sl_dist:
                 sl_candidate = current_price - min_sl_dist
@@ -451,8 +525,8 @@ class RiskGuardian:
             risk_dist = current_price - stop_loss
 
             # Structural TP target is the overhead swing high liquidity pool if present
-            if structure_output.swing_high > current_price:
-                take_profit = round(structure_output.swing_high, 3)
+            if swing_high > current_price:
+                take_profit = round(swing_high, 3)
             else:
                 take_profit = round(current_price + (risk_dist * MIN_RISK_REWARD_RATIO), 3)
 
@@ -463,15 +537,15 @@ class RiskGuardian:
 
         elif direction == "SELL":
             # SL placed above recent swing high or ATR buffer
-            sl_candidate = structure_output.swing_high + (atr * 0.2) if structure_output.swing_high > 0 else (current_price + min_sl_dist)
+            sl_candidate = swing_high + (atr * 0.2) if swing_high > 0 else (current_price + min_sl_dist)
             if (sl_candidate - current_price) < min_sl_dist:
                 sl_candidate = current_price + min_sl_dist
             stop_loss = round(sl_candidate, 3)
             risk_dist = stop_loss - current_price
 
             # Structural TP target is the underneath swing low liquidity pool if present
-            if structure_output.swing_low > 0 and structure_output.swing_low < current_price:
-                take_profit = round(structure_output.swing_low, 3)
+            if swing_low > 0 and swing_low < current_price:
+                take_profit = round(swing_low, 3)
             else:
                 take_profit = round(current_price - (risk_dist * MIN_RISK_REWARD_RATIO), 3)
 
@@ -487,22 +561,41 @@ class RiskGuardian:
             risk_dist = 0.0
             veto_reasons.append("Direction is neutral or undefined.")
 
-        # 3. Minimum R:R Gating (Strict 1:2.0 floor)
+        # 3. Minimum R:R Gating (configured floor)
         if direction in ("BUY", "SELL") and rr_ratio < MIN_RISK_REWARD_RATIO:
             veto_reasons.append(f"Calculated R:R {rr_ratio}:1 fails institutional minimum {MIN_RISK_REWARD_RATIO}:1.")
 
-        # 4. Spread Tolerance Check
-        if risk_dist > 0 and (spread_points / risk_dist) > 0.20:
-            veto_reasons.append(f"Spread cost ({spread_points}) exceeds 20% of stop distance ({round(risk_dist, 3)}).")
+        # 4. Spread Tolerance Check. Points are for display; compare the raw
+        # bid/ask difference in quote-price units with the stop distance.
+        try:
+            spread_price = float(spread_price)
+        except (TypeError, ValueError):
+            spread_price = 0.0
+        if not math.isfinite(spread_price) or spread_price <= 0:
+            veto_reasons.append("Verified bid/ask spread is unavailable; execution cost cannot be checked.")
+        elif risk_dist > 0 and (spread_price / risk_dist) > 0.20:
+            veto_reasons.append(f"Spread cost ({spread_price}) exceeds 20% of stop distance ({round(risk_dist, 3)}).")
+        try:
+            spread_points = float(spread_points) if spread_points is not None else None
+        except (TypeError, ValueError):
+            spread_points = None
+        if spread_points is not None and (not math.isfinite(spread_points) or spread_points <= 0):
+            spread_points = None
 
-        # 5. Position Sizing (Fixed 0.5% max risk cap)
+        # 5. Position Sizing (configured maximum risk)
         risk_amount_usd = round(account_equity * (RISK_PER_TRADE_PERCENT / 100.0), 2)
         lot_size = 0.01
         if risk_dist > 0:
-            contract_size = 100 if "XAU" in symbol else 100000
+            contract_size = float(cfg.get("lot_size", 100 if "XAU" in symbol else 100000))
+            if not math.isfinite(contract_size) or contract_size <= 0:
+                veto_reasons.append("Instrument contract size is unavailable; position sizing cannot be verified.")
+                contract_size = 1.0
             # standard lot sizing formula
             calculated_lots = risk_amount_usd / (risk_dist * contract_size)
-            lot_size = max(0.01, min(5.0, round(calculated_lots, 2)))
+            if calculated_lots < 0.01:
+                veto_reasons.append("Minimum supported position size would exceed the configured risk limit.")
+            else:
+                lot_size = min(5.0, math.floor(calculated_lots * 100) / 100.0)
 
         approved = len(veto_reasons) == 0 and direction in ("BUY", "SELL")
 
@@ -521,6 +614,7 @@ class RiskGuardian:
             risk_amount_usd=risk_amount_usd,
             recommended_lot_size=lot_size,
             spread_points=spread_points,
+            spread_price=spread_price if math.isfinite(spread_price) and spread_price > 0 else None,
             latency_ms=latency
         )
 
@@ -553,12 +647,14 @@ class IndependentCritic:
 
         if proposed_action == "BUY":
             # Check RSI overbought trap
-            if mtf.rsi_14 > 70.0:
+            rsi = mtf.rsi_14
+            atr = mtf.atr_val or 0.0
+            if rsi is not None and rsi > 70.0:
                 objections.append(f"M15 RSI is overbought ({mtf.rsi_14}); risk of immediate pullback into FVG.")
                 counter_risk = "MEDIUM"
                 critic_score -= 20
             # Check proximity to swing high resistance
-            if structure.swing_high > 0 and (structure.swing_high - current_price) < (mtf.atr_val * 0.5):
+            if structure.swing_high is not None and structure.swing_high > 0 and (structure.swing_high - current_price) < (atr * 0.5):
                 objections.append(f"Buying directly into major swing high resistance ({structure.swing_high}).")
                 trapped_risk = "HIGH"
                 critic_score -= 25
@@ -567,12 +663,14 @@ class IndependentCritic:
 
         elif proposed_action == "SELL":
             # Check RSI oversold trap
-            if mtf.rsi_14 < 30.0:
+            rsi = mtf.rsi_14
+            atr = mtf.atr_val or 0.0
+            if rsi is not None and rsi < 30.0:
                 objections.append(f"M15 RSI is oversold ({mtf.rsi_14}); vulnerable to aggressive short-covering squeeze.")
                 counter_risk = "MEDIUM"
                 critic_score -= 20
             # Check proximity to swing low support
-            if structure.swing_low > 0 and (current_price - structure.swing_low) < (mtf.atr_val * 0.5):
+            if structure.swing_low is not None and structure.swing_low > 0 and (current_price - structure.swing_low) < (atr * 0.5):
                 objections.append(f"Selling directly into major swing low liquidity pool ({structure.swing_low}).")
                 trapped_risk = "HIGH"
                 critic_score -= 25
@@ -668,23 +766,29 @@ class FinalSynthesisAgent:
 
         else:
             action = "WAIT"
-            confidence = 40
+            confidence = 0
             policy_verdict = "Market lacks full structural alignment or liquidity sweep confirmation."
 
         # English Thesis
+        geometry_entry = risk.entry_price if risk.entry_price is not None else "N/A"
+        geometry_sl = risk.stop_loss if risk.stop_loss is not None else "N/A"
+        geometry_tp = risk.take_profit if risk.take_profit is not None else "N/A"
+        geometry_rr = risk.risk_reward_ratio if risk.risk_reward_ratio is not None else "N/A"
+        mtf_score = mtf.confluence_score if mtf.confluence_score is not None else "N/A"
+        critic_score = critic.critic_score if critic.critic_score is not None else "N/A"
         thesis_en = (
             f"ZYROX AI Institutional Verdict for {symbol} at {current_price}: Action is {action} (Confidence: {confidence}%).\n"
-            f"Market Structure: {structure.trend} ({structure.regime}). Multi-timeframe confluence: {mtf.alignment} (Score: {mtf.confluence_score}/100).\n"
-            f"Execution Geometry: Entry {risk.entry_price}, SL {risk.stop_loss}, TP {risk.take_profit} (R:R {risk.risk_reward_ratio}:1, Risk: 0.5%).\n"
-            f"Critic Assessment: Score {critic.critic_score}/100 with {len(critic.objections)} recorded reservations."
+            f"Market Structure: {structure.trend} ({structure.regime}). Multi-timeframe confluence: {mtf.alignment} (Score: {mtf_score}/100).\n"
+            f"Execution Geometry: Entry {geometry_entry}, SL {geometry_sl}, TP {geometry_tp} (R:R {geometry_rr}:1, Configured risk limit: {risk.max_risk_percent}%).\n"
+            f"Critic Assessment: Score {critic_score}/100 with {len(critic.objections)} recorded reservations."
         )
 
         # Natural Khmer Institutional Thesis
         thesis_kh = (
             f"របាយការណ៍វិភាគ ZYROX AI សម្រាប់ {symbol} ក្នុងតម្លៃ {current_price}៖ ការសម្រេចចិត្តគឺ {action} (កម្រិតទំនុកចិត្ត៖ {confidence}%)\n"
-            f"រចនាសម្ព័ន្ធទីផ្សារ៖ {structure.trend} ({structure.regime})។ ការស្របគ្នានៃ Timeframe៖ {mtf.alignment} (ពិន្ទុ {mtf.confluence_score}/100)។\n"
-            f"កម្រិតជួញដូរ៖ ចំណុចចូល {risk.entry_price}, Stop Loss {risk.stop_loss}, Take Profit {risk.take_profit} (R:R {risk.risk_reward_ratio}:1, ហានិភ័យ 0.5%)។\n"
-            f"ការវាយតម្លៃរបស់ Critic៖ ពិន្ទុ {critic.critic_score}/100 ជាមួយនឹងការកត់សម្គាល់ {len(critic.objections)} ចំណុច។"
+            f"រចនាសម្ព័ន្ធទីផ្សារ៖ {structure.trend} ({structure.regime})។ ការស្របគ្នានៃ Timeframe៖ {mtf.alignment} (ពិន្ទុ {mtf_score}/100)។\n"
+            f"កម្រិតជួញដូរ៖ ចំណុចចូល {geometry_entry}, Stop Loss {geometry_sl}, Take Profit {geometry_tp} (R:R {geometry_rr}:1, កម្រិតហានិភ័យកំណត់ {risk.max_risk_percent}%)។\n"
+            f"ការវាយតម្លៃរបស់ Critic៖ ពិន្ទុ {critic_score}/100 ជាមួយនឹងការកត់សម្គាល់ {len(critic.objections)} ចំណុច។"
         )
 
         latency = round((time.time() - t0) * 1000, 2)
@@ -723,6 +827,10 @@ class Orchestrator:
         self.risk_guardian = RiskGuardian()
         self.critic_agent = IndependentCritic()
         self.synthesis_agent = FinalSynthesisAgent()
+        from taikry.agents.orderflow_sentiment_analyst import orderflow_sentiment_agent
+        from taikry.agents.fractal_mtf_analyst import fractal_mtf_agent
+        self.orderflow_agent = orderflow_sentiment_agent
+        self.fractal_mtf_agent = fractal_mtf_agent
 
     def run_deep_analysis(
         self,
@@ -756,33 +864,48 @@ class Orchestrator:
         market_open, open_msg = is_market_open(symbol)
         freshness = check_data_freshness(symbol, price_timestamp)
 
-        # If market closed or data is stale (> 30 minutes in standard freshness check), abort inference
-        if not freshness.get("fresh", False) and freshness.get("status") != "WEEKEND_CLOSED":
+        # Do not run actionable analysis against closed, stale, synthetic, or missing feeds.
+        invalid_source = any(marker in str(provider_name).upper() for marker in ("SYNTHETIC", "DEMO", "UNAVAILABLE"))
+        if (
+            not market_open
+            or not freshness.get("fresh", False)
+            or verified_price <= 0
+            or invalid_source
+        ):
+            if not market_open:
+                preflight_reason = f"Market is closed ({open_msg})."
+                preflight_status = "WAIT_MARKET_CLOSED"
+            elif verified_price <= 0 or invalid_source:
+                preflight_reason = "A verified live market price is unavailable."
+                preflight_status = "WAIT_DATA_UNAVAILABLE"
+            else:
+                preflight_reason = f"Market data is stale ({freshness.get('age_minutes', 'unknown')} minutes old)."
+                preflight_status = "WAIT_STALE_DATA"
             # Fast WAIT return to save tokens and avoid false analysis on stale data
             total_duration = round((time.time() - t_start) * 1000, 2)
-            stale_structure = MarketStructureOutput(status="SKIPPED", error="Aborted due to stale market data.")
-            stale_mtf = MultiTimeframeOutput(status="SKIPPED", error="Aborted due to stale market data.")
-            stale_macro = MacroNewsOutput(status="SKIPPED", error="Aborted due to stale market data.")
+            stale_structure = MarketStructureOutput(status="SKIPPED", error=preflight_reason)
+            stale_mtf = MultiTimeframeOutput(status="SKIPPED", error=preflight_reason)
+            stale_macro = MacroNewsOutput(status="SKIPPED", error=preflight_reason)
             stale_risk = RiskGuardianOutput(
                 status="SKIPPED",
                 approved=False,
-                veto_reasons=[f"Data freshness check failed: {freshness.get('age_minutes', 'unknown')} minutes old."],
+                veto_reasons=[preflight_reason],
                 entry_price=verified_price
             )
-            stale_critic = CriticOutput(status="SKIPPED", approved=False, objections=["Market feed is stale."])
+            stale_critic = CriticOutput(status="SKIPPED", approved=False, objections=[preflight_reason])
             stale_synthesis = FinalSynthesisOutput(
                 action="WAIT",
                 confidence=0,
-                policy_verdict=f"Market data is stale ({freshness.get('age_minutes', 0)}m old). Inference halted.",
-                thesis_en=f"Analysis halted for {symbol}. Live data stream is awaiting update.",
-                thesis_kh=f"ការវិភាគត្រូវបានផ្អាកសម្រាប់ {symbol} ដោយសារទិន្នន័យមិនទាន់ស្រស់ (ហួសពេលកំណត់)។"
+                policy_verdict=f"{preflight_reason} Inference halted.",
+                thesis_en=f"Analysis halted for {symbol}. {preflight_reason}",
+                thesis_kh=f"ការវិភាគសម្រាប់ {symbol} ត្រូវបានផ្អាក។ {preflight_reason}"
             )
 
             return WorkflowTrace(
                 request_id=request_id,
                 symbol=symbol,
                 timestamp_utc=now_utc,
-                overall_status="WAIT_STALE_DATA",
+                overall_status=preflight_status,
                 execution_time_ms=total_duration,
                 freshness_validated=False,
                 data_provenance=data_provenance,
@@ -800,21 +923,27 @@ class Orchestrator:
         df_m15 = multi_tf_data.get("M15") if multi_tf_data.get("M15") is not None else multi_tf_data.get("M5")
 
         # ---------------------------------------------------------------------
-        # STEP 2: CONCURRENT SPECIALIST AGENTS DISPATCH
+        # STEP 2: CONCURRENT SPECIALIST AGENTS DISPATCH (5 Agents Parallel)
         # ---------------------------------------------------------------------
         t_specialists_0 = time.time()
         structure_out: Optional[MarketStructureOutput] = None
         mtf_out: Optional[MultiTimeframeOutput] = None
         macro_out: Optional[MacroNewsOutput] = None
+        orderflow_out = None
+        fractal_out = None
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             fut_struct = executor.submit(self.market_structure_agent.analyze, symbol, df_m15, verified_price)
             fut_mtf = executor.submit(self.multi_timeframe_agent.analyze, symbol, multi_tf_data)
             fut_macro = executor.submit(self.macro_news_agent.analyze, symbol)
+            fut_orderflow = executor.submit(self.orderflow_agent.analyze, symbol, df_m15, verified_price)
+            fut_fractal = executor.submit(self.fractal_mtf_agent.analyze, symbol, multi_tf_data)
 
             structure_out = fut_struct.result()
             mtf_out = fut_mtf.result()
             macro_out = fut_macro.result()
+            orderflow_out = fut_orderflow.result()
+            fractal_out = fut_fractal.result()
 
         step_latencies["specialists_concurrent"] = round((time.time() - t_specialists_0) * 1000, 2)
 
@@ -831,6 +960,22 @@ class Orchestrator:
         elif structure_out.trend == "BEARISH" and mtf_out.dominant_bias == "BEARISH":
             proposed_direction = "SELL"
 
+        _, _, spread_fresh, spread_tick = mt5_receiver.get_latest_price(symbol)
+        spread_points = None
+        spread_price = None
+        if spread_fresh:
+            try:
+                bid = float(spread_tick.get("bid"))
+                ask = float(spread_tick.get("ask"))
+                spread_points = float(spread_tick.get("spread"))
+                if math.isfinite(bid) and math.isfinite(ask) and ask > bid and math.isfinite(spread_points) and spread_points > 0:
+                    spread_price = ask - bid
+                else:
+                    spread_points = None
+            except (TypeError, ValueError):
+                spread_points = None
+                spread_price = None
+
         risk_out = self.risk_guardian.evaluate_risk(
             symbol=symbol,
             direction=proposed_direction,
@@ -838,7 +983,9 @@ class Orchestrator:
             structure_output=structure_out,
             mtf_output=mtf_out,
             macro_output=macro_out,
-            account_equity=account_equity
+            account_equity=account_equity,
+            spread_points=spread_points,
+            spread_price=spread_price
         )
         step_latencies["risk_guardian_deterministic"] = round((time.time() - t_risk_0) * 1000, 2)
 
@@ -891,7 +1038,9 @@ class Orchestrator:
             macro_news=macro_out,
             risk_guardian=risk_out,
             critic=critic_out,
-            final_synthesis=final_synth
+            final_synthesis=final_synth,
+            orderflow_sentiment=orderflow_out.model_dump() if hasattr(orderflow_out, "model_dump") else orderflow_out,
+            fractal_mtf=fractal_out.model_dump() if hasattr(fractal_out, "model_dump") else fractal_out
         )
 
 

@@ -17,16 +17,16 @@ import hashlib
 import datetime
 import zoneinfo
 import logging
+import math
 from typing import Dict, Any, List, Optional, Tuple
-import os
+import threading
 from taikry.config import (
-    PRIMARY_SYMBOL, LOCAL_TIMEZONE, DEFAULT_STRATEGY_VERSION,
-    COMMISSION_PER_LOT, MT5_BRIDGE_ENABLED, get_symbol_config
+    DEFAULT_STRATEGY_VERSION, COMMISSION_PER_LOT, MIN_RISK_REWARD_RATIO
 )
 from taikry.database.session import SessionLocal
 from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel
 from taikry.data.providers import market_data_engine
-from taikry.data.validator import validate_dataframe, is_market_open
+from taikry.data.validator import validate_dataframe, is_market_open, check_data_freshness
 from taikry.data.mt5_receiver import mt5_receiver
 from taikry.agents.registry import agent_registry
 
@@ -43,7 +43,7 @@ CAMBODIA_TZ = zoneinfo.ZoneInfo("Asia/Phnom_Penh")
 
 # Default Operational Parameters
 DEFAULT_DAILY_LIMIT = 4
-DEFAULT_MIN_RR = 2.0
+DEFAULT_MIN_RR = MIN_RISK_REWARD_RATIO
 DEFAULT_MIN_SCORE = 80
 DEFAULT_MAX_SCORE = 95
 DEFAULT_MAX_ENTRY_DEVIATION_POINTS = 3.5  # Max allowable price drift from entry
@@ -99,6 +99,7 @@ class XAUUSDSignalEngine:
         self.max_entry_dev = DEFAULT_MAX_ENTRY_DEVIATION_POINTS
         self.expiry_hours = DEFAULT_SIGNAL_EXPIRY_HOURS
         self.min_agent_coverage_ratio = 0.60  # At least 60% of eligible agents must participate
+        self._generation_lock = threading.Lock()
 
     # -------------------------------------------------------------------------
     # 1. ATOMIC DAILY QUOTA & DEDUPLICATION CHECKS
@@ -106,31 +107,37 @@ class XAUUSDSignalEngine:
 
     def get_daily_quota_status(self, target_date: Optional[str] = None) -> Dict[str, Any]:
         """
-        Atomically inspects SQLite database for signals sent on the Cambodia calendar day.
+        Counts sent and pending delivery reservations for the Cambodia calendar day.
         """
         date_str = target_date or get_cambodia_date_str()
         db = SessionLocal()
         try:
-            # Query signals that were successfully sent to Telegram today
+            # Count actual deliveries separately from reservations to avoid
+            # oversubscribing the daily limit while Telegram sends are pending.
             sent_count = db.query(XAUUSDTelegramSignalModel).filter(
                 XAUUSDTelegramSignalModel.cambodia_date == date_str,
                 XAUUSDTelegramSignalModel.telegram_delivery_status == "SENT"
             ).count()
+            used_count = db.query(XAUUSDTelegramSignalModel).filter(
+                XAUUSDTelegramSignalModel.cambodia_date == date_str,
+                XAUUSDTelegramSignalModel.telegram_delivery_status.in_(["PENDING", "SENDING", "SENT", "DELIVERY_UNKNOWN"])
+            ).count()
 
-            remaining = max(0, self.daily_limit - sent_count)
-            is_limit_reached = sent_count >= self.daily_limit
+            remaining = max(0, self.daily_limit - used_count)
+            is_limit_reached = used_count >= self.daily_limit
 
             target_status = "0/4 — Awaiting High Quality Setups"
-            if sent_count == 1:
-                target_status = "1/4 — 1 Quality Signal Sent"
-            elif sent_count in [2, 3]:
-                target_status = f"{sent_count}/4 — On Target (2-4 Daily Signals)"
-            elif sent_count >= 4:
+            if used_count == 1:
+                target_status = "1/4 — Signal Reserved or Sent"
+            elif used_count in [2, 3]:
+                target_status = f"{used_count}/4 — Reserved or Sent"
+            elif used_count >= 4:
                 target_status = "4/4 — Daily Hard Cap Reached (Protected)"
 
             return {
                 "cambodia_date": date_str,
                 "signals_sent_today": sent_count,
+                "signals_reserved_or_sent_today": used_count,
                 "daily_hard_limit": self.daily_limit,
                 "remaining_quota": remaining,
                 "is_limit_reached": is_limit_reached,
@@ -153,7 +160,7 @@ class XAUUSDSignalEngine:
             existing = db.query(XAUUSDTelegramSignalModel).filter(
                 XAUUSDTelegramSignalModel.canonical_symbol == ALLOWED_CANONICAL_SYMBOL,
                 XAUUSDTelegramSignalModel.direction == direction,
-                XAUUSDTelegramSignalModel.telegram_delivery_status == "SENT",
+                XAUUSDTelegramSignalModel.telegram_delivery_status.in_(["PENDING", "SENDING", "SENT", "DELIVERY_UNKNOWN"]),
                 XAUUSDTelegramSignalModel.signal_status.in_(["SENT", "OPEN", "VALIDATED", "WAITING_CONFIRMATION"]),
                 XAUUSDTelegramSignalModel.created_at >= recent_window
             ).all()
@@ -237,6 +244,8 @@ class XAUUSDSignalEngine:
                     "setup_eligible": out.get("setup_eligible", False),
                     "evidence": out.get("evidence", []),
                     "key_levels": out.get("key_price_levels") or out.get("key_price_zones") or {},
+                    "key_price_levels": out.get("key_price_levels") or {},
+                    "key_price_zones": out.get("key_price_zones") or {},
                     "rationale": out.get("rationale", ""),
                     "status": "SUCCESS",
                     "latency_ms": round(latency_ms, 1),
@@ -273,7 +282,9 @@ class XAUUSDSignalEngine:
         symbol: str,
         verified_price: float,
         agent_outputs: Dict[str, Any],
-        multi_tf_data: Dict[str, Any]
+        multi_tf_data: Dict[str, Any],
+        price_timestamp: Optional[datetime.datetime] = None,
+        spread_price: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Synthesizes individual agent outputs into an institutional consensus decision.
@@ -288,7 +299,17 @@ class XAUUSDSignalEngine:
                 "rejection_reason": "No eligible agents available for XAUUSD analysis."
             }
 
-        successful_agents = [a for a in agent_outputs.values() if a["status"] == "SUCCESS"]
+        successful_agents = []
+        for agent_id, output in agent_outputs.items():
+            if not isinstance(output, dict) or output.get("status") != "SUCCESS":
+                continue
+            try:
+                confidence = float(output.get("confidence"))
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(confidence) or not 0 <= confidence <= 100 or not isinstance(output.get("bias"), str):
+                continue
+            successful_agents.append((agent_id, output))
         coverage = len(successful_agents) / float(total_eligible)
         if coverage < self.min_agent_coverage_ratio:
             return {
@@ -301,15 +322,22 @@ class XAUUSDSignalEngine:
         buy_weight = 0.0
         sell_weight = 0.0
         neutral_weight = 0.0
+        total_participant_weight = 0.0
         all_evidence: List[str] = []
 
         # Load dynamic agent weights from learning model if available
         agent_weights = self._load_agent_weights()
 
-        for a_id, out in agent_outputs.items():
-            w = agent_weights.get(a_id, 1.0)
-            bias = out["bias"]
-            conf = out["confidence"] / 100.0
+        for a_id, out in successful_agents:
+            try:
+                w = float(agent_weights.get(a_id, 1.0))
+            except (TypeError, ValueError):
+                w = 1.0
+            if not math.isfinite(w) or w <= 0:
+                w = 1.0
+            total_participant_weight += w
+            bias = out["bias"].upper()
+            conf = float(out["confidence"]) / 100.0
 
             if "BULLISH" in bias or "BUY" in bias:
                 buy_weight += (w * conf)
@@ -318,8 +346,9 @@ class XAUUSDSignalEngine:
             else:
                 neutral_weight += w
 
+            agent_name = str(out.get("name") or out.get("agent_name") or a_id)[:20]
             for ev in out.get("evidence", []):
-                all_evidence.append(f"[{out['name'][:20]}] {ev}")
+                all_evidence.append(f"[{agent_name}] {ev}")
 
         # Check for material conflict
         if buy_weight > 0.2 and sell_weight > 0.2:
@@ -348,57 +377,92 @@ class XAUUSDSignalEngine:
         # 3. Calculate Entry, SL, and Multi-Target TPs
         # Extract ATR for dynamic volatility buffer
         atr = self._extract_atr(agent_outputs, verified_price)
+        if not math.isfinite(atr) or atr <= 0:
+            return {
+                "decision": "NO TRADE",
+                "score": 0,
+                "rejection_reason": "A measured ATR is required to calculate trade levels."
+            }
+
+        tp1_rr = max(2.1, self.min_rr)
+        tp2_rr = max(3.3, tp1_rr + 1.2)
+        tp3_rr = max(4.8, tp2_rr + 1.5)
 
         if proposed_direction == "BUY":
             entry = verified_price
             sl = round(entry - (1.6 * atr), 2)
             risk_dist = entry - sl
-            tp1 = round(entry + (risk_dist * 2.1), 2)
-            tp2 = round(entry + (risk_dist * 3.3), 2)
-            tp3 = round(entry + (risk_dist * 4.8), 2)
+            tp1 = round(entry + (risk_dist * tp1_rr), 2)
+            tp2 = round(entry + (risk_dist * tp2_rr), 2)
+            tp3 = round(entry + (risk_dist * tp3_rr), 2)
         else:
             entry = verified_price
             sl = round(entry + (1.6 * atr), 2)
             risk_dist = sl - entry
-            tp1 = round(entry - (risk_dist * 2.1), 2)
-            tp2 = round(entry - (risk_dist * 3.3), 2)
-            tp3 = round(entry - (risk_dist * 4.8), 2)
+            tp1 = round(entry - (risk_dist * tp1_rr), 2)
+            tp2 = round(entry - (risk_dist * tp2_rr), 2)
+            tp3 = round(entry - (risk_dist * tp3_rr), 2)
 
         rr1 = round(abs(tp1 - entry) / max(0.01, risk_dist), 2)
         rr2 = round(abs(tp2 - entry) / max(0.01, risk_dist), 2)
         rr3 = round(abs(tp3 - entry) / max(0.01, risk_dist), 2)
 
-        # 4. Strict Risk Validation (Agent 4 / Risk Arbiter)
-        if "risk_validator" in agent_outputs and agent_outputs["risk_validator"].get("status") == "SUCCESS":
-            risk_res = agent_outputs["risk_validator"]
-            if risk_res.get("bias") in ["REJECT", "NO_TRADE"] or risk_res.get("decision") == "REJECT":
-                return {
-                    "decision": "NO TRADE",
-                    "score": 0,
-                    "rejection_reason": f"Risk Arbiter VETO: {'; '.join(risk_res.get('evidence', ['Risk validation rejected']))}"
-                }
-        elif len(agent_outputs) >= 3 and "macro_analyst" in agent_outputs and agent_outputs["macro_analyst"].get("status") == "SUCCESS":
-            risk_adapter = agent_registry.get_adapter("risk_validator")
-            if risk_adapter:
-                now_dt = datetime.datetime.now(datetime.timezone.utc)
-                risk_res = risk_adapter.execute(
-                    symbol=symbol,
-                    verified_price=verified_price,
-                    price_timestamp=now_dt,
-                    agent1_report=agent_outputs.get("technical_analyst", {}),
-                    agent2_report=agent_outputs.get("ict_smc_analyst", {}),
-                    agent3_report=agent_outputs.get("macro_analyst", {})
-                )
-                if risk_res.get("decision") == "REJECT":
-                    return {
-                        "decision": "NO TRADE",
-                        "score": 0,
-                        "rejection_reason": f"Risk Arbiter VETO: {'; '.join(risk_res.get('reasons', ['Risk validation rejected']))}"
-                    }
+        # 4. Strict Risk Validation (Agent 4 / Risk Arbiter). Missing reports,
+        # a missing validator, and every non-APPROVE verdict must block the setup.
+        required_reports = ("technical_analyst", "ict_smc_analyst", "macro_analyst")
+        if any(
+            not isinstance(agent_outputs.get(agent_id), dict)
+            or agent_outputs[agent_id].get("status") != "SUCCESS"
+            for agent_id in required_reports
+        ):
+            return {
+                "decision": "NO TRADE",
+                "score": 0,
+                "rejection_reason": "A required technical, structure, or macro report is unavailable; risk review cannot be completed."
+            }
 
-        # 5. Calculate AI Confluence Score (Strict 80% - 95%)
-        raw_score = 80 + int(min(15, (max(buy_weight, sell_weight) - 1.4) * 8))
-        score = max(self.min_score, min(self.max_score, raw_score))
+        risk_adapter = agent_registry.get_adapter("risk_validator")
+        if risk_adapter is None:
+            return {
+                "decision": "NO TRADE",
+                "score": 0,
+                "rejection_reason": "Risk validator is unavailable; setup rejected."
+            }
+
+        risk_res = risk_adapter.execute(
+            symbol=symbol,
+            verified_price=verified_price,
+            price_timestamp=price_timestamp,
+            agent1_report=agent_outputs["technical_analyst"],
+            agent2_report=agent_outputs["ict_smc_analyst"],
+            agent3_report=agent_outputs["macro_analyst"],
+            spread_price=spread_price,
+            candidate_levels={"stop_loss": sl, "take_profit_1": tp1, "take_profit_2": tp2}
+        )
+        if not isinstance(risk_res, dict):
+            reasons = ["Risk validator returned an invalid result."]
+        elif risk_res.get("decision") != "APPROVE":
+            reasons = risk_res.get("reasons") or risk_res.get("evidence") or [risk_res.get("decision", "Risk validation unavailable")]
+        else:
+            reasons = []
+        if reasons:
+            return {
+                "decision": "NO TRADE",
+                "score": 0,
+                "rejection_reason": f"Risk Arbiter veto: {'; '.join(str(reason) for reason in reasons)}"
+            }
+
+        # Measure directional support against all participating agents. Do not
+        # add an artificial floor; the configured quality gate handles it.
+        raw_score = 100.0 * max(buy_weight, sell_weight) / total_participant_weight if total_participant_weight else 0.0
+        score = max(0, min(self.max_score, int(round(raw_score))))
+        if score < self.min_score:
+            return {
+                "decision": "WAIT",
+                "score": score,
+                "rejection_reason": f"Measured directional support {score}/100 is below the configured minimum {self.min_score}/100.",
+                "evidence": all_evidence
+            }
 
         return {
             "decision": proposed_direction,
@@ -422,6 +486,19 @@ class XAUUSDSignalEngine:
     # -------------------------------------------------------------------------
 
     def generate_xauusd_signal(self, raw_symbol: str = "XAUUSD") -> Dict[str, Any]:
+        """Serialize signal generation within this application process."""
+        if not self._generation_lock.acquire(blocking=False):
+            return {
+                "success": False,
+                "error": "A signal generation request is already in progress.",
+                "status": "GENERATION_IN_PROGRESS"
+            }
+        try:
+            return self._generate_xauusd_signal_locked(raw_symbol)
+        finally:
+            self._generation_lock.release()
+
+    def _generate_xauusd_signal_locked(self, raw_symbol: str = "XAUUSD") -> Dict[str, Any]:
         """
         Main pipeline entry point.
         Enforces strict XAUUSD-only validation, runs all eligible agents, checks quota,
@@ -451,6 +528,18 @@ class XAUUSDSignalEngine:
         # Step 3: Fetch Market Data Snapshot
         timeframes = ["D1", "H4", "H1", "M15", "M5"]
         multi_tf_data = market_data_engine.get_multi_timeframe_candles(canonical_symbol, timeframes)
+        synthetic_timeframes = [
+            tf for tf, frame in multi_tf_data.items()
+            if frame is None or frame.empty or ("source" in frame.columns and frame["source"].astype(str).str.upper().str.contains("DEMO|SYNTHETIC").any())
+        ]
+        if synthetic_timeframes:
+            return {
+                "success": False,
+                "error": "Synthetic fallback candles cannot be used to generate trade signals.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_SYNTHETIC_MARKET_DATA",
+                "synthetic_timeframes": synthetic_timeframes
+            }
         primary_df = multi_tf_data.get("M15")
         if primary_df is None or primary_df.empty:
             primary_df = multi_tf_data.get("M5")
@@ -472,6 +561,22 @@ class XAUUSDSignalEngine:
                 "canonical_symbol": canonical_symbol,
                 "status": "MISSING_VERIFIED_PRICE"
             }
+        if any(marker in str(price_source).upper() for marker in ("DEMO", "SYNTHETIC", "UNAVAILABLE")):
+            return {
+                "success": False,
+                "error": "Synthetic fallback prices cannot be used to generate trade signals.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_SYNTHETIC_MARKET_DATA"
+            }
+        m15_freshness = check_data_freshness(canonical_symbol, primary_df.iloc[-1].get("timestamp"), "M15")
+        if not m15_freshness.get("fresh"):
+            return {
+                "success": False,
+                "error": "The latest M15 market data is stale; signal generation is blocked.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_STALE_MARKET_DATA",
+                "data_freshness": m15_freshness
+            }
         verified_price = round(float(verified_price), 2)
 
         # Step 3b: Stale/Disconnected Feed Guardrail: Never use a price from a stale or disconnected feed
@@ -485,23 +590,41 @@ class XAUUSDSignalEngine:
                 "status": "BLOCKED_STALE_BROKER_FEED"
             }
 
-        require_mt5 = os.getenv("REQUIRE_MT5_FOR_SIGNALS", "false").lower() in ("true", "1", "yes")
-        if require_mt5 and b_status == "DISCONNECTED":
+        if b_status != "CONNECTED":
             return {
                 "success": False,
-                "error": "Market feed from Exness MT5 is currently DISCONNECTED. Actionable signals blocked (REQUIRE_MT5_FOR_SIGNALS=true).",
+                "error": "A fresh Exness MT5 market feed is required for verified bid/ask spread and actionable signal validation.",
                 "canonical_symbol": canonical_symbol,
                 "status": "BLOCKED_DISCONNECTED_BROKER_FEED"
             }
 
-        # Step 3c: Extract live spread and estimated transaction costs
+        # Step 3c: A verified bid/ask spread is required for risk validation.
         mt5_p, mt5_src, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(canonical_symbol)
-        spread_val = float(mt5_tick.get("spread", 0.0)) if mt5_tick else 0.0
-        if spread_val <= 0:
-            cfg = get_symbol_config(canonical_symbol)
-            spread_val = float(cfg.get("spread_estimate", 0.25))
-        # 1 standard gold lot = 100 oz. $7 commission round turn = 0.07 pts
-        estimated_costs = round(spread_val + (COMMISSION_PER_LOT / 100.0), 2)
+        try:
+            bid = float(mt5_tick.get("bid")) if mt5_tick else 0.0
+            ask = float(mt5_tick.get("ask")) if mt5_tick else 0.0
+            spread_points = float(mt5_tick.get("spread")) if mt5_tick else 0.0
+        except (TypeError, ValueError):
+            bid = ask = spread_points = 0.0
+        if (
+            not mt5_fresh
+            or not math.isfinite(bid)
+            or not math.isfinite(ask)
+            or bid <= 0
+            or ask <= bid
+            or not math.isfinite(spread_points)
+            or spread_points <= 0
+        ):
+            return {
+                "success": False,
+                "error": "A fresh broker bid/ask spread is required for XAUUSD risk validation.",
+                "canonical_symbol": canonical_symbol,
+                "status": "BLOCKED_MISSING_VERIFIED_SPREAD"
+            }
+        spread_price = ask - bid
+        spread_points = round(spread_points, 1)
+        # 1 standard gold lot = 100 oz; $7 round-turn commission is $0.07/oz.
+        estimated_costs = round(spread_price + (COMMISSION_PER_LOT / 100.0), 2)
 
         # Step 4: Atomic Daily Quota Check (Cambodia Calendar Day)
         cambodia_date = get_cambodia_date_str()
@@ -519,7 +642,14 @@ class XAUUSDSignalEngine:
         agent_outputs = self.execute_all_agents(canonical_symbol, multi_tf_data, verified_price)
 
         # Step 6: Consensus Synthesis
-        consensus = self.synthesize_consensus(canonical_symbol, verified_price, agent_outputs, multi_tf_data)
+        consensus = self.synthesize_consensus(
+            canonical_symbol,
+            verified_price,
+            agent_outputs,
+            multi_tf_data,
+            price_timestamp=price_ts,
+            spread_price=spread_price
+        )
         decision = consensus.get("decision")
 
         if decision not in ["BUY", "SELL"]:
@@ -621,7 +751,7 @@ class XAUUSDSignalEngine:
                 broker_source=price_source,
                 setup_score_label="Setup Score (out of 100, not win probability)",
                 calibrated_probability=None,
-                spread_points=spread_val,
+                spread_points=spread_points,
                 estimated_trading_costs=estimated_costs,
                 execution_mode="SHADOW_PAPER",
                 consensus_summary=summary_text,
@@ -662,9 +792,9 @@ class XAUUSDSignalEngine:
                 "risk_reward_3": consensus["risk_reward_3"],
                 "ai_score": consensus["score"],
                 "setup_score": consensus["score"],
-                "score_explanation": f"Setup confluence score {consensus['score']}/100 based on SMC structure, liquidity sweep, and multi-timeframe alignment. This is an execution setup score, NOT a statistical win probability.",
+                "score_explanation": f"Measured directional support score {consensus['score']}/100 based on participating agents' weighted direction and confidence; not a statistical win probability.",
                 "calibrated_probability": None,
-                "spread_points": spread_val,
+                "spread_points": spread_points,
                 "estimated_trading_costs": estimated_costs,
                 "execution_mode": "SHADOW_PAPER",
                 "strategy": "ZYROX Institutional Multi-Agent Consensus",
@@ -684,14 +814,17 @@ class XAUUSDSignalEngine:
     # -------------------------------------------------------------------------
 
     def _extract_atr(self, agent_outputs: Dict[str, Any], verified_price: float) -> float:
-        """Extracts verified ATR from technical analyst output or computes safe fallback."""
+        """Extracts measured ATR from the technical analyst; returns zero when unavailable."""
         tech = agent_outputs.get("technical_analyst", {})
         levels = tech.get("key_levels", {})
         atr_val = levels.get("atr")
-        if atr_val and isinstance(atr_val, (int, float)) and atr_val > 0.5:
-            return round(float(atr_val), 2)
-        # Conservative Gold ATR fallback: 0.25% of price (~10-15 pts)
-        return round(max(3.5, verified_price * 0.0025), 2)
+        try:
+            atr = float(atr_val)
+        except (TypeError, ValueError):
+            return 0.0
+        if not math.isfinite(atr) or atr <= 0.5:
+            return 0.0
+        return round(atr, 2)
 
     def _load_agent_weights(self) -> Dict[str, float]:
         """Loads historical accuracy weights from database, normalized around 1.0."""

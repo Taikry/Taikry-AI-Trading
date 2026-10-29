@@ -48,8 +48,7 @@ When running Python locally on your machine or VPS:
 
 - If hosted on a VPS: `http://YOUR_SERVER_IP:8000`
 - If running locally behind Ngrok or Cloudflare Tunnel: `https://your-tunnel-url.com`
-- Set Header:
-  `X-TAIKRY-API-KEY: taikry_admin_access_token_2026`
+- Use the protected `/api/v1/admin/analyze` route for scheduled or Telegram-command scans. Store your server's `ADMIN_API_KEY` in Make Vault and map it into the `X-TAIKRY-API-KEY` header for that route and other protected routes. Replace `YOUR_PUBLIC_API_HOST` with a reachable HTTPS host. Do not use a literal key from this template.
 
 ---
 

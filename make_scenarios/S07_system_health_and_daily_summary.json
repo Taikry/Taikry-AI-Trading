@@ -13,7 +13,7 @@
       "module": "http:ActionSendRequest",
       "name": "GET /health",
       "parameters": {
-        "url": "http://localhost:8000/health",
+        "url": "https://YOUR_PUBLIC_API_HOST/health",
         "method": "GET"
       }
     },
@@ -32,7 +32,7 @@
       "module": "telegram:sendTextMessage",
       "name": "Send Service Degraded Alert",
       "parameters": {
-        "chat_id": "-1004341134868",
+        "chat_id": "",
         "parse_mode": "HTML",
         "text": "⚠️ <b>TAIKRY SYSTEM HEALTH ALERT</b>\n\nStatus: <b>{{2.data.status}}</b>\nTimestamp: {{2.data.timestamp_utc}}\nMarket Feeds: {{2.data.market_status}}\n\n<i>Immediate investigation required.</i>"
       }
@@ -48,8 +48,9 @@
       "module": "http:ActionSendRequest",
       "name": "GET /api/v1/reports/daily",
       "parameters": {
-        "url": "http://localhost:8000/api/v1/reports/daily",
-        "method": "GET"
+        "url": "https://YOUR_PUBLIC_API_HOST/api/v1/reports/daily",
+        "method": "GET",
+        "headers": [{"name": "X-TAIKRY-API-KEY", "value": ""}]
       }
     },
     {
@@ -57,7 +58,7 @@
       "module": "telegram:sendTextMessage",
       "name": "Broadcast Daily Executive Briefing",
       "parameters": {
-        "chat_id": "-1004341134868",
+        "chat_id": "",
         "parse_mode": "HTML",
         "text": "📅 <b>TAIKRY PRO — DAILY EXECUTIVE MARKET BRIEFING</b>\n\n{{6.data.daily_briefing_english}}"
       }

@@ -1,5 +1,5 @@
 """
-24/7 Resilient Market Monitoring Engine for TAIKRY AI MARKET INTELLIGENCE PRO
+Continuous Market Monitoring Engine for TAIKRY AI MARKET INTELLIGENCE PRO
 Orchestrates:
 - 15-minute analysis cycles for primary assets
 - Real-time paper trade position tracking & TP/SL execution
@@ -10,6 +10,7 @@ Orchestrates:
 import time
 import datetime
 import threading
+import math
 from typing import Dict, Any, List
 
 from taikry.config import (
@@ -31,7 +32,7 @@ from taikry.trading.xauusd_signal_engine import xauusd_signal_engine, normalize_
 from taikry.trading.xauusd_tracker import xauusd_performance_tracker
 
 class MarketMonitor247:
-    """Continuous 24/7 Market Surveillance Engine."""
+    """Continuous market surveillance while the host process is running."""
 
     def __init__(self):
         self.is_running = False
@@ -94,7 +95,7 @@ class MarketMonitor247:
                 score = res.get("ai_score") or res.get("confidence_score", 0)
 
                 # Strict Quality Gate: ONLY setups with active direction AND score strictly in 80% - 95%
-                if (setup_status == "APPROVE" or prop_dir in ["LONG", "SHORT", "BUY", "SELL"]) and (80 <= score <= 95):
+                if setup_status == "APPROVE" and prop_dir in ["LONG", "SHORT", "BUY", "SELL"] and (80 <= score <= 95):
                     qualifying_candidates.append(res)
 
             except Exception as e:
@@ -169,6 +170,9 @@ class MarketMonitor247:
         sym = consensus_res["symbol"]
         score = consensus_res.get("ai_score") or consensus_res.get("confidence_score", 0)
 
+        if consensus_res.get("setup_status") != "APPROVE" or consensus_res.get("proposed_direction") not in ["LONG", "SHORT", "BUY", "SELL"]:
+            return
+
         # Strict Guard: Score MUST be strictly within 80% - 95%
         if score < 80 or score > 95:
             return
@@ -187,19 +191,20 @@ class MarketMonitor247:
             if elapsed_min < cooldown_limit:
                 return
 
-        entry = consensus_res.get("entry_price") or consensus_res.get("verified_price", 0.0)
-        sl = consensus_res.get("stop_loss")
-        tp1 = consensus_res.get("take_profit_1")
+        try:
+            entry = float(consensus_res.get("entry_price"))
+            sl = float(consensus_res.get("stop_loss"))
+            tp1 = float(consensus_res.get("take_profit_1"))
+        except (TypeError, ValueError):
+            logger.info("Approved setup for %s skipped: entry, stop-loss, or take-profit is missing.", sym)
+            return
+        if not all(math.isfinite(value) and value > 0 for value in (entry, sl, tp1)):
+            logger.info("Approved setup for %s skipped: invalid price levels.", sym)
+            return
+        if (is_buy and not sl < entry < tp1) or (not is_buy and not sl > entry > tp1):
+            logger.info("Approved setup for %s skipped: price levels conflict with direction.", sym)
+            return
         tp2 = consensus_res.get("take_profit_2")
-        dec = 2 if (entry > 10 or "XAU" in sym or "XAG" in sym) else 4
-        if "JPY" in sym: dec = 3
-
-        if not sl or sl == 0.0:
-            atr = consensus_res.get("agents", {}).get("agent_1_technical", {}).get("key_price_levels", {}).get("atr") or (entry * 0.004)
-            sl = round(entry - (1.5 * atr) if is_buy else entry + (1.5 * atr), dec)
-        if not tp1 or tp1 == 0.0:
-            sl_dist = abs(entry - sl)
-            tp1 = round(entry + (sl_dist * 2.2) if is_buy else entry - (sl_dist * 2.2), dec)
 
         # 1. Register persistent stateful signal in Signal Lifecycle Manager (General Dashboard)
         created_signal = signal_lifecycle_manager.create_signal(
@@ -209,7 +214,7 @@ class MarketMonitor247:
             stop_loss=sl,
             take_profit_1=tp1,
             take_profit_2=tp2,
-            risk_reward=consensus_res.get("risk_reward_ratio", "1:2.2"),
+            risk_reward=consensus_res.get("risk_reward_ratio", "N/A"),
             ai_score=score,
             timeframe=consensus_res.get("timeframe", "M15"),
             initial_state=SignalState.WAITING_CONFIRMATION,
@@ -256,8 +261,7 @@ class MarketMonitor247:
             "paper_trade": paper_res,
             "report_english": consensus_res.get("report_english"),
             "report_khmer": consensus_res.get("report_khmer"),
-            "chat_id": TELEGRAM_CHAT_ID or "-1004341134868",
-            "telegram_chat_id": TELEGRAM_CHAT_ID or "-1004341134868",
+            **({"chat_id": TELEGRAM_CHAT_ID, "telegram_chat_id": TELEGRAM_CHAT_ID} if TELEGRAM_CHAT_ID else {}),
             "timestamp": now_utc.isoformat()
         }
         dispatch_to_make(payload, event_type="critical_market_alert")

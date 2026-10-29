@@ -51,7 +51,7 @@ def run_migration():
                 db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN setup_score_label VARCHAR(100) DEFAULT 'Setup Score (out of 100, not win probability)';"))
                 db.commit()
             if "spread_points" not in sig_cols:
-                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN spread_points FLOAT DEFAULT 0.25;"))
+                db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN spread_points FLOAT DEFAULT NULL;"))
                 db.commit()
             if "estimated_trading_costs" not in sig_cols:
                 db.execute(text("ALTER TABLE xauusd_telegram_signals ADD COLUMN estimated_trading_costs FLOAT DEFAULT 0.0;"))
@@ -70,7 +70,7 @@ def run_migration():
                 ("strategy_version", "VARCHAR(50)", "'ZYROX-SMC-V2.1'"),
                 ("broker_source", "VARCHAR(50)", "'EXNESS_MT5'"),
                 ("setup_score_label", "VARCHAR(100)", "'Setup Score (out of 100, not win probability)'"),
-                ("spread_points", "FLOAT", "0.25"),
+                ("spread_points", "FLOAT", "NULL"),
                 ("estimated_trading_costs", "FLOAT", "0.0"),
                 ("calibrated_probability", "FLOAT", "NULL"),
                 ("execution_mode", "VARCHAR(30)", "'SHADOW_PAPER'"),

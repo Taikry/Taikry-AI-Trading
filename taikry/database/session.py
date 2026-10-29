@@ -2,10 +2,13 @@
 Database Session Management for TAIKRY AI MARKET INTELLIGENCE PRO
 """
 import os
+import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from taikry.config import DATABASE_URL
 from taikry.database.models import Base
+
+logger = logging.getLogger("taikry.database.session")
 
 # Normalize Render's postgres:// scheme to postgresql:// for SQLAlchemy 2.0
 db_url = DATABASE_URL
@@ -40,13 +43,21 @@ def init_db():
     try:
         from taikry.database.migrate_lifecycle_events import run_migration
         run_migration()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception("Lifecycle schema migration failed")
+        raise RuntimeError("Lifecycle schema migration failed") from exc
     try:
         from taikry.database.migrate_vip_subscriptions import run_vip_migration
         run_vip_migration()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception("VIP subscription schema migration failed")
+        raise RuntimeError("VIP subscription schema migration failed") from exc
+    try:
+        from taikry.database.migrate_learning_metrics import run_learning_migration
+        run_learning_migration()
+    except Exception as exc:
+        logger.exception("Agent-learning schema migration failed")
+        raise RuntimeError("Agent-learning schema migration failed") from exc
 
 # Auto-initialize database schema
 init_db()

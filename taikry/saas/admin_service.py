@@ -10,6 +10,7 @@ Implements:
 
 import os
 import datetime
+import logging
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -26,6 +27,8 @@ from taikry.database.models import (
 )
 from taikry.saas.security import hash_password
 
+logger = logging.getLogger(__name__)
+
 
 def is_admin_user(user: Optional[User]) -> bool:
     """Verifies that the user object has verified ADMIN privileges."""
@@ -35,13 +38,16 @@ def is_admin_user(user: Optional[User]) -> bool:
 def bootstrap_admin_if_needed(db: Session) -> Optional[User]:
     """
     Bootstraps the first administrator using environment variables:
-    ADMIN_EMAIL and ADMIN_PASSWORD (or ADMIN_API_KEY).
+    SAAS_ADMIN_EMAIL and SAAS_ADMIN_PASSWORD.
     Never uses a hardcoded default password.
     """
     admin_email = os.getenv("SAAS_ADMIN_EMAIL", "").strip().lower()
     admin_password = os.getenv("SAAS_ADMIN_PASSWORD", "").strip()
 
     if not admin_email or not admin_password:
+        return None
+    if len(admin_password) < 16 or admin_password in {"change_this_admin_password_2026", "generate-a-long-random-admin-password"}:
+        logger.warning("Initial admin bootstrap skipped: configure a unique password of at least 16 characters.")
         return None
 
     user = db.query(User).filter(User.email == admin_email).first()
@@ -76,9 +82,10 @@ def bootstrap_admin_if_needed(db: Session) -> Optional[User]:
         db.add(sub)
         db.commit()
     elif user.role != "ADMIN":
-        user.role = "ADMIN"
-        user.is_verified = True
-        db.commit()
+        # Never elevate an existing account just because its address matches an
+        # environment setting; the account holder could already control it.
+        logger.warning("Initial admin bootstrap skipped: configured admin email already belongs to a non-admin account.")
+        return None
 
     return user
 

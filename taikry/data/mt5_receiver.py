@@ -32,12 +32,13 @@ class MT5BridgeReceiver:
         self._lock = threading.RLock()
         self._ticks: Dict[str, Dict[str, Any]] = {}
         self._candles: Dict[str, pd.DataFrame] = {}
+        self._seen_signatures: Dict[str, float] = {}
         self._bridge_meta: Dict[str, Any] = {
             "connected": False,
             "last_heartbeat_utc": None,
             "last_tick_utc": None,
-            "broker": "Exness",
-            "server": "Exness-Real",
+            "broker": None,
+            "server": None,
             "terminal_ping_ms": 0.0,
             "bridge_version": "2.1.0",
             "active_symbols": []
@@ -55,15 +56,15 @@ class MT5BridgeReceiver:
         body_bytes: Optional[bytes] = None
     ) -> bool:
         """
-        Validates authentication token, timestamp drift (replay protection),
-        and optional HMAC-SHA256 signature from the Windows MT5 bridge.
+        Validates the configured token, required timestamp, and HMAC-SHA256
+        signature over timestamp + exact request body. Rejects repeated signatures.
         """
         if not MT5_BRIDGE_ENABLED:
             logger.warning("[MT5_BRIDGE] Inbound request rejected: MT5_BRIDGE_ENABLED is False")
             return False
 
-        expected_token = MT5_BRIDGE_TOKEN or "zyrox_mt5_bridge_secure_token_change_me"
-        if not expected_token:
+        expected_token = MT5_BRIDGE_TOKEN
+        if not expected_token or len(expected_token) < 32 or expected_token == "zyrox_mt5_bridge_secure_token_change_me":
             logger.warning("[MT5_BRIDGE] Inbound request rejected: MT5_BRIDGE_TOKEN is not configured on server")
             return False
 
@@ -73,26 +74,30 @@ class MT5BridgeReceiver:
             return False
 
         # Timestamp drift validation (within 60 seconds)
-        if timestamp_header:
-            try:
-                req_ts = float(timestamp_header)
-                now_ts = time.time()
-                if abs(now_ts - req_ts) > 60.0:
-                    logger.warning(f"[MT5_BRIDGE] Inbound request rejected: timestamp drift {abs(now_ts - req_ts):.1f}s > 60s")
-                    return False
-            except (ValueError, TypeError):
-                pass
+        if not timestamp_header or not signature or body_bytes is None:
+            logger.warning("[MT5_BRIDGE] Inbound request rejected: timestamp, signature, and body are required")
+            return False
+        try:
+            req_ts = float(timestamp_header)
+        except (ValueError, TypeError):
+            return False
+        now_ts = time.time()
+        if abs(now_ts - req_ts) > 60.0:
+            logger.warning(f"[MT5_BRIDGE] Inbound request rejected: timestamp drift {abs(now_ts - req_ts):.1f}s > 60s")
+            return False
 
-        # Optional HMAC signature verification
-        if signature and body_bytes:
-            expected_sig = hmac.new(
-                expected_token.encode("utf-8"),
-                body_bytes,
-                hashlib.sha256
-            ).hexdigest()
-            if not hmac.compare_digest(signature, expected_sig):
-                logger.warning("[MT5_BRIDGE] Inbound request rejected: HMAC signature mismatch")
+        signed_payload = timestamp_header.encode("utf-8") + b"." + body_bytes
+        expected_sig = hmac.new(expected_token.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected_sig):
+            logger.warning("[MT5_BRIDGE] Inbound request rejected: HMAC signature mismatch")
+            return False
+
+        with self._lock:
+            self._seen_signatures = {sig: seen_at for sig, seen_at in self._seen_signatures.items() if now_ts - seen_at <= 120.0}
+            if signature in self._seen_signatures:
+                logger.warning("[MT5_BRIDGE] Inbound request rejected: repeated signed request")
                 return False
+            self._seen_signatures[signature] = now_ts
 
         return True
 
@@ -108,7 +113,8 @@ class MT5BridgeReceiver:
             self._bridge_meta["last_heartbeat_utc"] = now_utc.isoformat()
             self._bridge_meta["broker"] = meta.get("broker", self._bridge_meta["broker"])
             self._bridge_meta["server"] = meta.get("server", self._bridge_meta["server"])
-            self._bridge_meta["terminal_ping_ms"] = float(meta.get("terminal_ping_ms", 0.0))
+            ping_value = meta.get("terminal_ping_ms")
+            self._bridge_meta["terminal_ping_ms"] = float(ping_value) if ping_value is not None else None
             self._bridge_meta["bridge_version"] = meta.get("bridge_version", "2.1.0")
             if "active_symbols" in meta:
                 self._bridge_meta["active_symbols"] = meta["active_symbols"]
@@ -267,17 +273,30 @@ class MT5BridgeReceiver:
                 else:
                     status = "DISCONNECTED"
 
+            fresh_tick_symbols = []
+            for symbol, tick in self._ticks.items():
+                received_at = tick.get("received_at")
+                if received_at is None:
+                    continue
+                if received_at.tzinfo is None:
+                    received_at = received_at.replace(tzinfo=datetime.timezone.utc)
+                bid = float(tick.get("bid", 0.0) or 0.0)
+                ask = float(tick.get("ask", 0.0) or 0.0)
+                if (now - received_at).total_seconds() <= MT5_BRIDGE_STALE_SECONDS and bid > 0 and ask >= bid:
+                    fresh_tick_symbols.append(symbol)
+
             return {
                 "status": status,
                 "seconds_since_last_activity": round(seconds_ago, 1) if seconds_ago is not None else None,
-                "broker": self._bridge_meta.get("broker", "Exness"),
-                "server": self._bridge_meta.get("server", "Exness-Real"),
+                "broker": self._bridge_meta.get("broker"),
+                "server": self._bridge_meta.get("server"),
                 "terminal_ping_ms": self._bridge_meta.get("terminal_ping_ms", 0.0),
                 "active_symbols": self._bridge_meta.get("active_symbols", []),
+                "fresh_tick_symbols": sorted(fresh_tick_symbols),
                 "last_heartbeat_utc": last_hb_str,
                 "last_tick_utc": last_tick_str,
                 "stale_threshold_seconds": MT5_BRIDGE_STALE_SECONDS,
-                "is_active_for_signals": (status == "CONNECTED")
+                "is_active_for_signals": bool(fresh_tick_symbols)
             }
 
     def is_symbol_fresh(self, symbol: str) -> bool:

@@ -23,8 +23,9 @@ import pandas as pd
 import numpy as np
 
 from taikry.indicators.chart_engine import XAUUSDChartEngine
-from taikry.data.providers import market_data_engine, generate_synthetic_candles
-from taikry.data.validator import is_market_open
+from taikry.data.providers import market_data_engine
+from taikry.data.validator import check_data_freshness, is_market_open
+from taikry.config import MIN_RISK_REWARD_RATIO
 
 
 class MultiTimeframeEngine:
@@ -82,27 +83,62 @@ class MultiTimeframeEngine:
         bearish_votes = 0
         neutral_votes = 0
 
-        verified_price = 0.0
+        verified_price, price_source, price_timestamp = market_data_engine.get_verified_price(sym)
         daily_high = 0.0
         daily_low = 0.0
 
+        def unavailable(reason: str, freshness: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+            return {
+                "symbol": sym,
+                "status": "DATA_UNAVAILABLE",
+                "data_error": reason,
+                "data_freshness": freshness,
+                "price_source": price_source,
+                "verified_price": None,
+                "overall_bias": "NO TRADE",
+                "overall_direction": "HOLD",
+                "confluence_score": None,
+                "market_open": market_open,
+                "market_status_desc": open_desc,
+                "session_context": session_info,
+                "trade_setup": {"action": "HOLD", "entry_price": None, "stop_loss": None, "take_profit_1": None, "take_profit_2": None, "risk_reward_ratio": "N/A"},
+                "timeframe_details": {},
+                "summary_en": reason,
+                "summary_kh": f"{reason} ទិន្នន័យមិនអាចប្រើសម្រាប់ការវិភាគបានទេ។",
+                "timestamp_utc": now_utc.isoformat()
+            }
+
+        price_freshness = check_data_freshness(sym, price_timestamp, "M15")
+        if verified_price <= 0 or "SYNTHETIC" in str(price_source).upper() or not price_freshness.get("fresh"):
+            return unavailable("Verified live market price is unavailable or stale.", price_freshness)
+
         for tf in self.TIMEFRAMES:
-            limit = 60 if tf in ["D1", "H4"] else 120
+            limit = 250 if tf == "D1" else (180 if tf == "H4" else 120)
             df = market_data_engine.get_candles(sym, timeframe=tf, limit=limit)
-            if df is None or df.empty or len(df) < 15:
-                df = generate_synthetic_candles(sym, timeframe=tf, limit=limit)
+            minimum_bars = 200 if tf == "D1" else 50
+            if df is None or df.empty or len(df) < minimum_bars:
+                return unavailable(f"Verified {tf} candle data is unavailable or insufficient.")
+            if "source" in df.columns and df["source"].astype(str).str.upper().str.contains("SYNTHETIC|DEMO").any():
+                return unavailable(f"Synthetic {tf} candles cannot be used for market analysis.")
+            if tf == "M15":
+                candle_freshness = check_data_freshness(sym, df.iloc[-1].get("timestamp"), tf)
+                if not candle_freshness.get("fresh"):
+                    return unavailable("Latest M15 candle is stale.", candle_freshness)
 
             # Compute causal indicators
             df_ind = self.chart_engine.compute_technical_indicators(df)
             last_row = df_ind.iloc[-1]
             close = float(last_row["close"])
-            if verified_price == 0.0:
-                verified_price = close
 
             ema20 = float(last_row.get("ema_20", close))
             ema50 = float(last_row.get("ema_50", close))
-            ema200 = float(last_row.get("ema_200", close))
-            rsi = float(last_row.get("rsi_14", 50.0))
+            ema200_raw = last_row.get("ema_200")
+            ema200 = float(ema200_raw) if pd.notna(ema200_raw) else None
+            rsi_raw = last_row.get("rsi_14")
+            atr_raw = last_row.get("atr_14")
+            if pd.isna(rsi_raw) or pd.isna(atr_raw) or not np.isfinite(float(atr_raw)) or float(atr_raw) <= 0:
+                return unavailable(f"Verified indicator history is insufficient for {tf}.")
+            rsi = float(rsi_raw)
 
             # Detect structural swing points and BOS/CHoCH
             swings = self.chart_engine.detect_causal_swings(df_ind, left=2, right=2)
@@ -118,10 +154,10 @@ class MultiTimeframeEngine:
                 daily_high = float(df_ind["high"].max())
                 daily_low = float(df_ind["low"].min())
                 # D1 Bias based on 200 EMA and structure
-                if close > ema200 and close > ema50:
+                if ema200 is not None and close > ema200 and close > ema50:
                     bias = "BULLISH"
                     bullish_votes += 2  # D1 carries double weight
-                elif close < ema200 and close < ema50:
+                elif ema200 is not None and close < ema200 and close < ema50:
                     bias = "BEARISH"
                     bearish_votes += 2
                 else:
@@ -162,12 +198,15 @@ class MultiTimeframeEngine:
                     neutral_votes += 1
 
             else: # M5 Trigger
-                if close > ema20:
+                if bullish_votes > bearish_votes and close > ema20:
                     bias = "BULLISH"
                     bullish_votes += 1
-                else:
+                elif bearish_votes > bullish_votes and close < ema20:
                     bias = "BEARISH"
                     bearish_votes += 1
+                else:
+                    bias = "NEUTRAL"
+                    neutral_votes += 1
 
             tf_results[tf] = {
                 "timeframe": tf,
@@ -177,6 +216,7 @@ class MultiTimeframeEngine:
                 "ema_50": ema50,
                 "ema_200": ema200,
                 "rsi_14": rsi,
+                "atr_14": float(last_row.get("atr_14")) if pd.notna(last_row.get("atr_14")) else None,
                 "active_fvgs_count": len([f for f in fvg_list if not f.get("mitigated", False)]),
                 "order_blocks_count": len(ob_list),
                 "liquidity_sweeps_count": len(sweep_list),
@@ -213,30 +253,34 @@ class MultiTimeframeEngine:
             confluence_score = 50
 
         # Bound confluence score cleanly
-        confluence_score = max(55, min(95, confluence_score))
+        confluence_score = max(0, min(95, confluence_score))
 
         # Precision Entry & Risk Levels
-        atr_m15 = verified_price * 0.003
+        atr_m15 = tf_results.get("M15", {}).get("atr_14")
         dec = 2 if "XAU" in sym or "XAG" in sym or verified_price > 10 else 4
-        if overall_direction == "BUY":
+        if not atr_m15 or not np.isfinite(atr_m15) or atr_m15 <= 0:
+            overall_direction = "HOLD"
+            overall_bias = "NEUTRAL"
+            entry_price = stop_loss = take_profit_1 = take_profit_2 = None
+            risk_reward_str = "N/A"
+        elif overall_direction == "BUY":
             entry_price = round(verified_price, dec)
             stop_loss = round(verified_price - (1.6 * atr_m15), dec)
             risk = entry_price - stop_loss
-            take_profit_1 = round(entry_price + (risk * 2.3), dec)
-            take_profit_2 = round(entry_price + (risk * 3.8), dec)
+            take_profit_1 = round(entry_price + (risk * max(MIN_RISK_REWARD_RATIO, 2.3)), dec)
+            take_profit_2 = round(entry_price + (risk * max(MIN_RISK_REWARD_RATIO * 1.5, 3.8)), dec)
+            risk_reward_str = f"1:{abs(take_profit_1 - entry_price) / risk:.2f}" if risk else "N/A"
         elif overall_direction == "SELL":
             entry_price = round(verified_price, dec)
             stop_loss = round(verified_price + (1.6 * atr_m15), dec)
             risk = stop_loss - entry_price
-            take_profit_1 = round(entry_price - (risk * 2.3), dec)
-            take_profit_2 = round(entry_price - (risk * 3.8), dec)
+            take_profit_1 = round(entry_price - (risk * max(MIN_RISK_REWARD_RATIO, 2.3)), dec)
+            take_profit_2 = round(entry_price - (risk * max(MIN_RISK_REWARD_RATIO * 1.5, 3.8)), dec)
+            risk_reward_str = f"1:{abs(take_profit_1 - entry_price) / risk:.2f}" if risk else "N/A"
         else:
             entry_price = verified_price
-            stop_loss = round(verified_price * 0.99, dec)
-            take_profit_1 = round(verified_price * 1.02, dec)
-            take_profit_2 = round(verified_price * 1.035, dec)
-
-        risk_reward_str = "1:2.3"
+            stop_loss = take_profit_1 = take_profit_2 = None
+            risk_reward_str = "N/A"
 
         # Bilingual Synthesis
         summary_en = (

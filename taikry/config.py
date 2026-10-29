@@ -2,19 +2,28 @@
 TAIKRY AI MARKET INTELLIGENCE PRO - Configuration Module
 """
 import os
-from typing import List, Dict, Any
+import math
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 
 load_dotenv()
+
+def _credential(name: str, default: str = "") -> str:
+    """Ignore common template values so copied .env examples never appear connected."""
+    value = os.getenv(name, default).strip()
+    lowered = value.lower()
+    if any(marker in lowered for marker in ("your_", "_here", "change-this", "change_this", "placeholder", "replace_me")):
+        return ""
+    return value
 
 # System Info
 APP_NAME = "TAIKRY AI MARKET INTELLIGENCE PRO"
 APP_VERSION = "2.0.0"
 ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-SECRET_KEY = os.getenv("SECRET_KEY", "taikry-super-secret-key-change-in-production")
+SECRET_KEY = _credential("SECRET_KEY")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-TAIKRY-API-KEY")
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "taikry_admin_access_token_2026")
+ADMIN_API_KEY = _credential("ADMIN_API_KEY")
 
 # Database & Cache
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./taikry_market.db")
@@ -30,21 +39,26 @@ LOCAL_TIMEZONE = os.getenv("LOCAL_TIMEZONE", "Asia/Phnom_Penh")  # Cambodia Time
 AI_PROVIDER = os.getenv("AI_PROVIDER", "auto").lower()
 
 # Real AI LLM API Keys & Endpoints (Frontier Models: Claude 3.7/3.5, OpenAI o3/o1/GPT-4o, Gemini 2.5, DeepSeek V3/R1)
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", os.getenv("ANTHROPIC_API_KEY", ""))
+CLAUDE_API_KEY = _credential("CLAUDE_API_KEY", _credential("ANTHROPIC_API_KEY"))
 CLAUDE_BASE_URL = os.getenv("CLAUDE_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "").strip()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = _credential("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "").strip()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MANUS_API_KEY = os.getenv("MANUS_API_KEY", "")
+GEMINI_API_KEY = _credential("GEMINI_API_KEY")
+DEEPSEEK_API_KEY = _credential("DEEPSEEK_API_KEY")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "").strip()
+OPENROUTER_API_KEY = _credential("OPENROUTER_API_KEY")
+GROQ_API_KEY = _credential("GROQ_API_KEY")
+MANUS_API_KEY = _credential("MANUS_API_KEY")
 MANUS_API_URL = os.getenv("MANUS_API_URL", "https://api.manus.ai/v1")
+ORCAROUTER_API_KEY = _credential("ORCAROUTER_API_KEY")
+ORCAROUTER_BASE_URL = os.getenv("ORCAROUTER_BASE_URL", "https://api.orcarouter.ai/v1").rstrip("/")
+ORCAROUTER_MODEL = os.getenv("ORCAROUTER_MODEL", "deepseek/deepseek-v4-pro-0813").strip()
 
 # AnyRouter Inference Integration (OpenAI-compatible)
-ANYROUTER_API_KEY = os.getenv("ANYROUTER_API_KEY", "")
+ANYROUTER_API_KEY = _credential("ANYROUTER_API_KEY")
 ANYROUTER_BASE_URL = os.getenv("ANYROUTER_BASE_URL", "https://anyrouter.dev/api/v1").rstrip("/")
 ANYROUTER_TIMEOUT_SECONDS = float(os.getenv("ANYROUTER_TIMEOUT_SECONDS", "30.0"))
 ANYROUTER_MAX_RETRIES = int(os.getenv("ANYROUTER_MAX_RETRIES", "2"))
@@ -53,9 +67,9 @@ ANYROUTER_CONCURRENCY_LIMIT = int(os.getenv("ANYROUTER_CONCURRENCY_LIMIT", "3"))
 
 
 # FreeLLMAPI Integration (OpenAI-compatible unified free-tier proxy from GitHub: https://github.com/tashfeenahmed/freellmapi)
-FREELLMAPI_ENABLED = os.getenv("FREELLMAPI_ENABLED", "true").lower() in ("true", "1", "yes")
-FREELLMAPI_BASE_URL = os.getenv("FREELLMAPI_BASE_URL", "http://localhost:4000/v1").rstrip("/")
-FREELLMAPI_API_KEY = os.getenv("FREELLMAPI_API_KEY", "sk-freellmapi-default")
+FREELLMAPI_ENABLED = os.getenv("FREELLMAPI_ENABLED", "false").lower() in ("true", "1", "yes")
+FREELLMAPI_BASE_URL = os.getenv("FREELLMAPI_BASE_URL", "").rstrip("/")
+FREELLMAPI_API_KEY = _credential("FREELLMAPI_API_KEY")
 FREELLMAPI_TIMEOUT_SECONDS = float(os.getenv("FREELLMAPI_TIMEOUT_SECONDS", "30.0"))
 FREELLMAPI_DEFAULT_MODEL = os.getenv("FREELLMAPI_DEFAULT_MODEL", "deepseek-r1")
 
@@ -81,6 +95,8 @@ def get_configured_llms() -> List[str]:
         active.append("gemini")
     if DEEPSEEK_API_KEY:
         active.append("deepseek")
+    if ORCAROUTER_API_KEY:
+        active.append("orcarouter")
     if MANUS_API_KEY:
         active.append("manus")
     if ANYROUTER_API_KEY:
@@ -90,19 +106,26 @@ def get_configured_llms() -> List[str]:
     return active
 
 # Telegram Configuration
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1004341134868")
+TELEGRAM_BOT_TOKEN = _credential("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_ADMIN_IDS: List[int] = [
-    int(x.strip()) for x in os.getenv("TELEGRAM_ADMIN_IDS", "-1004341134868").split(",") if x.strip()
+    int(x.strip()) for x in os.getenv("TELEGRAM_ADMIN_IDS", "").split(",") if x.strip()
 ]
 TELEGRAM_WEBAPP_URL = os.getenv("TELEGRAM_WEBAPP_URL", "")
-VIP_TELEGRAM_CHAT_ID = os.getenv("VIP_TELEGRAM_CHAT_ID", TELEGRAM_CHAT_ID or "-1004341134868")
-BAKONG_KHQR_ACCOUNT = os.getenv("BAKONG_KHQR_ACCOUNT", "taikry_financial@aclb")
-USDT_TRC20_WALLET = os.getenv("USDT_TRC20_WALLET", "TYD6xNf3bQeXG8sWpZ29jL4v1k8mR7q9Aa")
-TELEGRAM_ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "taikry_admin")
-TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "zyrox_trading_bot")
-TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
-PUBLIC_APP_URL = os.getenv("PUBLIC_APP_URL", "https://taikry-ai-trading.onrender.com")
+VIP_TELEGRAM_CHAT_ID = os.getenv("VIP_TELEGRAM_CHAT_ID", "")
+BAKONG_KHQR_ACCOUNT = os.getenv("BAKONG_KHQR_ACCOUNT", "")
+USDT_TRC20_WALLET = os.getenv("USDT_TRC20_WALLET", "")
+TELEGRAM_ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
+TELEGRAM_WEBHOOK_SECRET = _credential("TELEGRAM_WEBHOOK_SECRET")
+PUBLIC_APP_URL = os.getenv("PUBLIC_APP_URL", os.getenv("RENDER_EXTERNAL_URL", "")).strip().rstrip("/")
+CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "")
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
 
 # Make.com Webhooks (Configured via environment variables only)
 MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL", "")
@@ -110,7 +133,7 @@ MAKE_CRITICAL_ALERT_WEBHOOK = os.getenv("MAKE_CRITICAL_ALERT_WEBHOOK", MAKE_WEBH
 MAKE_PAPER_TRADE_WEBHOOK = os.getenv("MAKE_PAPER_TRADE_WEBHOOK", MAKE_WEBHOOK_URL)
 
 # Windows MT5 Bridge Configuration
-MT5_BRIDGE_TOKEN = os.getenv("MT5_BRIDGE_TOKEN", "")
+MT5_BRIDGE_TOKEN = _credential("MT5_BRIDGE_TOKEN")
 MT5_BRIDGE_ENABLED = os.getenv("MT5_BRIDGE_ENABLED", "true").lower() in ("true", "1", "yes")
 MT5_BRIDGE_STALE_SECONDS = int(os.getenv("MT5_BRIDGE_STALE_SECONDS", "30"))
 MAX_DAILY_XAUUSD_SIGNALS = int(os.getenv("MAX_DAILY_XAUUSD_SIGNALS", "4"))
@@ -124,10 +147,22 @@ MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 BACKOFF_BASE_SECONDS = float(os.getenv("BACKOFF_BASE_SECONDS", "2.0"))
 
 # Research & Paper Trading Risk Limits (Configurable limits, no guarantees)
-INITIAL_PAPER_BALANCE = float(os.getenv("INITIAL_PAPER_BALANCE", "100000.0"))
-RISK_PER_TRADE_PERCENT = float(os.getenv("RISK_PER_TRADE_PERCENT", "0.5"))  # 0.5% equity
-MIN_RISK_REWARD_RATIO = float(os.getenv("MIN_RISK_REWARD_RATIO", "2.0"))   # 1:2.0 minimum
-MAX_DAILY_LOSS_PERCENT = float(os.getenv("MAX_DAILY_LOSS_PERCENT", "2.5")) # 2.5% daily drawdown stop
+def _finite_env_float(name: str, default: float, minimum: float, maximum: Optional[float] = None) -> float:
+    """Read a finite bounded numeric setting, falling back safely on invalid input."""
+    try:
+        value = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(value) or value < minimum or (maximum is not None and value > maximum):
+        return default
+    return value
+
+
+INITIAL_PAPER_BALANCE = _finite_env_float("INITIAL_PAPER_BALANCE", 100000.0, 1.0)
+MAX_RISK_PER_TRADE_PERCENT = 2.0
+RISK_PER_TRADE_PERCENT = _finite_env_float("RISK_PER_TRADE_PERCENT", 0.5, 0.1, MAX_RISK_PER_TRADE_PERCENT)
+MIN_RISK_REWARD_RATIO = _finite_env_float("MIN_RISK_REWARD_RATIO", 2.0, 1.0)
+MAX_DAILY_LOSS_PERCENT = _finite_env_float("MAX_DAILY_LOSS_PERCENT", 2.5, 0.1, 100.0)
 MAX_SIMULTANEOUS_POSITIONS = int(os.getenv("MAX_SIMULTANEOUS_POSITIONS", "3"))
 SLIPPAGE_PIPS = float(os.getenv("SLIPPAGE_PIPS", "1.0"))
 COMMISSION_PER_LOT = float(os.getenv("COMMISSION_PER_LOT", "7.0")) # $7 per standard round-turn lot

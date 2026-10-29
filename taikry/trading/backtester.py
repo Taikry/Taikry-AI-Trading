@@ -131,20 +131,24 @@ class BacktestEngine:
                 summary = extract_technical_summary(df_ind)
 
                 trend = summary.get("trend", "NEUTRAL")
-                rsi = summary.get("rsi", 50.0)
-                atr = summary.get("atr", curr_close * 0.005)
+                rsi = summary.get("rsi")
+                atr = summary.get("atr")
 
                 signal = None
-                if "BULLISH" in trend and 45 <= rsi <= 68:
+                metrics_valid = (
+                    isinstance(rsi, (int, float)) and np.isfinite(rsi)
+                    and isinstance(atr, (int, float)) and np.isfinite(atr) and atr > 0
+                )
+                if metrics_valid and "BULLISH" in trend and 45 <= rsi <= 68:
                     signal = "BUY"
-                elif "BEARISH" in trend and 32 <= rsi <= 55:
+                elif metrics_valid and "BEARISH" in trend and 32 <= rsi <= 55:
                     signal = "SELL"
 
                 if signal:
-                    # Risk sizing 0.5%
+                    # Position risk follows the configured account risk cap.
                     risk_amount = balance * (RISK_PER_TRADE_PERCENT / 100.0)
                     sl_dist = 1.5 * atr
-                    tp_dist = 2.0 * sl_dist # R:R 1:2.0
+                    tp_dist = MIN_RISK_REWARD_RATIO * sl_dist
 
                     if signal == "BUY":
                         exec_entry = curr_close + (spread / 2.0)

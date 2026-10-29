@@ -18,6 +18,7 @@ import hmac
 import hashlib
 import datetime
 import argparse
+import urllib.parse
 import urllib.request
 import urllib.error
 from typing import Dict, Any, List, Optional
@@ -71,6 +72,12 @@ class ExnessMT5BridgeClient:
         candle_interval: float = 10.0
     ):
         self.backend_url = backend_url.rstrip("/")
+        parsed_backend_url = urllib.parse.urlparse(self.backend_url)
+        is_local_backend = parsed_backend_url.hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed_backend_url.scheme != "https" and not (parsed_backend_url.scheme == "http" and is_local_backend):
+            raise ValueError("Backend URL must use HTTPS (HTTP is allowed only for localhost).")
+        if not bridge_token or len(bridge_token) < 32 or bridge_token == "zyrox_mt5_bridge_secure_token_change_me":
+            raise ValueError("Set MT5_BRIDGE_TOKEN to a unique secret of at least 32 characters.")
         self.bridge_token = bridge_token
         self.login = login
         self.password = password
@@ -78,6 +85,8 @@ class ExnessMT5BridgeClient:
         self.terminal_path = terminal_path
         self.tick_interval = tick_interval
         self.candle_interval = candle_interval
+        self.broker: Optional[str] = None
+        self.account_server: Optional[str] = None
 
         self.discovered_symbols: Dict[str, str] = {}  # canonical -> broker symbol
         self.active_gold_symbol: Optional[str] = None
@@ -115,9 +124,12 @@ class ExnessMT5BridgeClient:
         term_info = mt5.terminal_info()
         acc_info = mt5.account_info()
 
-        broker = acc_info.company if acc_info else "Exness"
-        server = acc_info.server if acc_info else "Unknown"
+        broker = acc_info.company if acc_info else None
+        server = acc_info.server if acc_info else None
         acc_num = acc_info.login if acc_info else "Active Terminal"
+
+        self.broker = str(broker).strip() if broker else None
+        self.account_server = str(server).strip() if server else None
 
         print(f"[+] MT5 Connected Successfully!")
         print(f"    Broker:  {broker}")
@@ -240,10 +252,10 @@ class ExnessMT5BridgeClient:
         json_bytes = json.dumps(payload).encode("utf-8")
         timestamp_str = str(time.time())
 
-        # Generate HMAC-SHA256 signature of request body
+        # Bind the signature to this request timestamp to prevent replay.
         signature = hmac.new(
             self.bridge_token.encode("utf-8"),
-            json_bytes,
+            timestamp_str.encode("utf-8") + b"." + json_bytes,
             hashlib.sha256
         ).hexdigest()
 
@@ -289,10 +301,10 @@ class ExnessMT5BridgeClient:
 
         # Heartbeat announcement
         hb_payload = {
-            "broker": "Exness",
-            "server": self.server or "Exness-Real",
+            "broker": self.broker,
+            "server": self.server or self.account_server,
             "bridge_version": "2.1.0",
-            "terminal_ping_ms": 1.5,
+            "terminal_ping_ms": None,
             "active_symbols": list(self.discovered_symbols.keys())
         }
         self.send_to_backend("/api/v1/bridge/heartbeat", hb_payload)
@@ -355,7 +367,7 @@ def main():
     parser = argparse.ArgumentParser(description="ZYROX AI — Exness MT5 Windows Bridge Client")
     parser.add_argument("--backend-url", default=os.getenv("ZYROX_BACKEND_URL", "https://taikry-ai-trading.onrender.com"),
                         help="ZYROX AI Backend URL (e.g. https://taikry-ai-trading.onrender.com or http://localhost:8000)")
-    parser.add_argument("--token", default=os.getenv("MT5_BRIDGE_TOKEN", "zyrox_mt5_bridge_secure_token_change_me"),
+    parser.add_argument("--token", default=os.getenv("MT5_BRIDGE_TOKEN", "").strip(),
                         help="Shared authentication token matching server MT5_BRIDGE_TOKEN")
     parser.add_argument("--login", type=int, default=None, help="Optional MT5 account number")
     parser.add_argument("--password", default=None, help="Optional MT5 account password")
@@ -364,6 +376,9 @@ def main():
     parser.add_argument("--tick-interval", type=float, default=1.0, help="Tick polling interval in seconds")
 
     args = parser.parse_args()
+
+    if not args.token:
+        parser.error("Set MT5_BRIDGE_TOKEN in the environment or provide --token.")
 
     client = ExnessMT5BridgeClient(
         backend_url=args.backend_url,

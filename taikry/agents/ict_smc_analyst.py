@@ -178,57 +178,50 @@ class IctSmcAnalystAgent:
             bias = "BULLISH"
             confidence = max(55, min(92, bull_score))
             setup_eligible = True
-            evidence = bull_evidence or ["Bullish order block accumulation in discount"]
+            evidence = bull_evidence or ["Bullish score threshold passed; no specific structural evidence was recorded."]
             entry = curr_price
-            candidate_sl = ote.get("fib_786") if (ote.get("impulse_direction") == "BULLISH" and ote.get("fib_786", 0) < curr_price) else prem_disc.get("range_low", curr_price * 0.995)
-            if not candidate_sl or candidate_sl >= curr_price:
-                candidate_sl = curr_price * 0.995
-            sl = round(candidate_sl, 4)
-            sl_dist = curr_price - sl
-            tp1 = round(curr_price + (sl_dist * 2.2), 4)
-            tp2 = round(curr_price + (sl_dist * 3.5), 4)
-            invalidation = f"Clean close below OTE 0.786 boundary / discount support at {sl}"
-            rationale = "ICT Bullish structure confirmed via OTE sweet spot, liquidity sweep, or FVG confluence."
+            candidate_sl = ote.get("fib_786") if (ote.get("impulse_direction") == "BULLISH" and ote.get("fib_786") is not None and ote.get("fib_786") < curr_price) else prem_disc.get("range_low")
+            if candidate_sl is not None and candidate_sl < curr_price:
+                sl = round(candidate_sl, 4)
+                sl_dist = curr_price - sl
+                tp1 = round(curr_price + (sl_dist * 2.2), 4)
+                tp2 = round(curr_price + (sl_dist * 3.5), 4)
+                invalidation = f"Close below measured OTE/discount support at {sl}"
+                rationale = "Bullish technical structure score passed using chart-derived OTE, liquidity, or FVG signals."
+            else:
+                sl = tp1 = tp2 = None
+                setup_eligible = False
+                invalidation = "No valid measured bullish invalidation level is available."
+                rationale = "Bullish structure score passed, but no valid structural stop level is available."
         elif (bear_score >= 35 and bear_score > bull_score) or (bear_score > bull_score and bear_score >= 25):
             bias = "BEARISH"
             confidence = max(55, min(92, bear_score))
             setup_eligible = True
-            evidence = bear_evidence or ["Bearish order block distribution in premium"]
+            evidence = bear_evidence or ["Bearish score threshold passed; no specific structural evidence was recorded."]
             entry = curr_price
-            candidate_sl = ote.get("fib_786") if (ote.get("impulse_direction") == "BEARISH" and ote.get("fib_786", 0) > curr_price) else prem_disc.get("range_high", curr_price * 1.005)
-            if not candidate_sl or candidate_sl <= curr_price:
-                candidate_sl = curr_price * 1.005
-            sl = round(candidate_sl, 4)
-            sl_dist = sl - curr_price
-            tp1 = round(curr_price - (sl_dist * 2.2), 4)
-            tp2 = round(curr_price - (sl_dist * 3.5), 4)
-            invalidation = f"Clean close above OTE 0.786 boundary / premium resistance at {sl}"
-            rationale = "ICT Bearish structure confirmed via OTE sweet spot, liquidity sweep, or FVG confluence."
-        else:
-            # Resolves dealing range tilt: Discount (< Eq) -> Buy dip; Premium (>= Eq) -> Sell rally
-            eq = prem_disc.get("equilibrium", curr_price)
-            is_discount = curr_price <= eq
-            bias = "BULLISH" if is_discount else "BEARISH"
-            confidence = 54
-            setup_eligible = True
-            evidence = bull_evidence + bear_evidence
-            entry = curr_price
-            if is_discount:
-                sl = round(prem_disc.get("range_low", curr_price * 0.995), 4)
-                if sl >= curr_price: sl = round(curr_price * 0.995, 4)
-                sl_dist = curr_price - sl
-                tp1 = round(curr_price + (sl_dist * 2.2), 4)
-                tp2 = round(curr_price + (sl_dist * 3.5), 4)
-                invalidation = f"Break of dealing range low at {sl}"
-                rationale = "Dealing Range Discount: Institutional accumulation favorable near range low."
-            else:
-                sl = round(prem_disc.get("range_high", curr_price * 1.005), 4)
-                if sl <= curr_price: sl = round(curr_price * 1.005, 4)
+            candidate_sl = ote.get("fib_786") if (ote.get("impulse_direction") == "BEARISH" and ote.get("fib_786") is not None and ote.get("fib_786") > curr_price) else prem_disc.get("range_high")
+            if candidate_sl is not None and candidate_sl > curr_price:
+                sl = round(candidate_sl, 4)
                 sl_dist = sl - curr_price
                 tp1 = round(curr_price - (sl_dist * 2.2), 4)
                 tp2 = round(curr_price - (sl_dist * 3.5), 4)
-                invalidation = f"Break of dealing range high at {sl}"
-                rationale = "Dealing Range Premium: Institutional distribution favorable near range high."
+                invalidation = f"Close above measured OTE/premium resistance at {sl}"
+                rationale = "Bearish technical structure score passed using chart-derived OTE, liquidity, or FVG signals."
+            else:
+                sl = tp1 = tp2 = None
+                setup_eligible = False
+                invalidation = "No valid measured bearish invalidation level is available."
+                rationale = "Bearish structure score passed, but no valid structural stop level is available."
+        else:
+            # Premium/discount location alone is not enough evidence to infer direction.
+            bias = "NEUTRAL"
+            confidence = 0
+            setup_eligible = False
+            evidence = bull_evidence + bear_evidence
+            entry = curr_price
+            sl = tp1 = tp2 = None
+            invalidation = "No directional structure passed the ICT/SMC score threshold."
+            rationale = f"ICT/SMC evidence is mixed or insufficient for direction (bull {bull_score}, bear {bear_score})."
 
         return {
             "agent_id": self.AGENT_ID,

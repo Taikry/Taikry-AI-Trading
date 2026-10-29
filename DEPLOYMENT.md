@@ -12,22 +12,22 @@
 
 ## 1. System Architecture Overview
 
-TAIKRY AI MARKET INTELLIGENCE PRO coordinates seven specialized quantitative and AI agents into a unified, resilient financial surveillance system:
+TAIKRY AI MARKET INTELLIGENCE PRO uses registered analysis and orchestration components. The core signal path includes:
 
 1. **Agent 1 — Technical & Momentum Analyst (`technical_analyst`):**  
    Multi-timeframe EMAs (20, 50, 200), Wilder's RSI (14), ATR volatility bands, and non-repainting causal swing fractals.
 2. **Agent 2 — ICT / SMC Institutional Structure Analyst (`ict_smc_analyst`):**  
    Break of Structure (BOS), Change of Character (CHoCH), Fair Value Gaps (FVG with mitigation tracking), Order Blocks (OB with body/wick bounds), and Liquidity Sweeps (BSL/SSL).
 3. **Agent 3 — Macro Catalyst & Currency Regime Analyst (`macro_analyst`):**  
-   US Dollar Index (DXY) inverse correlation, yield dynamics, and economic calendar blackout detection (FOMC, NFP, CPI, PPI).
+   Available DXY context, economic calendar events, and macro news. Yield data is not currently loaded by this component; missing feeds remain unavailable.
 4. **Agent 4 — Independent Risk Validator & Gatekeeper (`risk_validator`):**  
-   Non-bypassable server-side risk controls: 0.5% account equity risk cap, minimum 1:2.0 Risk-to-Reward ratio floor, maximum 3 simultaneous open positions, and high-impact news blackout audit. Zero-compromise safety fallback lock on agent failure.
+   Server-side risk controls use the configured risk percentage (default 0.5%, maximum 2%), configured minimum R:R (default 1:2.0), maximum simultaneous positions, and economic-calendar availability checks. Analysis fails closed when required data or risk checks are unavailable.
 5. **Multi-Agent Consensus Engine (`consensus_engine`):**  
-   Synthesizes individual agent verdicts, checks for directional agreement, requires $\ge 3/4$ quorum, and generates bilingual reports in Khmer and English.
+   Combines the available agent outputs, preserves dissent, applies risk checks, and generates Khmer and English reports. Participation is checked against the eligible agents discovered for the request.
 6. **Round-Table Adversarial Debate Engine (`debate_engine`):**  
-   Coordinates multi-turn debate among agents ("AI Agents និយាយគ្នាវិភាគ ទៅវិញទៅមក") to challenge assumptions and resolve dissenting opinions before trade execution.
+   Organizes analysis and dissent summaries. A generated debate summary should not be interpreted as proof that independent model calls occurred unless the response identifies those calls.
 7. **Continuous Self-Trainer & Recalibration Engine (`self_trainer`):**  
-   Tracks agent prediction accuracy, Brier scores, and dynamically recalibrates voting weights based on simulated trade outcomes ("train ខ្លួនឯងបាន").
+   Tracks resolved directional outcomes and Brier scores, and updates weights only when eligible resolved outcome data is available.
 
 ---
 
@@ -66,7 +66,7 @@ The system routes requests across multiple AI providers with automatic fallback:
 4. **Anthropic Claude:** Claude 3.7 Sonnet / 3.5 Sonnet.
 5. **OpenAI:** o3-mini / GPT-4o.
 6. **Manus AI:** Autonomous Agent API.
-7. **Local Quant Fallback:** Offline deterministic rule engine (100% reliable, zero external network dependency).
+7. **Deterministic Python agents:** Technical, ICT/SMC, macro, and risk agents run locally in the application process. They are code-based analysts, not separate cloud LLM sessions; their actionable output still depends on fresh provider data. Optional cloud LLM synthesis runs only when selected and configured.
 
 Every model call records full provenance metadata (`model_used`, `provider_used`, `fallback_occurred`, `latency_ms`). Circuit breakers automatically trip after consecutive errors and cool down for 60 seconds.
 
@@ -109,7 +109,7 @@ python main.py --scan
 python main.py --scan --symbol XAUUSD
 python main.py --scan --symbol BTCUSDT
 
-# 5. Generate bilingual report and dispatch to Telegram (-1004341134868) and Make webhook
+# 5. Generate bilingual report and dispatch to the configured Telegram chat and Make webhook
 python main.py --send-report --symbol XAUUSD
 
 # 6. Run walk-forward backtest on historical candles
@@ -135,11 +135,11 @@ python main.py --backtest --symbol XAUUSD
 | `GET` | `/api/v1/xauusd/chart` | OHLCV candles, causal indicators, FVG, OB, BOS, sweeps |
 | `GET` | `/api/v1/best-setup` | Single highest scoring setup across watchlist (80%-95%) |
 | `POST` | `/api/v1/telegram/broadcast-alert` | Dispatch verified #1 best setup to Telegram |
-| `GET` | `/api/v1/agents/debate` | Multi-turn conversational debate in EN & KH |
+| `GET` | `/api/v1/agents/debate` | Structured summary of registered agent findings in EN & KH; not proof of independent LLM calls |
 | `POST` | `/api/v1/agents/train` | Trigger self-training epoch |
 | `GET` | `/api/v1/agents/learning-stats` | Brier scores, accuracy, and dynamic voting weights |
 | `GET` | `/api/v1/system/auto-fix/alerts` | Autonomous self-healing incident audit trail |
-| `POST` | `/api/v1/trade/execute-bridge` | Simulated 1-click execution with 0.5% risk cap |
+| `POST` | `/api/v1/trade/execute-bridge` | Simulated paper-trade ticket using configured risk limits; does not send broker orders |
 | `GET` | `/api/v1/chart/indicators` | Indicator catalogue with parameter schemas & bilingual metadata |
 | `POST` | `/api/v1/chart/indicators/calculate` | Dynamic quantitative indicator calculation on candle history |
 | `GET` | `/api/v1/chart/overlays` | Active ICT/SMC structure overlays, MTF bias, and trade signals |
@@ -181,20 +181,7 @@ Taikry Signal AI includes an institutional-grade, interactive financial chart wo
 
 ## 8. Quality Assurance & Verification
 
-The test suite contains **121 automated unit and integration tests** verifying:
-
-- Strict XAUUSD-only Telegram enforcement and immediate rejection of BTCUSD, EURUSD, etc.
-- Multi-agent dynamic discovery and consensus synthesis across all registered, eligible agents.
-- Atomic daily quota enforcement: maximum 4 signals per Cambodia calendar day (`Asia/Phnom_Penh`), no forced trades.
-- Structural level geometry: $SL < Entry < TP1 < TP2 < TP3$ for BUY; $SL > Entry > TP1 > TP2 > TP3$ for SELL; Minimum R:R $\ge 1:2.0$.
-- Telegram delivery with API response verification (`ok: true`), message ID tracking, 2-retry policy, and token masking.
-- Persistent signal lifecycle and independent tick/candle outcome resolution (`TP1_CONSERVATIVE_V1`).
-- Same-candle ambiguity handling: marked `AMBIGUOUS` (not a win) when both TP1 and SL touched in same bar.
-- Verified win-rate calculation: $\text{Win Rate} = \text{Wins} / (\text{Wins} + \text{Losses}) \times 100\%$, visible sample sizes ($W/L$), and exclusion of open/unfilled expired signals.
-- Idempotent daily Telegram summary reports preventing duplicate dispatches on scheduler restart.
-- Non-repainting technical indicators, causal ICT/SMC patterns, zero lookahead bias invariant, and REST API regression.
-
-To run the entire test suite:
+Automated tests live under `tests/`; their count and coverage evolve with the code. Review the current tests and deployment configuration before relying on a specific guarantee. Run the suite in a suitable local environment before deployment:
 
 ```bash
 pytest -q
@@ -206,7 +193,7 @@ pytest -q
 
 - Never commit private keys, bot tokens, or webhook credentials into source control.
 - All external API secrets must be loaded via `.env` or system environment variables.
-- Server-side risk validation is non-bypassable and enforces capital protection under all conditions.
+- Server-side risk validation applies configured limits and fails closed when required market or risk inputs are unavailable. Check the provider, spread, calendar, and position-count integrations before relying on generated analysis.
 - Telegram bot tokens are automatically masked (`[REDACTED_BOT_TOKEN]`) in all logs, error paths, and API responses.
 
 ---
@@ -223,17 +210,17 @@ The dedicated XAUUSD Signal Engine provides institutional-grade Gold trade signa
 2. **Atomic Daily Quota (Asia/Phnom_Penh):**
    - **Target:** 2–4 high-quality signals per Cambodia calendar day.
    - **Hard Cap:** Exactly 4 new signals per day. Never exceeded.
-   - **Persistence:** Enforced atomically via SQLite database queries (`cambodia_date` + `SENT` status). Cannot be bypassed by process restarts or memory resets.
+   - **Persistence:** Signal delivery reservations and states are stored in the configured database. A process-local lock reduces duplicate sends within one worker; it does not coordinate multiple app replicas. Use a shared production database and add a database-level reservation/unique constraint before running multiple workers if a strict global daily cap is required.
    - **Zero Forcing:** Zero signals are sent when market conditions, spread, volatility, or AI consensus are unfavorable.
 
 3. **All-Agent Dynamic Discovery & Consensus:**
    - Discovers all enabled, healthy agents dynamically from `AgentRegistry`.
    - Requires $\ge 60\%$ eligible-agent participation.
    - Conflicting biases (Bullish vs Bearish) trigger an immediate `WAIT` decision.
-   - Requires strict 80%–95% AI confluence score and R:R $\ge 1:2.0$.
+   - Uses a measured setup-confluence score (not a win probability), a score gate of 80–95, and the configured minimum R:R (default 2.0).
 
 4. **Reliable Telegram Delivery:**
-   - Dispatched to configured chat ID `-1004341134868` using bilingual templates (Khmer-first with English technical details).
+   - Dispatched only to the chat configured through `TELEGRAM_CHAT_ID`, using bilingual templates (Khmer-first with English technical details).
    - Verifies HTTP 200 and `{"ok": true}` from Telegram Bot API before updating status to `SENT`.
    - Records Telegram `message_id` and dispatches via transactional idempotency key.
    - Retries with exponential backoff on network failures; masks bot token on error.

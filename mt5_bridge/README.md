@@ -7,7 +7,7 @@
 
 ## 📌 Architecture Overview
 
-Because ZYROX AI is hosted 24/7 on Render (Linux containers) while MetaTrader 5 runs on your Windows machine, the bridge uses a **secure outbound HTTPS architecture**:
+Because the backend runs in a cloud service while MetaTrader 5 runs on your Windows machine, the bridge uses a **secure outbound HTTPS architecture**. Free hosting plans may sleep or pause, so they may not provide continuous monitoring:
 
 ```
 +------------------------------------------+
@@ -29,8 +29,8 @@ Because ZYROX AI is hosted 24/7 on Render (Linux containers) while MetaTrader 5 
 ```
 
 > [!NOTE]
-> **Strict Read-Only Protection:**
-> The bridge client contains **zero trade-execution methods**. It only reads tick prices (Bid, Ask, Spread) and OHLC candles from your MT5 terminal and streams them to your dashboard. Your trading balance is 100% safe.
+> **Read-Only:**
+> The bridge client contains no trade-execution methods. It reads tick prices (Bid, Ask, Spread) and OHLC candles and streams them to the backend. This bridge does not need MT5's Algo Trading permission; keep automated trading disabled unless another tool you use requires it.
 
 ---
 
@@ -38,8 +38,7 @@ Because ZYROX AI is hosted 24/7 on Render (Linux containers) while MetaTrader 5 
 
 ### Step 1: Open Exness MT5
 1. Launch your **MetaTrader 5** terminal and log in to your Exness account (Demo or Real).
-2. Ensure **Algo Trading / DLL Imports** is enabled in MT5:
-   `Tools -> Options -> Expert Advisors -> Allow automated trading`.
+2. Keep **Algo Trading** disabled for this bridge. It only reads prices and candles; automated trading permissions are not required.
 
 ### Step 2: Install Dependencies
 Open PowerShell or Command Prompt on your Windows machine:
@@ -48,20 +47,18 @@ pip install MetaTrader5 requests
 ```
 
 ### Step 3: Run the Bridge
-Execute the bridge pointing to your live Render application:
+Set the same unique secret (at least 32 characters) as `MT5_BRIDGE_TOKEN` on the server and in your local environment. Replace the example host with your public HTTPS API host. The client rejects missing/default secrets and requires HTTPS for remote backends.
 
 ```powershell
-python mt5_bridge/exness_mt5_bridge.py --backend-url https://taikry-ai-trading.onrender.com --token zyrox_mt5_bridge_secure_token_change_me
+$env:MT5_BRIDGE_TOKEN = "<your-unique-32-character-or-longer-secret>"
+python mt5_bridge/exness_mt5_bridge.py --backend-url https://your-domain.example
 ```
 
 *(For local development testing)*:
 ```powershell
-python mt5_bridge/exness_mt5_bridge.py --backend-url http://localhost:8000 --token zyrox_mt5_bridge_secure_token_change_me
+$env:MT5_BRIDGE_TOKEN = "<your-unique-32-character-or-longer-secret>"
+python mt5_bridge/exness_mt5_bridge.py --backend-url http://localhost:8000
 ```
 
 ### Step 4: Verify Connection in Dashboard
-Once launched, your ZYROX AI dashboard will immediately display:
-- **Broker Status:** `● EXNESS MT5 CONNECTED` (Green)
-- **Active Symbol:** `XAUUSDm` (or `XAUUSD`)
-- **Real-Time Spread:** Live Exness broker spread in points
-- **Source Badge:** `FEED: EXNESS_MT5 (VERIFIED BROKER)`
+After the bridge has delivered a fresh bid/ask tick and the API accepts it, the dashboard reports the actual broker/server values, tick age, and feed source. A heartbeat alone shows the bridge as connected but does not count as a fresh quote. The bridge client and MT5 terminal must remain running on the Windows PC or VPS that has access to the broker account.

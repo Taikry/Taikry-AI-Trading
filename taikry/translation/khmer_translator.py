@@ -16,15 +16,20 @@ BIAS_KHMER_MAP = {
 }
 
 STATUS_KHMER_MAP = {
+    "APPROVE": "បានអនុម័ត (APPROVE)",
     "APPROVED": "បានអនុម័ត (APPROVED)",
+    "REJECT": "បដិសេធ (REJECT)",
     "REJECTED": "បដិសេធ (REJECTED)",
     "WAIT": "រង់ចាំ (WAIT)",
-    "NO TRADE": "គ្មានការជួញដូរ (NO TRADE)"
+    "NO TRADE": "គ្មានការជួញដូរ (NO TRADE)",
+    "NO_TRADE": "គ្មានការជួញដូរ (NO TRADE)"
 }
 
 DECISION_KHMER_MAP = {
     "LONG": "ទំនោរទិញ (BUY BIAS)",
     "SHORT": "ទំនោរលក់ (SELL BIAS)",
+    "BUY": "ទំនោរទិញ (BUY)",
+    "SELL": "ទំនោរលក់ (SELL)",
     "NONE": "គ្មានការជួញដូរ (NO TRADE)",
     "FLAT": "អព្យាក្រឹត (FLAT)"
 }
@@ -54,6 +59,10 @@ def translate_to_khmer(report_data: Dict[str, Any]) -> str:
     # Final decision tag
     proposed_dir = report_data.get("proposed_direction", "NONE")
     decision_khmer = DECISION_KHMER_MAP.get(proposed_dir, proposed_dir)
+    if setup_status != "APPROVE":
+        entry = sl = tp1 = tp2 = "មិនមាន"
+        rr = "N/A"
+        decision_khmer = DECISION_KHMER_MAP["NONE"]
 
     # Agents findings
     a1_findings = report_data.get("agent_1_summary", "គ្មានទិន្នន័យ")

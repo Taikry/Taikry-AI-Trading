@@ -13,10 +13,10 @@
       "module": "http:ActionSendRequest",
       "name": "POST /api/v1/backtests/run",
       "parameters": {
-        "url": "http://localhost:8000/api/v1/backtests/run",
+        "url": "https://YOUR_PUBLIC_API_HOST/api/v1/backtests/run",
         "method": "POST",
-        "headers": [{"name": "Content-Type", "value": "application/json"}],
-        "body": "{\"symbol\": \"XAUUSD\", \"timeframe\": \"M15\", \"candle_limit\": 150, \"initial_balance\": 100000.0}"
+        "headers": [{"name": "Content-Type", "value": "application/json"}, {"name": "X-TAIKRY-API-KEY", "value": ""}],
+        "body": "{\"symbol\": \"XAUUSD\", \"timeframe\": \"M15\", \"candle_limit\": 150}"
       }
     },
     {
@@ -34,7 +34,7 @@
       "module": "telegram:sendTextMessage",
       "name": "Send Backtest Scorecard to Telegram",
       "parameters": {
-        "chat_id": "-1004341134868",
+        "chat_id": "",
         "parse_mode": "HTML",
         "text": "📊 <b>STRATEGY BACKTEST SCORECARD — {{2.data.symbol}} ({{2.data.timeframe}})</b>\n\n🆔 <b>Job ID:</b> <code>{{2.data.job_id}}</code>\n🔬 <b>Strategy:</b> {{2.data.strategy_version}}\n\n📈 <b>Win Rate:</b> <b>{{2.data.win_rate_percent}}%</b> ({{2.data.winning_trades}}W / {{2.data.losing_trades}}L)\n💵 <b>Net Return:</b> <b>${{2.data.net_profit}}</b> ({{2.data.net_return_percent}}%)\n🎯 <b>Profit Factor:</b> <b>{{2.data.profit_factor}}</b>\n📉 <b>Max Drawdown:</b> {{2.data.max_drawdown_percent}}% (${{2.data.max_drawdown_usd}})\n⚖️ <b>Average R-Multiple:</b> {{2.data.average_r_multiple}}R\n📦 <b>Total Trades Evaluated:</b> {{2.data.total_trades}}\n\n<i>Walk-forward simulated without look-ahead bias and including spread/commissions.</i>"
       }

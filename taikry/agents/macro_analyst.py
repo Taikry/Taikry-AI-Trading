@@ -3,7 +3,7 @@ AGENT 3 — MACROECONOMIC & GLOBAL NEWS ANALYST
 Analyzes:
 - Federal Reserve Monetary Policy Stance & FOMC Meetings
 - Real-time High-Impact Economic Events: FOMC, PPI, CPI, NFP, GDP
-- US Dollar Index (DXY) momentum and yield curve pressure
+- US Dollar Index (DXY) momentum when a verified feed is available
 - Live Breaking Financial News (Investing.com / MarketWatch RSS)
 - Multi-Asset Macroeconomic Impact Mapping (Gold, Forex, Crypto)
 - Bilingual Synthesis (English & Natural Khmer)
@@ -24,9 +24,9 @@ class MacroAnalystAgent:
 
         # 1. Fetch DXY context
         dxy_data = economic_calendar_provider.get_usd_strength_context()
-        dxy_price = dxy_data.get("dxy_price", 104.0)
-        dxy_change = dxy_data.get("dxy_change_pts", 0.0)
-        usd_bias = dxy_data.get("usd_bias", "NEUTRAL_USD")
+        dxy_price = dxy_data.get("dxy_price")
+        dxy_change = dxy_data.get("dxy_change_pts")
+        usd_bias = dxy_data.get("usd_bias", "UNAVAILABLE")
 
         # 2. Fetch verified high-impact economic calendar & countdowns
         events = economic_calendar_provider.get_upcoming_high_impact_events()
@@ -39,38 +39,47 @@ class MacroAnalystAgent:
 
         evidence = []
         evidence_kh = []
-        evidence.append(f"US Dollar Index (DXY) at {dxy_price} (Change: {dxy_change:+} pts). Bias: {usd_bias}.")
-        evidence_kh.append(f"សន្ទស្សន៍ប្រាក់ដុល្លារអាមេរិក (DXY) ស្ថិតនៅ {dxy_price} (បម្រែបម្រួល {dxy_change:+} pts)។ ទំនោរ: {usd_bias}។")
+        if dxy_price is not None and dxy_change is not None:
+            evidence.append(f"US Dollar Index (DXY) at {dxy_price} (Change: {dxy_change:+} pts). Bias: {usd_bias}.")
+            evidence_kh.append(f"សន្ទស្សន៍ប្រាក់ដុល្លារអាមេរិក (DXY) ស្ថិតនៅ {dxy_price} (បម្រែបម្រួល {dxy_change:+} pts)។ ទំនោរ: {usd_bias}។")
+        else:
+            evidence.append("US Dollar Index data is unavailable; no DXY direction is inferred.")
+            evidence_kh.append("មិនមានទិន្នន័យសន្ទស្សន៍ប្រាក់ដុល្លារ DXY ទេ ដូច្នេះមិនសន្និដ្ឋានទិសដៅពី DXY ឡើយ។")
 
         # Macro Bias mapping based on asset class
         if symbol == "XAUUSD" or category == "Commodities":
-            # Gold has inverse correlation with USD and yields
+            # This rule uses DXY only; no yield series is loaded here.
             if usd_bias == "BULLISH_USD":
                 macro_bias = "BEARISH"
                 confidence = 65
-                gold_impact = "Stronger USD creates headwind for Gold bullion."
-                gold_impact_kh = "ប្រាក់ដុល្លាររឹងមាំដាក់សម្ពាធធ្លាក់ចុះលើតម្លៃមាស។"
+                gold_impact = "The available DXY direction is a headwind for Gold; yield data was not assessed."
+                gold_impact_kh = "ទិសដៅ DXY ដែលមានបង្ហាញជាកត្តាសម្ពាធលើមាស។ ទិន្នន័យទិន្នផលសញ្ញាប័ណ្ណមិនត្រូវបានវាយតម្លៃទេ។"
             elif usd_bias == "BEARISH_USD":
                 macro_bias = "BULLISH"
-                confidence = 75
-                gold_impact = "Softening USD and lower yields provide supportive tailwind for Gold."
-                gold_impact_kh = "ប្រាក់ដុល្លារចុះខ្សោយ និងទិន្នផលធ្លាក់ចុះ ជួយរុញច្រានឱ្យតម្លៃមាសហក់ឡើង។"
+                confidence = 65
+                gold_impact = "The available DXY direction may support Gold; yield data was not assessed."
+                gold_impact_kh = "ទិសដៅ DXY ដែលមានអាចគាំទ្រតម្លៃមាស។ ទិន្នន័យទិន្នផលសញ្ញាប័ណ្ណមិនត្រូវបានវាយតម្លៃទេ។"
             else:
                 macro_bias = "NEUTRAL"
-                confidence = 50
-                gold_impact = "Dollar consolidation; Gold driven primarily by technical and geopolitical safe-haven flow."
-                gold_impact_kh = "ប្រាក់ដុល្លារកំពុងប្រមូលផ្តុំកម្លាំង មាសរងឥទ្ធិពលពីលំហូរសុវត្ថិភាពភូមិសាស្ត្រនយោបាយ។"
+                confidence = 0 if usd_bias == "UNAVAILABLE" else 50
+                gold_impact = "DXY unavailable; macro direction cannot be assessed." if usd_bias == "UNAVAILABLE" else "DXY direction is neutral in the available feed."
+                gold_impact_kh = "DXY មិនអាចប្រើបាន ដូច្នេះមិនអាចវាយតម្លៃទិសដៅម៉ាក្រូបានទេ។" if usd_bias == "UNAVAILABLE" else "ទិន្នន័យ DXY ដែលមានបង្ហាញទិសដៅអព្យាក្រឹត។"
             evidence.append(gold_impact)
             evidence_kh.append(gold_impact_kh)
 
         elif category == "Forex":
-            if symbol.startswith("USD"):
-                macro_bias = "BULLISH" if usd_bias == "BULLISH_USD" else ("BEARISH" if usd_bias == "BEARISH_USD" else "NEUTRAL")
+            if usd_bias == "UNAVAILABLE":
+                macro_bias, confidence = "NEUTRAL", 0
+                evidence.append("DXY data is unavailable; FX macro direction is unverified.")
+                evidence_kh.append("មិនមានទិន្នន័យ DXY ទេ ដូច្នេះទិសដៅម៉ាក្រូ FX មិនទាន់បានផ្ទៀងផ្ទាត់។")
             else:
-                macro_bias = "BEARISH" if usd_bias == "BULLISH_USD" else ("BULLISH" if usd_bias == "BEARISH_USD" else "NEUTRAL")
-            confidence = 65 if macro_bias != "NEUTRAL" else 50
-            evidence.append(f"Macro correlation aligns {macro_bias} against US Dollar trend.")
-            evidence_kh.append(f"ទំនាក់ទំនងម៉ាក្រូសេដ្ឋកិច្ចស្របទៅនឹងទំនោរ {macro_bias} ធៀបនឹងប្រាក់ដុល្លារ។")
+                if symbol.startswith("USD"):
+                    macro_bias = "BULLISH" if usd_bias == "BULLISH_USD" else ("BEARISH" if usd_bias == "BEARISH_USD" else "NEUTRAL")
+                else:
+                    macro_bias = "BEARISH" if usd_bias == "BULLISH_USD" else ("BULLISH" if usd_bias == "BEARISH_USD" else "NEUTRAL")
+                confidence = 65 if macro_bias != "NEUTRAL" else 50
+                evidence.append(f"Macro correlation aligns {macro_bias} against US Dollar trend.")
+                evidence_kh.append(f"ទំនាក់ទំនងម៉ាក្រូសេដ្ឋកិច្ចស្របទៅនឹងទំនោរ {macro_bias} ធៀបនឹងប្រាក់ដុល្លារ។")
 
         elif category == "Crypto":
             if usd_bias == "BEARISH_USD":
@@ -85,9 +94,9 @@ class MacroAnalystAgent:
                 evidence_kh.append("កម្លាំងដុល្លាររឹតបន្តឹងលក្ខខណ្ឌហិរញ្ញវត្ថុ ដាក់សម្ពាធលើទ្រព្យគ្រីបតូ។")
             else:
                 macro_bias = "NEUTRAL"
-                confidence = 50
-                evidence.append("Macro environment neutral; Crypto driven by on-chain and technical factors.")
-                evidence_kh.append("បរិយាកាសម៉ាក្រូអព្យាក្រឹត គ្រីបតូដឹកនាំដោយទិន្នន័យ On-chain និងបច្ចេកទេស។")
+                confidence = 0 if usd_bias == "UNAVAILABLE" else 50
+                evidence.append("DXY data is unavailable; no USD-driven crypto view is inferred." if usd_bias == "UNAVAILABLE" else "DXY direction is neutral in the available feed.")
+                evidence_kh.append("មិនមានទិន្នន័យ DXY ទេ ដូច្នេះមិនសន្និដ្ឋានទិសដៅគ្រីបតូដោយផ្អែកលើ USD ឡើយ។" if usd_bias == "UNAVAILABLE" else "ទិន្នន័យ DXY ដែលមានបង្ហាញទិសដៅអព្យាក្រឹត។")
         else:
             macro_bias = "NEUTRAL"
             confidence = 50
@@ -97,6 +106,9 @@ class MacroAnalystAgent:
         risk_warnings_kh = []
 
         if blackout_info.get("is_blackout"):
+            risk_warnings.append(blackout_info["advisory_en"])
+            risk_warnings_kh.append(blackout_info["advisory_kh"])
+        elif blackout_info.get("status") == "UNAVAILABLE":
             risk_warnings.append(blackout_info["advisory_en"])
             risk_warnings_kh.append(blackout_info["advisory_kh"])
 
@@ -116,7 +128,8 @@ class MacroAnalystAgent:
             "agent_name": self.AGENT_NAME,
             "bias": macro_bias,
             "confidence": confidence,
-            "setup_eligible": True,
+            "confidence_basis": "rule_based_heuristic_not_calibrated_probability",
+            "setup_eligible": usd_bias != "UNAVAILABLE",
             "usd_index": {
                 "dxy_price": dxy_price,
                 "dxy_change": dxy_change,
@@ -129,8 +142,8 @@ class MacroAnalystAgent:
             "evidence_kh": evidence_kh,
             "risk_warnings": risk_warnings,
             "risk_warnings_kh": risk_warnings_kh,
-            "rationale": f"Fundamental direction driven by {usd_bias} with DXY at {dxy_price}.",
-            "rationale_kh": f"ទិសដៅម៉ាក្រូសេដ្ឋកិច្ចត្រូវបានដឹកនាំដោយទំនោរ {usd_bias} ជាមួយ DXY ស្ថិតនៅ {dxy_price}។"
+            "rationale": f"Fundamental direction driven by {usd_bias} with DXY at {dxy_price}." if dxy_price is not None else "DXY data is unavailable; no USD-driven macro direction is inferred.",
+            "rationale_kh": f"ទិសដៅម៉ាក្រូសេដ្ឋកិច្ចត្រូវបានដឹកនាំដោយទំនោរ {usd_bias} ជាមួយ DXY ស្ថិតនៅ {dxy_price}។" if dxy_price is not None else "មិនមានទិន្នន័យ DXY ទេ ដូច្នេះមិនសន្និដ្ឋានទិសដៅម៉ាក្រូដោយផ្អែកលើ USD ឡើយ។"
         }
 
 macro_analyst_agent = MacroAnalystAgent()

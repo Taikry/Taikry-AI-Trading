@@ -16,6 +16,7 @@ Rules Enforced:
 """
 
 import datetime
+import math
 import zoneinfo
 import logging
 from typing import Dict, Any, List, Optional, Tuple
@@ -76,8 +77,12 @@ class XAUUSDPerformanceTracker:
                 entry = sig.entry_price
                 sl = sig.stop_loss
                 tp1 = sig.take_profit_1
-                tp2 = sig.take_profit_2 or (entry + abs(entry - sl) * 3.3 if is_buy else entry - abs(entry - sl) * 3.3)
-                tp3 = sig.take_profit_3 or (entry + abs(entry - sl) * 4.8 if is_buy else entry - abs(entry - sl) * 4.8)
+                tp2 = sig.take_profit_2
+                tp3 = sig.take_profit_3
+                risk_distance = abs(entry - sl) if entry is not None and sl is not None else 0.0
+                if not entry or not sl or not tp1 or risk_distance <= 0:
+                    logger.warning("Skipping malformed stored signal %s; required price levels are missing.", sig.signal_id)
+                    continue
 
                 # 1. Expiration check for unfilled orders
                 if status == "SENT" and not sig.entry_reached:
@@ -157,17 +162,17 @@ class XAUUSDPerformanceTracker:
                         sig.exit_price = tp1
                         sig.exit_time = eval_dt
                         sig.closed_at = eval_dt
-                        sig.pnl_r_multiple = sig.risk_reward_1
+                        sig.pnl_r_multiple = sig.risk_reward_1 or round(abs(tp1 - entry) / risk_distance, 2)
 
                         # Check if higher targets also attained in this bar
-                        tp2_hit = (h >= tp2) if is_buy else (l <= tp2)
-                        tp3_hit = (h >= tp3) if is_buy else (l <= tp3)
+                        tp2_hit = bool(tp2 and ((h >= tp2) if is_buy else (l <= tp2)))
+                        tp3_hit = bool(tp3 and ((h >= tp3) if is_buy else (l <= tp3)))
                         if tp3_hit:
                             sig.signal_status = "TP3_HIT"
-                            sig.pnl_r_multiple = sig.risk_reward_3 or (sig.risk_reward_1 * 2.2)
+                            sig.pnl_r_multiple = sig.risk_reward_3 or round(abs(tp3 - entry) / risk_distance, 2)
                         elif tp2_hit:
                             sig.signal_status = "TP2_HIT"
-                            sig.pnl_r_multiple = sig.risk_reward_2 or (sig.risk_reward_1 * 1.5)
+                            sig.pnl_r_multiple = sig.risk_reward_2 or round(abs(tp2 - entry) / risk_distance, 2)
 
                         self._append_audit(sig, sig.signal_status, f"Take Profit attained at {sig.exit_price:.2f}", sig.exit_price, eval_dt)
                         resolved_events.append({"signal_id": sig.signal_id, "status": sig.signal_status, "outcome": "WIN", "pnl_r": sig.pnl_r_multiple})
@@ -381,7 +386,16 @@ class XAUUSDPerformanceTracker:
 
         # Trading costs and spreads
         total_costs = round(sum(getattr(s, "estimated_trading_costs", 0.0) or 0.0 for s in signals), 2)
-        avg_spread = round(sum(getattr(s, "spread_points", 0.25) or 0.25 for s in signals) / float(max(1, total_sent)), 2)
+        spread_samples = []
+        for signal in signals:
+            try:
+                spread = float(getattr(signal, "spread_points", None))
+            except (TypeError, ValueError):
+                continue
+            # 0.25 was the legacy fallback default, not verified broker data.
+            if math.isfinite(spread) and spread > 0 and spread != 0.25:
+                spread_samples.append(spread)
+        avg_spread = round(sum(spread_samples) / len(spread_samples), 2) if spread_samples else None
 
         # Calculate Max Drawdown in R
         running_r = 0.0

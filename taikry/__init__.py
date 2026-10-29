@@ -1,6 +1,6 @@
 """
 TAIKRY AI MARKET INTELLIGENCE PRO
-Institutional-grade, autonomous 24/7 AI financial market intelligence platform.
-Focus: XAUUSD (Gold), Forex, and Cryptocurrency.
+AI-assisted market analysis and paper-trading monitor.
+Focus: XAUUSD (Gold), Forex, and Cryptocurrency; availability depends on configured providers and host uptime.
 """
 __version__ = "2.0.0"

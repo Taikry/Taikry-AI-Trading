@@ -15,9 +15,9 @@
       "module": "http:ActionSendRequest",
       "name": "POST /api/v1/paper-trades/evaluate",
       "parameters": {
-        "url": "http://localhost:8000/api/v1/paper-trades/evaluate",
+        "url": "https://YOUR_PUBLIC_API_HOST/api/v1/paper-trades/evaluate",
         "method": "POST",
-        "headers": [{"name": "Content-Type", "value": "application/json"}],
+        "headers": [{"name": "Content-Type", "value": "application/json"}, {"name": "X-TAIKRY-API-KEY", "value": ""}],
         "body": "{\"symbol\": \"{{1.symbol}}\", \"direction\": \"{{1.direction}}\", \"entry_price\": {{1.entry_price}}, \"stop_loss\": {{1.stop_loss}}, \"take_profit_1\": {{1.take_profit_1}}, \"take_profit_2\": {{1.take_profit_2}}}"
       }
     },
@@ -36,9 +36,9 @@
       "module": "telegram:sendTextMessage",
       "name": "Broadcast Paper Trade Confirmation",
       "parameters": {
-        "chat_id": "-1004341134868",
+        "chat_id": "{{1.chat_id}}",
         "parse_mode": "HTML",
-        "text": "📝 <b>SIMULATED PAPER TRADE EXECUTED</b>\n\n🆔 <b>Trade ID:</b> #{{2.data.trade_id}}\n🪙 <b>Symbol:</b> {{2.data.symbol}}\n🧭 <b>Direction:</b> {{2.data.direction}}\n💵 <b>Entry Price:</b> <code>{{2.data.entry_price}}</code>\n🛑 <b>Stop Loss:</b> <code>{{2.data.stop_loss}}</code>\n🎯 <b>Take Profit:</b> <code>{{2.data.take_profit_1}}</code>\n📦 <b>Position Size:</b> {{2.data.lot_size}} Lots\n🛡 <b>Risk:</b> ${{2.data.risk_amount}} (0.5% Equity)\n💸 <b>Simulated Commission:</b> ${{2.data.commission}}\n\n<i>Position state is tracked and audited in Python backend.</i>"
+        "text": "📝 <b>SIMULATED PAPER TRADE RECORDED</b>\n\n🆔 <b>Trade ID:</b> #{{2.data.trade_id}}\n🪙 <b>Symbol:</b> {{2.data.symbol}}\n🧭 <b>Direction:</b> {{2.data.direction}}\n💵 <b>Entry Price:</b> <code>{{2.data.entry_price}}</code>\n🛑 <b>Stop Loss:</b> <code>{{2.data.stop_loss}}</code>\n🎯 <b>Take Profit:</b> <code>{{2.data.take_profit_1}}</code>\n📦 <b>Position Size:</b> {{2.data.lot_size}} Lots\n🛡 <b>Risk:</b> ${{2.data.risk_amount}} ({{2.data.risk_percentage}}% Equity)\n💸 <b>Simulated Commission:</b> ${{2.data.commission}}\n\n<i>Position state is tracked and audited in Python backend. No broker order was placed.</i>"
       }
     }
   ]

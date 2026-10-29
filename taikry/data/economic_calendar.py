@@ -89,6 +89,7 @@ class EconomicCalendarProvider:
         self.dxy_ticker = "DX-Y.NYB"
         self._cached_events: List[Dict[str, Any]] = []
         self._last_event_fetch_ts: float = 0.0
+        self._calendar_available = False
         self._event_cache_ttl_seconds: int = 1800  # 30 minutes cache to avoid rate limits
         self._cached_news: List[Dict[str, Any]] = []
         self._last_news_fetch_ts: float = 0.0
@@ -134,116 +135,21 @@ class EconomicCalendarProvider:
         clean = title.split(" - ")[0].split(":")[0].strip()
         return clean[:14]
 
-    def _generate_synthetic_benchmark_schedule(self) -> List[Dict[str, Any]]:
-        """
-        Provides verified active high-impact economic calendar benchmarks with realistic scheduled times
-        anchored around the current trading week.
-        """
-        now = datetime.datetime.now(datetime.timezone.utc)
-        base_date = now.replace(minute=30, second=0, microsecond=0)
-
-        raw_benchmarks = [
-            {
-                "id": "ev_fomc_policy",
-                "title": "Federal Reserve FOMC Interest Rate Decision & Statement",
-                "keyword": "FOMC",
-                "country": "USD",
-                "offset_hours": 3.5,
-                "forecast": "5.25% - 5.50%",
-                "previous": "5.50%",
-                "impact": "HIGH"
-            },
-            {
-                "id": "ev_ppi_final_demand",
-                "title": "US Core PPI Final Demand (MoM / YoY)",
-                "keyword": "PPI",
-                "country": "USD",
-                "offset_hours": 0.75,
-                "forecast": "+0.3%",
-                "previous": "+0.2%",
-                "impact": "HIGH"
-            },
-            {
-                "id": "ev_cpi_inflation",
-                "title": "US Consumer Price Index (CPI) Core Inflation Rate",
-                "keyword": "CPI",
-                "country": "USD",
-                "offset_hours": 18.0,
-                "forecast": "3.1%",
-                "previous": "3.3%",
-                "impact": "HIGH"
-            },
-            {
-                "id": "ev_nfp_employment",
-                "title": "US Non-Farm Payrolls (NFP) & Unemployment Rate",
-                "keyword": "NFP",
-                "country": "USD",
-                "offset_hours": 42.0,
-                "forecast": "180K / 4.1%",
-                "previous": "216K / 4.1%",
-                "impact": "HIGH"
-            },
-            {
-                "id": "ev_ecb_monetary_policy",
-                "title": "ECB Main Refinancing Rate Decision & Press Conference",
-                "keyword": "INTEREST RATE",
-                "country": "EUR",
-                "offset_hours": 64.0,
-                "forecast": "3.65%",
-                "previous": "3.90%",
-                "impact": "HIGH"
-            },
-            {
-                "id": "ev_us_retail_sales",
-                "title": "US Core Retail Sales (MoM Advance)",
-                "keyword": "RETAIL SALES",
-                "country": "USD",
-                "offset_hours": 88.0,
-                "forecast": "+0.4%",
-                "previous": "+0.1%",
-                "impact": "HIGH"
-            }
-        ]
-
-        events = []
-        for b in raw_benchmarks:
-            event_dt = base_date + datetime.timedelta(hours=b["offset_hours"])
-            meta = self._match_khmer_meta(b["keyword"])
-            events.append({
-                "id": b["id"],
-                "title": b["title"],
-                "title_kh": meta["title_kh"],
-                "country": b["country"],
-                "impact": b["impact"],
-                "scheduled_utc": event_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "scheduled_display": event_dt.strftime("%A, %b %d at %H:%M UTC"),
-                "forecast": b["forecast"],
-                "previous": b["previous"],
-                "actual": "PENDING",
-                "volatility_risk": "EXTREME" if b["keyword"] in ["FOMC", "PPI", "CPI", "NFP"] else "HIGH",
-                "gold_impact_en": meta["gold_impact_en"],
-                "gold_impact_kh": meta["gold_impact_kh"],
-                "forex_impact_en": meta["forex_impact_en"],
-                "forex_impact_kh": meta["forex_impact_kh"],
-                "category": b["keyword"]
-            })
-
-        return events
-
     def get_upcoming_high_impact_events(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """
         Retrieves upcoming high-impact economic events with live countdown and blackout status.
-        Uses cached / public feeds with guaranteed fallback to verified benchmarks.
+        Uses a public calendar feed. Missing feed data remains unavailable.
         """
         now_ts = time.time()
         now_dt = datetime.datetime.now(datetime.timezone.utc)
 
         # Return cached if still within TTL
-        if not force_refresh and self._cached_events and (now_ts - self._last_event_fetch_ts < self._event_cache_ttl_seconds):
+        if not force_refresh and (now_ts - self._last_event_fetch_ts < self._event_cache_ttl_seconds):
             # Recalculate countdowns dynamically
             return self._enrich_countdowns(self._cached_events, now_dt)
 
         fetched_events: List[Dict[str, Any]] = []
+        self._calendar_available = False
 
         # 1. Attempt Forex Factory / FairEconomy public feed
         url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
@@ -251,6 +157,7 @@ class EconomicCalendarProvider:
             r = requests.get(url, headers=HEADERS, timeout=4)
             if r.status_code == 200:
                 raw = r.json()
+                self._calendar_available = isinstance(raw, list)
                 for item in raw:
                     impact = str(item.get("impact", "")).lower()
                     country = str(item.get("country", "")).upper()
@@ -279,9 +186,9 @@ class EconomicCalendarProvider:
         except Exception as e:
             logger.debug(f"FairEconomy feed skipped: {e}")
 
-        # If external fetch was empty or blocked (HTTP 429), use verified benchmarks
+        # Do not fabricate a schedule when the public calendar is unavailable.
         if not fetched_events:
-            fetched_events = self._generate_synthetic_benchmark_schedule()
+            logger.warning("Economic calendar feed returned no events; calendar status is unavailable.")
 
         self._cached_events = fetched_events
         self._last_event_fetch_ts = now_ts
@@ -302,7 +209,8 @@ class EconomicCalendarProvider:
                 else:
                     sched_dt = datetime.datetime.strptime(cleaned_str[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
             except Exception:
-                sched_dt = now_dt + datetime.timedelta(hours=2)
+                logger.warning("Skipping economic calendar event with invalid timestamp: %r", sched_str)
+                continue
 
             diff_sec = int((sched_dt - now_dt).total_seconds())
             diff_min = int(diff_sec / 60)
@@ -352,6 +260,7 @@ class EconomicCalendarProvider:
                 mins = ev.get("minutes_remaining", 0)
                 return {
                     "is_blackout": True,
+                    "status": "BLACKOUT",
                     "event_title": title,
                     "event_title_kh": title_kh,
                     "minutes_remaining": mins,
@@ -361,11 +270,20 @@ class EconomicCalendarProvider:
 
         return {
             "is_blackout": False,
+            "status": "UNAVAILABLE" if not self._calendar_available else "CLEAR",
             "event_title": None,
             "event_title_kh": None,
             "minutes_remaining": None,
-            "advisory_en": "No immediate high-impact blackout in effect. Normal volatility operating conditions.",
-            "advisory_kh": "មិនទាន់មានបំរាមជួញដូរនៅឡើយទេ។ ទីផ្សារមានកម្រិតបម្រែបម្រួលធម្មតា។"
+            "advisory_en": "Calendar feed is unavailable; upcoming event risk could not be verified.",
+            "advisory_kh": "មិនអាចភ្ជាប់ប្រតិទិនព័ត៌មានបានទេ ដូច្នេះមិនអាចផ្ទៀងផ្ទាត់ហានិភ័យព្រឹត្តិការណ៍ខាងមុខបានឡើយ។"
+        } if not self._calendar_available else {
+            "is_blackout": False,
+            "status": "CLEAR",
+            "event_title": None,
+            "event_title_kh": None,
+            "minutes_remaining": None,
+            "advisory_en": "No immediate high-impact blackout was found in the returned calendar events.",
+            "advisory_kh": "ក្នុងព្រឹត្តិការណ៍ដែលប្រតិទិនបានផ្តល់ មិនឃើញមានព្រឹត្តិការណ៍ឥទ្ធិពលខ្ពស់ក្នុងពេលបច្ចុប្បន្នទេ។"
         }
 
     def get_next_xauusd_catalyst(self) -> Optional[Dict[str, Any]]:
@@ -401,7 +319,7 @@ class EconomicCalendarProvider:
             if e.get("countdown_seconds", 0) > -1800
         ]
         if not active_or_upcoming:
-            active_or_upcoming = xau_events
+            return None
 
         # Sort by closest time to now
         active_or_upcoming.sort(key=lambda x: (x.get("countdown_seconds", 999999) < 0, abs(x.get("countdown_seconds", 999999))))
@@ -484,7 +402,7 @@ class EconomicCalendarProvider:
         - MarketWatch Top Stories RSS
         """
         now_ts = time.time()
-        if self._cached_news and (now_ts - self._last_news_fetch_ts < self._news_cache_ttl_seconds):
+        if now_ts - self._last_news_fetch_ts < self._news_cache_ttl_seconds:
             return self._cached_news[:limit]
 
         rss_feeds = [
@@ -533,31 +451,6 @@ class EconomicCalendarProvider:
             except Exception as e:
                 logger.debug(f"RSS fetch for {source_name} failed: {e}")
 
-        # Fallback if feeds are unreachable
-        if not news_items:
-            news_items = [
-                {
-                    "title": "Fed Officials Maintain Data-Dependent Stance Ahead of Inflation Readings",
-                    "source": "Institutional Macro Desk",
-                    "published_at": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                    "link": "#",
-                    "relevance": "HIGH",
-                    "is_gold_related": True,
-                    "is_macro_related": True,
-                    "snippet": "FOMC voting members reiterate that policy decisions remain tethered to upcoming PPI and CPI prints."
-                },
-                {
-                    "title": "Gold Consolidates Below Resistance as US Treasury Yields Fluctuate",
-                    "source": "Commodities Desk",
-                    "published_at": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                    "link": "#",
-                    "relevance": "HIGH",
-                    "is_gold_related": True,
-                    "is_macro_related": False,
-                    "snippet": "Bullion buyers defend technical discount zones amidst mixed macroeconomic dollar catalysts."
-                }
-            ]
-
         self._cached_news = news_items
         self._last_news_fetch_ts = now_ts
         return news_items[:limit]
@@ -577,21 +470,23 @@ class EconomicCalendarProvider:
                     curr_dxy = round(float(valid_quotes[-1]), 2)
                     prev_dxy = round(float(valid_quotes[-2]), 2)
                     dxy_change = round(curr_dxy - prev_dxy, 2)
-                    bias = "BULLISH_USD" if dxy_change > 0 else "BEARISH_USD"
+                    bias = "BULLISH_USD" if dxy_change > 0 else ("BEARISH_USD" if dxy_change < 0 else "NEUTRAL_USD")
                     return {
                         "dxy_price": curr_dxy,
                         "dxy_change_pts": dxy_change,
                         "usd_bias": bias,
+                        "status": "AVAILABLE",
                         "impact_on_gold": "BEARISH_PRESSURE" if bias == "BULLISH_USD" else "BULLISH_TAILWIND"
                     }
         except Exception:
             pass
 
         return {
-            "dxy_price": 104.20,
-            "dxy_change_pts": 0.0,
-            "usd_bias": "NEUTRAL_USD",
-            "impact_on_gold": "NEUTRAL"
+            "dxy_price": None,
+            "dxy_change_pts": None,
+            "usd_bias": "UNAVAILABLE",
+            "impact_on_gold": "UNAVAILABLE",
+            "status": "UNAVAILABLE"
         }
 
 economic_calendar_provider = EconomicCalendarProvider()

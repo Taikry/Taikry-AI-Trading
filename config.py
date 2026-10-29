@@ -5,7 +5,7 @@ MAKE_WEBHOOK_URL = os.getenv("MAKE_WEBHOOK_URL", "")
 
 # Telegram Direct Alerts Configuration (Optional: send directly to Telegram without 3rd party limits)
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "-1004341134868")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_WEBAPP_URL = os.getenv("TELEGRAM_WEBAPP_URL", "")
 
 # AI Engine Provider: "auto", "claude", "openai", "gemini", "deepseek", "manus", "ensemble", or "rule_based"
@@ -20,10 +20,15 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstr
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 MANUS_API_KEY = os.getenv("MANUS_API_KEY", "")
 MANUS_API_URL = os.getenv("MANUS_API_URL", "https://api.manus.ai/v1")
+ORCAROUTER_API_KEY = os.getenv("ORCAROUTER_API_KEY", "")
+ORCAROUTER_BASE_URL = os.getenv("ORCAROUTER_BASE_URL", "https://api.orcarouter.ai/v1").rstrip("/")
+ORCAROUTER_MODEL = os.getenv("ORCAROUTER_MODEL", "deepseek/deepseek-v4-pro-0813").strip()
 
 def get_configured_llms() -> list:
     """Returns a list of LLM providers that currently have active API keys."""
@@ -36,6 +41,8 @@ def get_configured_llms() -> list:
         active.append("gemini")
     if DEEPSEEK_API_KEY:
         active.append("deepseek")
+    if ORCAROUTER_API_KEY:
+        active.append("orcarouter")
     if MANUS_API_KEY:
         active.append("manus")
     return active

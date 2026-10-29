@@ -15,11 +15,14 @@ $payload = @{
     symbol    = $symbol
     timeframe = $timeframe
     action    = $action
-    test      = $test
-    chat_id   = "-1004341134868"
-} | ConvertTo-Json
+    test      = ($test -in @("1", "true", "yes"))
+}
+if ($env:TELEGRAM_CHAT_ID) {
+    $payload.chat_id = $env:TELEGRAM_CHAT_ID
+}
+$payload = $payload | ConvertTo-Json
 
-Write-Host "Sending webhook POST to $url..." -ForegroundColor Cyan
+Write-Host "Sending webhook POST to configured Make webhook..." -ForegroundColor Cyan
 Write-Host "Payload: $payload" -ForegroundColor Gray
 
 try {

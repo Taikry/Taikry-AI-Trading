@@ -12,12 +12,13 @@ Enforces:
 - Bilingual report production (English & Natural Khmer)
 """
 import datetime
+import math
 from typing import Dict, Any, Optional
 import zoneinfo
 
-from taikry.config import LOCAL_TIMEZONE, get_symbol_config
+from taikry.config import INITIAL_PAPER_BALANCE, LOCAL_TIMEZONE, MIN_RISK_REWARD_RATIO, RISK_PER_TRADE_PERCENT, get_symbol_config
 from taikry.data.providers import market_data_engine
-from taikry.data.validator import validate_dataframe
+from taikry.data.validator import validate_dataframe, check_data_freshness
 from taikry.agents.technical_analyst import technical_analyst_agent
 from taikry.agents.ict_smc_analyst import ict_smc_analyst_agent
 from taikry.agents.macro_analyst import macro_analyst_agent
@@ -37,8 +38,8 @@ class AIConsensusEngine:
     def analyze_symbol(
         self,
         symbol: str = "XAUUSD",
-        simulated_equity: float = 100000.0,
-        open_positions_count: int = 0,
+        simulated_equity: float = INITIAL_PAPER_BALANCE,
+        open_positions_count: Optional[int] = None,
         preferred_llm: str = "quant",
         force_refresh: bool = False
     ) -> Dict[str, Any]:
@@ -46,12 +47,20 @@ class AIConsensusEngine:
         Executes complete multi-agent workflow.
         """
         import time
+        t_start = time.time()
         cache_key = f"{symbol.upper()}:{preferred_llm or 'auto'}"
-        now_ts = time.time()
+        now_ts = t_start
         if not force_refresh and cache_key in _ANALYSIS_CACHE:
             c_time, c_data = _ANALYSIS_CACHE[cache_key]
             if (now_ts - c_time) < 45.0:
-                return c_data
+                ret = dict(c_data)
+                ret["performance"] = {
+                    "parallel_execution": True,
+                    "concurrency_level": 5,
+                    "cached": True,
+                    "latency_ms": round((time.time() - t_start) * 1000, 2)
+                }
+                return ret
         # 1. Fetch & Validate Market Data
         timeframes = ["D1", "H4", "H1", "M15", "M5"]
         multi_tf_data = market_data_engine.get_multi_timeframe_candles(symbol, timeframes)
@@ -71,7 +80,7 @@ class AIConsensusEngine:
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         cambodia_tz = zoneinfo.ZoneInfo("Asia/Phnom_Penh")
         now_cambodia = now_utc.astimezone(cambodia_tz)
-        ts_utc_str = now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
+        ts_utc_str = now_utc.isoformat()
         ts_kh_str = now_cambodia.strftime("%Y-%m-%d %H:%M:%S +07")
 
         if not val["valid"] or verified_price <= 0:
@@ -88,7 +97,37 @@ class AIConsensusEngine:
                 "report_khmer": f"TAIKRY AI MARKET INTELLIGENCE PRO\n\nគូរូបិយវត្ថុ: {symbol}\nស្ថានភាព: គ្មានការជួញដូរ (ទិន្នន័យពុំអាចទាញយកបាន)"
             }
 
-        # 2. Run Agents 1, 2, and 3 Independently via Standardized Registry Adapters
+        synthetic_timeframes = [
+            tf for tf, frame in multi_tf_data.items()
+            if frame is None or frame.empty or ("source" in frame.columns and frame["source"].astype(str).str.upper().str.contains("SYNTHETIC|DEMO").any())
+        ]
+        freshness = check_data_freshness(symbol, primary_df.iloc[-1].get("timestamp"), "M15")
+        if synthetic_timeframes or not freshness.get("fresh") or any(marker in str(price_source).upper() for marker in ("SYNTHETIC", "DEMO", "UNAVAILABLE")):
+            reason = "Synthetic or stale market data is not eligible for actionable analysis."
+            return {
+                "symbol": symbol,
+                "verified_price": verified_price,
+                "price_source": price_source,
+                "timestamp_utc": ts_utc_str,
+                "timestamp_cambodia": ts_kh_str,
+                "market_bias": "NO TRADE",
+                "setup_status": "NO TRADE",
+                "proposed_direction": "NONE",
+                "entry_price": None,
+                "stop_loss": None,
+                "take_profit_1": None,
+                "take_profit_2": None,
+                "error": reason,
+                "data_quality": {"synthetic_timeframes": synthetic_timeframes, "freshness": freshness},
+                "report_english": f"TAIKRY AI MARKET INTELLIGENCE PRO\n\nSymbol: {symbol}\nStatus: NO TRADE ({reason})",
+                "report_khmer": f"TAIKRY AI MARKET INTELLIGENCE PRO\n\nគូរូបិយវត្ថុ: {symbol}\nស្ថានភាព: គ្មានការជួញដូរ (ទិន្នន័យសិប្បនិម្មិត ឬចាស់ មិនអាចប្រើសម្រាប់សញ្ញាជួញដូរបានទេ)"
+            }
+
+        # 2. Run Agents 1, 2, 3, 8, and 9 Concurrently via Standardized Adapters & ThreadPool
+        from concurrent.futures import ThreadPoolExecutor
+        from taikry.agents.orderflow_sentiment_analyst import orderflow_sentiment_agent
+        from taikry.agents.fractal_mtf_analyst import fractal_mtf_agent
+
         try:
             from taikry.agents.registry import agent_registry
         except ImportError:
@@ -96,13 +135,37 @@ class AIConsensusEngine:
 
         if agent_registry:
             a1_ad = agent_registry.get_adapter("technical_analyst")
-            agent1_out = a1_ad.execute(symbol, multi_tf_data) if a1_ad else technical_analyst_agent.analyze(symbol, multi_tf_data)
-
             a2_ad = agent_registry.get_adapter("ict_smc_analyst")
-            agent2_out = a2_ad.execute(symbol, multi_tf_data) if a2_ad else ict_smc_analyst_agent.analyze(symbol, multi_tf_data)
-
             a3_ad = agent_registry.get_adapter("macro_analyst")
-            agent3_out = a3_ad.execute(symbol) if a3_ad else macro_analyst_agent.analyze(symbol)
+            a8_ad = agent_registry.get_adapter("orderflow_sentiment_analyst")
+            a9_ad = agent_registry.get_adapter("fractal_mtf_analyst")
+
+            def _run_a1():
+                return a1_ad.execute(symbol, multi_tf_data) if a1_ad else technical_analyst_agent.analyze(symbol, multi_tf_data)
+
+            def _run_a2():
+                return a2_ad.execute(symbol, multi_tf_data) if a2_ad else ict_smc_analyst_agent.analyze(symbol, multi_tf_data)
+
+            def _run_a3():
+                return a3_ad.execute(symbol) if a3_ad else macro_analyst_agent.analyze(symbol)
+
+            def _run_a8():
+                return a8_ad.execute(symbol=symbol, df_m15=primary_df, verified_price=verified_price) if a8_ad else orderflow_sentiment_agent.analyze(symbol, primary_df, verified_price)
+
+            def _run_a9():
+                return a9_ad.execute(symbol=symbol, multi_tf_data=multi_tf_data) if a9_ad else fractal_mtf_agent.analyze(symbol, multi_tf_data)
+
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                fut1 = executor.submit(_run_a1)
+                fut2 = executor.submit(_run_a2)
+                fut3 = executor.submit(_run_a3)
+                fut8 = executor.submit(_run_a8)
+                fut9 = executor.submit(_run_a9)
+                agent1_out = fut1.result()
+                agent2_out = fut2.result()
+                agent3_out = fut3.result()
+                agent8_out = fut8.result()
+                agent9_out = fut9.result()
 
             # 3. Challenge with Agent 4 (Risk Validator) via Adapter
             a4_ad = agent_registry.get_adapter("risk_validator")
@@ -129,9 +192,18 @@ class AIConsensusEngine:
                     open_positions_count=open_positions_count
                 )
         else:
-            agent1_out = technical_analyst_agent.analyze(symbol, multi_tf_data)
-            agent2_out = ict_smc_analyst_agent.analyze(symbol, multi_tf_data)
-            agent3_out = macro_analyst_agent.analyze(symbol)
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                fut1 = executor.submit(technical_analyst_agent.analyze, symbol, multi_tf_data)
+                fut2 = executor.submit(ict_smc_analyst_agent.analyze, symbol, multi_tf_data)
+                fut3 = executor.submit(macro_analyst_agent.analyze, symbol)
+                fut8 = executor.submit(orderflow_sentiment_agent.analyze, symbol, primary_df, verified_price)
+                fut9 = executor.submit(fractal_mtf_agent.analyze, symbol, multi_tf_data)
+                agent1_out = fut1.result()
+                agent2_out = fut2.result()
+                agent3_out = fut3.result()
+                agent8_out = fut8.result()
+                agent9_out = fut9.result()
+
             risk_out = risk_validator_agent.validate(
                 symbol=symbol,
                 verified_price=verified_price,
@@ -167,48 +239,35 @@ class AIConsensusEngine:
 
         # Record Dissenting Opinions
         dissenting = []
-        # Guarantee proposed trade direction
+        # Keep neutral and rejected analyses directionless.
         proposed_dir = risk_out.get("proposed_direction", "NONE")
-        if proposed_dir == "NONE" or not proposed_dir:
-            if "BULLISH" in market_bias:
-                proposed_dir = "LONG"
-            elif "BEARISH" in market_bias:
-                proposed_dir = "SHORT"
-            else:
-                proposed_dir = "LONG"
+        if proposed_dir not in ("LONG", "SHORT", "BUY", "SELL") or setup_status != "APPROVE":
+            proposed_dir = "NONE"
 
-        # Guarantee trade levels are always available
-        entry_price = risk_out.get("entry_price") or verified_price
-        sl = risk_out.get("stop_loss")
-        tp1 = risk_out.get("take_profit_1")
-        tp2 = risk_out.get("take_profit_2")
-        rr_str = risk_out.get("calculated_rr", "1:2.4")
+        entry_price = risk_out.get("entry_price") if setup_status == "APPROVE" else None
+        sl = risk_out.get("stop_loss") if setup_status == "APPROVE" else None
+        tp1 = risk_out.get("take_profit_1") if setup_status == "APPROVE" else None
+        tp2 = risk_out.get("take_profit_2") if setup_status == "APPROVE" else None
+        rr_str = risk_out.get("calculated_rr", "N/A") if setup_status == "APPROVE" else "N/A"
 
-        atr = agent1_out.get("key_price_levels", {}).get("atr") or (verified_price * 0.004)
-        is_buy = proposed_dir in ["LONG", "BUY"]
-        dec_places = 2 if (verified_price > 10 or "XAU" in symbol or "XAG" in symbol) else 4
-        if "JPY" in symbol:
-            dec_places = 3
-
-        if not sl or sl == 0.0:
-            sl = round(entry_price - (1.5 * atr) if is_buy else entry_price + (1.5 * atr), dec_places)
-        if not tp1 or tp1 == 0.0:
-            sl_dist = abs(entry_price - sl)
-            tp1 = round(entry_price + (sl_dist * 2.2) if is_buy else entry_price - (sl_dist * 2.2), dec_places)
-        if not tp2 or tp2 == 0.0:
-            sl_dist = abs(entry_price - sl)
-            tp2 = round(entry_price + (sl_dist * 3.5) if is_buy else entry_price - (sl_dist * 3.5), dec_places)
+        orderflow_dict = agent8_out.model_dump() if hasattr(agent8_out, "model_dump") else agent8_out
+        fractal_dict = agent9_out.model_dump() if hasattr(agent9_out, "model_dump") else agent9_out
 
         for ag, name in [
             (agent1_out, "Agent 1 (Technical)"),
             (agent2_out, "Agent 2 (ICT/SMC)"),
-            (agent3_out, "Agent 3 (Macro)")
+            (agent3_out, "Agent 3 (Macro)"),
+            (orderflow_dict, "Agent 8 (Order Flow)"),
+            (fractal_dict, "Agent 9 (Fractal MTF)")
         ]:
-            ag_bias = ag.get("bias", "NEUTRAL")
-            if proposed_dir == "LONG" and "BEARISH" in ag_bias:
-                dissenting.append(f"{name} holds dissenting BEARISH bias: {ag.get('rationale')}")
-            elif proposed_dir == "SHORT" and "BULLISH" in ag_bias:
-                dissenting.append(f"{name} holds dissenting BULLISH bias: {ag.get('rationale')}")
+            ag_bias = ag.get("bias") or ag.get("overall_direction", "NEUTRAL")
+            if proposed_dir == "LONG" and "BEARISH" in str(ag_bias):
+                dissenting.append(f"{name} holds dissenting BEARISH bias: {ag.get('rationale_en') or ag.get('rationale')}")
+            elif proposed_dir == "SHORT" and "BULLISH" in str(ag_bias):
+                dissenting.append(f"{name} holds dissenting BULLISH bias: {ag.get('rationale_en') or ag.get('rationale')}")
+
+        if fractal_dict.get("trap_detected"):
+            dissenting.append(f"Agent 9 (Fractal Defense): {fractal_dict.get('trap_description')}")
 
         # Smart Multi-Agent Cause & Rationale Analysis Synthesis ("វិភាគមូលហេតុឆ្លាតវៃ")
         tech_causes = agent1_out.get("evidence", []) or [agent1_out.get("rationale", "")]
@@ -225,8 +284,8 @@ class AIConsensusEngine:
         chk_rr = risk_out.get("decision") == "APPROVE"
 
         if setup_status == "APPROVE":
-            synthesis_en = f"Consensus Confirmed: Technical momentum ({agent1_out.get('bias')}) and SMC market structure ({agent2_out.get('bias')}) exhibit directional confluence. Risk parameters verified (R:R >= 1:2.0, max 0.5% risk)."
-            synthesis_kh = f"ការស្រុះស្រួលគ្នាបានសម្រេច: សញ្ញាគាំទ្រស៊ីសង្វាក់គ្នារវាងកម្លាំងរុញច្រានបច្ចេកទេស ({agent1_out.get('bias')}) និងរចនាសម្ព័ន្ធទីផ្សារស្ថាប័ន SMC ({agent2_out.get('bias')}) ជាមួយអនុបាត R:R លើសពី 1:2.0 និងហានិភ័យទាប 0.5%។"
+            synthesis_en = f"Consensus Confirmed: Technical momentum ({agent1_out.get('bias')}) and SMC market structure ({agent2_out.get('bias')}) exhibit directional confluence. Risk parameters verified against configured minimum R:R 1:{MIN_RISK_REWARD_RATIO} and maximum risk {RISK_PER_TRADE_PERCENT}%."
+            synthesis_kh = f"ការស្រុះស្រួលគ្នាបានសម្រេច៖ សញ្ញាបច្ចេកទេស ({agent1_out.get('bias')}) និងរចនាសម្ព័ន្ធតម្លៃ ({agent2_out.get('bias')}) បង្ហាញទិសដៅស្របគ្នា។ ហានិភ័យត្រូវបានផ្ទៀងផ្ទាត់តាម R:R អប្បបរមា 1:{MIN_RISK_REWARD_RATIO} និងកម្រិតហានិភ័យអតិបរមា {RISK_PER_TRADE_PERCENT}%。"
         elif setup_status == "REJECT":
             synthesis_en = f"Capital Protection Triggered: {'; '.join(risk_causes)}. Execution blocked to safeguard portfolio."
             synthesis_kh = f"ប្រព័ន្ធការពារដើមទុនត្រូវបានដំណើរការ: {'; '.join(risk_causes)}។ បញ្ឈប់ការចូលជួញដូរជាបណ្តោះអាសន្នដើម្បីការពារសុវត្ថិភាពដើមទុន។"
@@ -235,8 +294,19 @@ class AIConsensusEngine:
             synthesis_kh = f"ដំណាក់កាលរង់ចាំការបញ្ជាក់: សញ្ញារវាងភ្នាក់ងារនៅមានភាពខ្វែងគំនិត ត្រូវរង់ចាំការបញ្ជាក់ទិសដៅច្បាស់លាស់ពីក្របខ័ណ្ឌពេលវេលាធំ។"
 
         # Real LLM Synthesis (Claude, OpenAI, Gemini, Manus AI)
-        llm_meta = {"provider": "quant_multi_agent", "model": "built-in_4_agents", "status": "BUILTIN_ONLINE"}
+        llm_meta = {
+            "provider": "deterministic_multi_agent",
+            "model": "python_technical_smc_macro_risk_agents",
+            "status": "DETERMINISTIC_ONLY",
+            "llm_call_made": False,
+        }
         if llm_orchestrator and preferred_llm not in ["quant", "math", "fast"]:
+            llm_meta = {
+                "provider": "llm_orchestrator",
+                "model": None,
+                "status": "ATTEMPTED",
+                "llm_call_made": True,
+            }
             try:
                 cfg = get_symbol_config(symbol)
                 m15_metrics = dict(agent1_out.get("key_price_levels", {}))
@@ -252,9 +322,16 @@ class AIConsensusEngine:
                         synthesis_en = f"[{prov_tag}]: {sa.get('synthesis_summary_en')}"
                     if sa.get("synthesis_summary_kh"):
                         synthesis_kh = f"[{prov_tag} វិភាគ]: {sa.get('synthesis_summary_kh')}"
-                    llm_meta = real_ai_res.get("_llm_meta", {"provider": prov_tag.lower(), "status": "SUCCESS"})
+                    llm_meta = {
+                        **llm_meta,
+                        **real_ai_res.get("_llm_meta", {"provider": prov_tag.lower(), "status": "SUCCESS"}),
+                        "llm_call_made": True,
+                    }
+                else:
+                    llm_meta["status"] = "UNAVAILABLE_OR_FALLBACK"
             except Exception as e:
-                pass
+                llm_meta["status"] = "ERROR"
+                llm_meta["error_type"] = type(e).__name__
 
         smart_analysis = {
             "synthesis_summary_en": synthesis_en,
@@ -272,40 +349,28 @@ class AIConsensusEngine:
             }
         }
 
-        # Multi-Agent Confluence Scoring with Empirical Self-Trained Weights
-        c1 = agent1_out.get("confidence", 60)
-        c2 = agent2_out.get("confidence", 60)
-        c3 = agent3_out.get("confidence", 60)
-
+        # Report the weighted confidence actually returned by the contributing
+        # agents. Do not add approval bonuses or floor scores into the alert band.
         from taikry.learning.self_trainer import agent_self_trainer
         dyn_weights = agent_self_trainer.get_current_agent_weights(symbol)
-        w_t = dyn_weights.get("technical_analyst", 0.25)
-        w_s = dyn_weights.get("ict_smc_analyst", 0.35)
-        w_m = dyn_weights.get("macro_analyst", 0.20)
-        sum_w = max(0.01, w_t + w_s + w_m)
-        base_conf = ((w_t / sum_w) * c1) + ((w_s / sum_w) * c2) + ((w_m / sum_w) * c3)
+        confidence_terms = []
+        for agent_id, agent_output in (
+            ("technical_analyst", agent1_out),
+            ("ict_smc_analyst", agent2_out),
+            ("macro_analyst", agent3_out),
+        ):
+            try:
+                confidence = float(agent_output.get("confidence"))
+                weight = float(dyn_weights.get(agent_id, 1.0))
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(confidence) and 0 <= confidence <= 100 and math.isfinite(weight) and weight > 0:
+                confidence_terms.append((confidence, weight))
 
-        confluence_points = 0
-        if setup_status == "APPROVE":
-            confluence_points += 18
-        if chk_trend and chk_smc:
-            confluence_points += 15
-        elif chk_trend or chk_smc:
-            confluence_points += 8
-        if chk_macro:
-            confluence_points += 6
-        if chk_rr:
-            confluence_points += 6
-
-        raw_score = (0.50 * base_conf) + confluence_points + 25.0
-        ai_score = int(round(min(95, max(50, raw_score))))
-
-        if setup_status == "APPROVE" and (chk_trend or chk_smc):
-            ai_score = max(82, min(95, ai_score))
-        elif setup_status == "APPROVE":
-            ai_score = max(80, min(95, ai_score))
-        else:
-            ai_score = min(78, ai_score)
+        total_confidence_weight = sum(weight for _, weight in confidence_terms)
+        ai_score = int(round(
+            sum(confidence * weight for confidence, weight in confidence_terms) / total_confidence_weight
+        )) if total_confidence_weight else 0
 
         # English Report Generation
         report_en = self._build_english_report(
@@ -345,7 +410,7 @@ class AIConsensusEngine:
             "smart_analysis": smart_analysis,
             "agent_1_summary": f"ទំនោរ: {agent1_out.get('bias')} ({agent1_out.get('confidence')}%) | {agent1_out.get('rationale')}",
             "agent_2_summary": f"ទំនោរ: {agent2_out.get('bias')} | តំបន់: {agent2_out.get('key_price_zones', {}).get('current_zone')} | {agent2_out.get('rationale')}",
-            "agent_3_summary": f"ទំនោរ: {agent3_out.get('bias')} | DXY: {agent3_out.get('usd_index', {}).get('dxy_price')} | {agent3_out.get('rationale')}",
+            "agent_3_summary": f"ទំនោរ: {agent3_out.get('bias')} | DXY: {agent3_out.get('usd_index', {}).get('dxy_price') if agent3_out.get('usd_index', {}).get('dxy_price') is not None else 'N/A'} | {agent3_out.get('rationale')}",
             "agent_4_summary": f"ការសម្រេច: {setup_status} | ហេតុផល: {'; '.join(risk_out.get('reasons', []))}",
             "htf_analysis_khmer": f"D1: {agent1_out.get('multi_timeframe_alignment', {}).get('D1', 'N/A')} | H4: {agent1_out.get('multi_timeframe_alignment', {}).get('H4', 'N/A')} | H1: {agent1_out.get('multi_timeframe_alignment', {}).get('H1', 'N/A')}",
             "ltf_analysis_khmer": f"M15 Trend: {agent1_out.get('multi_timeframe_alignment', {}).get('M15', 'N/A')} | RSI 14: {agent1_out.get('key_price_levels', {}).get('rsi', 'N/A')} | ATR: {agent1_out.get('key_price_levels', {}).get('atr', 'N/A')}"
@@ -363,7 +428,8 @@ class AIConsensusEngine:
             "proposed_direction": proposed_dir,
             "ai_score": ai_score,
             "confidence_score": ai_score,
-            "setup_grade": "INSTITUTIONAL_A_PLUS" if ai_score >= 88 else ("HIGH_CONVICTION" if ai_score >= 80 else "STANDARD"),
+            "score_explanation": "Weighted mean of valid technical, SMC, and macro agent confidence inputs; heuristic score, not a calibrated win probability.",
+            "setup_grade": "HIGH_CONVICTION" if ai_score >= 80 else "STANDARD",
             "entry_price": entry_price,
             "stop_loss": sl,
             "take_profit_1": tp1,
@@ -375,7 +441,16 @@ class AIConsensusEngine:
                 "agent_1_technical": agent1_out,
                 "agent_2_ict_smc": agent2_out,
                 "agent_3_macro": agent3_out,
-                "agent_4_risk": risk_out
+                "agent_4_risk": risk_out,
+                "agent_8_orderflow": orderflow_dict,
+                "agent_9_fractal_mtf": fractal_dict
+            },
+            "agent_fleet_count": 9,
+            "performance": {
+                "parallel_execution": True,
+                "concurrency_level": 5,
+                "cached": False,
+                "latency_ms": round((time.time() - t_start) * 1000, 2)
             },
             "ict_smc_summary": {
                 "ote": agent2_out.get("key_price_zones", {}),

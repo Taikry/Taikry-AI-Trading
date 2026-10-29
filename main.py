@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--monitor", action="store_true", help="Start continuous 24/7 autonomous monitoring loop")
     parser.add_argument("--server", action="store_true", help="Launch FastAPI REST backend and Trading Dashboard")
     parser.add_argument("--backtest", action="store_true", help="Run a walk-forward backtest on the specified symbol")
-    parser.add_argument("--send-report", action="store_true", help="Generate full bilingual AI report and dispatch to Telegram (-1004341134868) and Make webhook")
+    parser.add_argument("--send-report", action="store_true", help="Generate bilingual report and dispatch to configured Telegram and Make destinations")
     parser.add_argument("--daily-report", action="store_true", help="Generate and dispatch XAUUSD daily performance report to Telegram")
     parser.add_argument("--stats", action="store_true", help="Display verified XAUUSD win rates and performance analytics")
     parser.add_argument("--reload", action="store_true", default=False, help="Enable auto-reload on code changes")
@@ -37,7 +37,7 @@ def main():
         print("Usage:")
         print("  python main.py --scan               # Single scan across all watchlist assets")
         print("  python main.py --scan --symbol BTCUSDT # Scan specific symbol")
-        print("  python main.py --send-report        # Send bilingual report to Telegram (-1004341134868)")
+        print("  python main.py --send-report        # Send report to configured Telegram and Make destinations")
         print("  python main.py --daily-report       # Dispatch verified XAUUSD daily performance report")
         print("  python main.py --stats              # Display verified XAUUSD win-rate metrics")
         print("  python main.py --server             # Start FastAPI & Dashboard at http://localhost:8000/dashboard")
@@ -45,6 +45,9 @@ def main():
         print("  python main.py --backtest           # Run walk-forward backtest on XAUUSD")
         print("=" * 70)
         return
+
+    from taikry.database.session import init_db
+    init_db()
 
     if args.scan:
         from taikry.monitoring.engine import market_monitor_247
@@ -102,7 +105,7 @@ def main():
 
         # 1. Dispatch directly via Telegram Bot Service
         tg_ok = telegram_service.send_bilingual_report(res, force=True)
-        print(f"[*] Telegram Direct API: {'SENT (HTTP 200)' if tg_ok else 'PENDING / AWAITING BOT TOKEN'}")
+        print(f"[*] Telegram Direct API: {'DELIVERED' if tg_ok else 'NOT SENT (no approved signal or delivery unavailable)'}")
 
         # 2. Dispatch to Make Webhook with chat_id
         payload = {
@@ -116,12 +119,16 @@ def main():
             "risk_reward": res.get("risk_reward_ratio"),
             "report_english": res.get("report_english"),
             "report_khmer": res.get("report_khmer"),
-            "chat_id": TELEGRAM_CHAT_ID,
-            "telegram_chat_id": TELEGRAM_CHAT_ID,
             "timestamp": res.get("timestamp_utc")
         }
-        dispatch_to_make(payload, event_type="critical_market_alert")
-        print(f"[*] Make.com Webhook delivered with chat_id: {TELEGRAM_CHAT_ID}")
+        if TELEGRAM_CHAT_ID:
+            payload["chat_id"] = TELEGRAM_CHAT_ID
+            payload["telegram_chat_id"] = TELEGRAM_CHAT_ID
+        make_result = dispatch_to_make(payload, event_type="critical_market_alert")
+        if make_result.get("success"):
+            print(f"[*] Make.com Webhook delivered (HTTP {make_result.get('status_code')}).")
+        else:
+            print(f"[!] Make.com Webhook not delivered: {make_result.get('error', 'delivery failed')}")
         print("\n" + "=" * 70)
         print("BILINGUAL REPORT PREVIEW (EN & KH)")
         print("=" * 70)
@@ -186,8 +193,6 @@ def main():
 
     elif args.server:
         import uvicorn
-        from taikry.database.session import init_db
-        init_db()
         print(f"[*] Starting TAIKRY PRO Server at http://localhost:{args.port}/dashboard ...")
         uvicorn.run("taikry.api.app:app", host=args.host, port=args.port, reload=args.reload)
 

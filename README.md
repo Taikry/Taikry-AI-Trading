@@ -1,6 +1,6 @@
-# 24/7 AI Trading Signal & Market Analysis Platform
+# AI Trading Signal & Market Analysis Platform
 
-An institutional-grade, autonomous 24/7 AI Agent pipeline designed to analyze real-time market data across **Commodities (Gold XAUUSD, Silver)**, **Crypto (BTC, ETH, SOL)**, and **Forex (EURUSD, GBPUSD, USDJPY)**, generating actionable high-conviction trading signals directly dispatched to your **Make.com Webhook**.
+An AI-assisted market analysis platform for **Commodities (Gold XAUUSD, Silver)**, **Crypto (BTC, ETH, SOL)**, and **Forex (EURUSD, GBPUSD, USDJPY)**. Background monitoring runs only while the service is active; hosting plan, provider uptime, and data freshness affect availability.
 
 ---
 
@@ -8,10 +8,10 @@ An institutional-grade, autonomous 24/7 AI Agent pipeline designed to analyze re
 
 ```mermaid
 flowchart TD
-    subgraph Market Feeds [Real-Time Market Feeds]
-        A1[Gold XAUUSD & Silver]
-        A2[Crypto: BTC, ETH, SOL]
-        A3[Forex: EURUSD, GBPUSD, USDJPY]
+    subgraph Market Feeds [External Market Feeds]
+        A1[Gold & Forex: Yahoo Finance fallback or configured MT5 bridge]
+        A2[Crypto: Binance public market feed]
+        A3[Other symbols: provider availability varies]
     end
 
     subgraph Indicator Engine [Quantitative Engine]
@@ -24,23 +24,23 @@ flowchart TD
     end
 
     subgraph AI Analyst [AI Agent Reasoning Engine]
-        D[ai_agent.py]
-        D -->|Primary| E1[Google Gemini / OpenAI LLM]
-        D -->|Automatic Failover| E2[Algorithmic Quant Strategy]
+        D[Technical, SMC, Macro & Risk Python agents]
+        D -->|Optional synthesis only when explicitly selected and configured| E1[Cloud LLM provider]
+        D -->|Default| E2[Deterministic multi-agent consensus]
     end
 
-    subgraph Dispatcher [24/7 Autonomous Engine]
+    subgraph Dispatcher [Background Scanner — runs while the process is available]
         F[engine_247.py]
         F --> G{Confidence >= 70% & Cooldown Passed?}
         G -->|Yes| H[Make.com Webhook]
     end
 
-    subgraph Make.com Scenario [Make.com 24/7 Workflow]
+    subgraph Make.com Scenario [Optional Make.com Workflow]
         H --> I[Filter: Action in BUY/SELL]
         I --> J1[Telegram Channel / Bot Alert]
         I --> J2[Discord Webhook Notification]
         I --> J3[Google Sheets / Notion Trade Journal]
-        I --> J4[MT4 / MT5 Webhook Execution]
+        I --> J4[Manual MT4 / MT5 Ticket — no broker order]
     end
 
     Market Feeds --> Indicator Engine
@@ -55,10 +55,10 @@ flowchart TD
 | File | Purpose |
 | :--- | :--- |
 | [`config.py`](file:///d:/test%20post%20webhook/config.py) | Asset watchlist, webhook target, timeframe, and confidence thresholds. |
-| [`market_data.py`](file:///d:/test%20post%20webhook/market_data.py) | Real-time candle fetcher (Crypto, Commodities, Forex) with zero auth required. |
+| `taikry/data/providers.py` | Binance public crypto feed, Yahoo Finance fallback, and authenticated MT5 bridge for broker quotes/candles. Availability and freshness vary by symbol and provider. |
 | [`indicators.py`](file:///d:/test%20post%20webhook/indicators.py) | EMA, RSI, MACD, ATR, Bollinger Bands, and market summary extractor. |
 | [`ai_agent.py`](file:///d:/test%20post%20webhook/ai_agent.py) | AI Reasoning engine (Gemini LLM + quantitative algorithmic fallback). |
-| [`engine_247.py`](file:///d:/test%20post%20webhook/engine_247.py) | 24/7 continuous autonomous scanner and webhook dispatcher. |
+| [`engine_247.py`](file:///d:/test%20post%20webhook/engine_247.py) | Continuous scanner while the process and host are running; uptime depends on deployment. |
 | [`make_scenario_template.json`](file:///d:/test%20post%20webhook/make_scenario_template.json) | Blueprint for building your Make.com scenario modules. |
 | [`auto_run_webhook.py`](file:///d:/test%20post%20webhook/auto_run_webhook.py) | Standalone webhook stress tester & auto-runner. |
 | [`.vscode/launch.json`](file:///d:/test%20post%20webhook/.vscode/launch.json) | 1-click VS Code run/debug configurations. |
@@ -67,14 +67,16 @@ flowchart TD
 
 ## 🚀 Quick Start
 
+The supported web application is the FastAPI service under `taikry/`. Without an available and fresh market-data feed, analysis returns **NO TRADE**; demo candles are never substituted. Crypto uses Binance public market data where supported. Gold/forex Yahoo data is a fallback and may be delayed; broker-grade XAUUSD data requires the authenticated Windows MT5 bridge. Four core analysts are deterministic Python agents; cloud LLM synthesis is optional and must be selected and configured separately.
+
 ### 1. Run a Single Test Scan
 Scans all 8 symbols, evaluates with AI, and prints current market status:
 ```powershell
 python engine_247.py --once
 ```
 
-### 2. Start the Continuous 24/7 Engine
-Runs indefinitely, scanning the market on interval and dispatching signals whenever high-confidence setups occur:
+### 2. Start the Continuous Scanner
+Runs until stopped, scanning at the selected interval while the process and host remain available:
 ```powershell
 python engine_247.py --interval 30
 ```

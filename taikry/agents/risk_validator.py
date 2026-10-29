@@ -8,20 +8,25 @@ Validates:
 - Data freshness & market open status
 - Spread and volatility bounds
 - Entry, Stop-Loss, and Take-Profit structural geometry
-- Strict Risk-to-Reward ratio (Minimum 1:2.0)
-- Risk per trade sizing (0.5% of simulated equity)
+- Strict Risk-to-Reward ratio (configured minimum)
+- Risk per trade sizing (configured percentage of simulated equity)
 - Economic event proximity risk
 Decision: APPROVE, REJECT, WAIT, or NO TRADE with explicit reasons.
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+import math
 from taikry.config import (
     MIN_RISK_REWARD_RATIO,
     RISK_PER_TRADE_PERCENT,
     INITIAL_PAPER_BALANCE,
+    MAX_SIMULTANEOUS_POSITIONS,
     get_symbol_config
 )
 from taikry.data.validator import check_data_freshness, is_market_open
 from taikry.data.economic_calendar import economic_calendar_provider
+from taikry.data.mt5_receiver import mt5_receiver
+from taikry.database.session import SessionLocal
+from taikry.database.models import PaperTrade
 
 class RiskValidatorAgent:
     """Agent 4: Independent Quantitative Risk & Governance Auditor."""
@@ -37,7 +42,9 @@ class RiskValidatorAgent:
         agent2_report: Dict[str, Any],
         agent3_report: Dict[str, Any],
         simulated_equity: float = INITIAL_PAPER_BALANCE,
-        open_positions_count: int = 0
+        open_positions_count: Optional[int] = None,
+        spread_price: Optional[float] = None,
+        candidate_levels: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Runs independent risk assessment.
@@ -47,25 +54,75 @@ class RiskValidatorAgent:
         warning_notes = []
         validation_checks = {}
 
+        try:
+            verified_price = float(verified_price)
+            simulated_equity = float(simulated_equity)
+        except (TypeError, ValueError):
+            verified_price = 0.0
+            simulated_equity = 0.0
+        if not math.isfinite(verified_price) or verified_price <= 0:
+            rejection_reasons.append("Verified market price is missing or invalid; setup rejected.")
+        if not math.isfinite(simulated_equity) or simulated_equity <= 0:
+            rejection_reasons.append("Account equity is missing or invalid; position sizing cannot be verified.")
+
+        if spread_price is None:
+            _, _, spread_fresh, spread_tick = mt5_receiver.get_latest_price(symbol)
+            if spread_fresh:
+                try:
+                    bid = float(spread_tick.get("bid"))
+                    ask = float(spread_tick.get("ask"))
+                    spread_price = ask - bid
+                except (TypeError, ValueError):
+                    spread_price = None
+        try:
+            spread_price = float(spread_price) if spread_price is not None else None
+        except (TypeError, ValueError):
+            spread_price = None
+        if spread_price is None or not math.isfinite(spread_price) or spread_price <= 0:
+            rejection_reasons.append("Verified bid/ask spread is unavailable; execution cost cannot be checked.")
+            spread_price = None
+        validation_checks["spread_price"] = spread_price
+
+        positions_verified = open_positions_count is not None
+        if open_positions_count is None:
+            db = SessionLocal()
+            try:
+                open_positions_count = db.query(PaperTrade).filter(PaperTrade.status == "OPEN").count()
+                positions_verified = True
+            except Exception:
+                open_positions_count = MAX_SIMULTANEOUS_POSITIONS
+                rejection_reasons.append("Could not verify the number of open paper positions; setup rejected.")
+            finally:
+                db.close()
+
         # 1. Market Open & Data Freshness Check
         open_ok, open_msg = is_market_open(symbol)
         freshness = check_data_freshness(symbol, price_timestamp)
         validation_checks["market_open"] = open_ok
         validation_checks["data_freshness"] = freshness["status"]
 
+        if not open_ok:
+            rejection_reasons.append(f"Market is closed ({open_msg}); new setup rejected.")
+
         if not freshness["fresh"] and freshness["status"] != "WEEKEND_CLOSED":
             rejection_reasons.append(f"Market data is stale ({freshness['age_minutes']} minutes old). Trade rejected.")
 
         # 1b. Real-Time High-Impact News Blackout Check (FOMC, PPI, CPI, NFP)
         blackout = economic_calendar_provider.check_news_blackout(symbol)
-        validation_checks["news_blackout_active"] = blackout["is_blackout"]
+        validation_checks["news_blackout_active"] = blackout.get("is_blackout", False)
+        validation_checks["calendar_status"] = blackout.get("status", "UNKNOWN")
         if blackout["is_blackout"]:
+            rejection_reasons.append(blackout["advisory_en"])
+            warning_notes.append(blackout["advisory_kh"])
+        elif blackout.get("status") == "UNAVAILABLE":
             rejection_reasons.append(blackout["advisory_en"])
             warning_notes.append(blackout["advisory_kh"])
 
         # 2. Maximum Simultaneous Position Count Check
-        if open_positions_count >= 3:
-            rejection_reasons.append(f"Maximum simultaneous open position limit (3) reached. Trade rejected.")
+        validation_checks["open_positions_count"] = open_positions_count
+        validation_checks["open_positions_verified"] = positions_verified
+        if open_positions_count >= MAX_SIMULTANEOUS_POSITIONS:
+            rejection_reasons.append(f"Maximum simultaneous open position limit ({MAX_SIMULTANEOUS_POSITIONS}) reached. Trade rejected.")
 
         # 3. Inter-Agent Agreement and Conflict Analysis
         bias_1 = agent1_report.get("bias", "NEUTRAL")
@@ -96,62 +153,100 @@ class RiskValidatorAgent:
 
         if dir_1 == "FLAT" and dir_2 == "FLAT":
             # Fallback to Macro Analyst direction or structural tilt
-            proposed_dir = dir_3 if dir_3 != "FLAT" else "LONG"
-            warning_notes.append("Technical & ICT agents in tight equilibrium; adopting macro/structural orientation.")
+            proposed_dir = dir_3 if dir_3 != "FLAT" else "NONE"
+            if proposed_dir == "NONE":
+                rejection_reasons.append("No directional consensus from technical, ICT/SMC, or macro agents.")
+            else:
+                warning_notes.append("Technical & ICT agents are neutral; direction is based on macro analysis only.")
         else:
             proposed_dir = dir_1 if dir_1 != "FLAT" else dir_2
 
         # 4. Entry, Stop-Loss, and Take-Profit Calculation Validation
         klevels_1 = agent1_report.get("key_price_levels", {})
         klevels_2 = agent2_report.get("key_price_zones", {})
-        atr = klevels_1.get("atr") or (verified_price * 0.004)
+        try:
+            atr = float(klevels_1.get("atr") or 0.0)
+        except (TypeError, ValueError):
+            atr = 0.0
+        if not math.isfinite(atr) or atr <= 0:
+            atr = 0.0
 
         entry = verified_price
 
         # Select candidate SL/TP from the agent that actually proposed the direction
-        candidate_source = None
-        if proposed_dir == dir_1 and agent1_report.get("setup_eligible"):
+        candidate_source = candidate_levels
+        if candidate_source is None and proposed_dir == dir_1 and agent1_report.get("setup_eligible"):
             candidate_source = klevels_1
-        elif proposed_dir == dir_2 and agent2_report.get("setup_eligible"):
+        elif candidate_source is None and proposed_dir == dir_2 and agent2_report.get("setup_eligible"):
             candidate_source = klevels_2
-        elif proposed_dir == dir_1:
+        elif candidate_source is None and proposed_dir == dir_1:
             candidate_source = klevels_1
-        elif proposed_dir == dir_2:
+        elif candidate_source is None and proposed_dir == dir_2:
             candidate_source = klevels_2
-        else:
+        elif candidate_source is None:
             candidate_source = klevels_1 if klevels_1.get("suggested_stop_loss") else klevels_2
 
-        sl = candidate_source.get("suggested_stop_loss") if candidate_source else None
+        sl = candidate_source.get("suggested_stop_loss", candidate_source.get("stop_loss")) if candidate_source else None
         tp1 = candidate_source.get("take_profit_1") if candidate_source else None
         tp2 = candidate_source.get("take_profit_2") if candidate_source else None
+        normalized_levels = []
+        for level in (sl, tp1, tp2):
+            try:
+                numeric_level = float(level)
+                normalized_levels.append(numeric_level if math.isfinite(numeric_level) and numeric_level > 0 else None)
+            except (TypeError, ValueError):
+                normalized_levels.append(None)
+        sl, tp1, tp2 = normalized_levels
 
-        # Check and refine price geometry
-        dec = 2 if entry > 10 else 4
-        if proposed_dir == "SHORT":
-            # For Short: SL must be strictly above Entry, TP1 must be strictly below Entry
-            if not sl or sl <= entry:
-                sl = round(entry + max(1.5 * atr, entry * 0.005), dec)
-            risk = sl - entry
-            if not tp1 or tp1 >= entry:
-                tp1 = round(entry - (risk * 2.2), dec)
-            reward_tp1 = entry - tp1
-            if not tp2 or tp2 >= tp1:
-                tp2 = round(entry - (risk * 3.5), dec)
+        # Do not manufacture a trade direction or price levels when all agents are neutral.
+        if proposed_dir not in ("LONG", "SHORT"):
+            sl = tp1 = tp2 = None
+            risk = reward_tp1 = 0.0
         else:
-            # For Long: SL must be strictly below Entry, TP1 must be strictly above Entry
-            if not sl or sl >= entry:
-                sl = round(entry - max(1.5 * atr, entry * 0.005), dec)
-            risk = entry - sl
-            if not tp1 or tp1 <= entry:
-                tp1 = round(entry + (risk * 2.2), dec)
-            reward_tp1 = tp1 - entry
-            if not tp2 or tp2 <= tp1:
-                tp2 = round(entry + (risk * 3.5), dec)
+            # Check and refine price geometry
+            dec = 2 if entry > 10 else 4
+            levels_valid = True
+            if proposed_dir == "SHORT":
+                # For Short: SL must be above Entry and TP1 below Entry
+                if not sl or sl <= entry:
+                    if atr <= 0:
+                        rejection_reasons.append("A valid stop-loss or measured ATR is required to calculate risk levels.")
+                        levels_valid = False
+                    else:
+                        sl = round(entry + (1.5 * atr), dec)
+                if levels_valid:
+                    risk = sl - entry
+                    if not tp1 or tp1 >= entry:
+                        tp1 = round(entry - (risk * MIN_RISK_REWARD_RATIO), dec)
+                    reward_tp1 = entry - tp1
+                    if not tp2 or tp2 >= tp1:
+                        tp2 = round(entry - (risk * max(MIN_RISK_REWARD_RATIO + 1.0, MIN_RISK_REWARD_RATIO * 1.5)), dec)
+                else:
+                    sl = tp1 = tp2 = None
+                    risk = reward_tp1 = 0.0
+            else:
+                # For Long: SL must be below Entry and TP1 above Entry
+                if not sl or sl >= entry:
+                    if atr <= 0:
+                        rejection_reasons.append("A valid stop-loss or measured ATR is required to calculate risk levels.")
+                        levels_valid = False
+                    else:
+                        sl = round(entry - (1.5 * atr), dec)
+                if levels_valid:
+                    risk = entry - sl
+                    if not tp1 or tp1 <= entry:
+                        tp1 = round(entry + (risk * MIN_RISK_REWARD_RATIO), dec)
+                    reward_tp1 = tp1 - entry
+                    if not tp2 or tp2 <= tp1:
+                        tp2 = round(entry + (risk * max(MIN_RISK_REWARD_RATIO + 1.0, MIN_RISK_REWARD_RATIO * 1.5)), dec)
+                else:
+                    sl = tp1 = tp2 = None
+                    risk = reward_tp1 = 0.0
 
         if risk > 0 and reward_tp1 > 0:
             rr_ratio = round(reward_tp1 / risk, 2)
             validation_checks["calculated_rr"] = f"1:{rr_ratio}"
-            # Enforce Minimum 1:2.0 Risk-to-Reward Ratio
+            # Enforce the configured minimum Risk-to-Reward Ratio
             if rr_ratio < MIN_RISK_REWARD_RATIO:
                 rejection_reasons.append(
                     f"Insufficient Risk-to-Reward: Calculated R:R is 1:{rr_ratio}, which fails the strict institutional minimum of 1:{MIN_RISK_REWARD_RATIO}."
@@ -160,9 +255,14 @@ class RiskValidatorAgent:
             rr_ratio = 0.0
             rejection_reasons.append("Missing valid Stop Loss or Take Profit targets.")
 
-        # 5. Position Sizing Calculation (0.5% of simulated equity)
+        if spread_price is not None and risk > 0 and (spread_price / risk) > 0.20:
+            rejection_reasons.append(
+                f"Verified spread ({spread_price:g}) exceeds 20% of stop distance ({risk:g}); setup rejected."
+            )
+
+        # 5. Position sizing from configured risk of simulated equity
         cfg = get_symbol_config(symbol)
-        max_risk_dollars = simulated_equity * (RISK_PER_TRADE_PERCENT / 100.0) # $500 on $100k
+        max_risk_dollars = simulated_equity * (RISK_PER_TRADE_PERCENT / 100.0)
         validation_checks["simulated_equity"] = simulated_equity
         validation_checks["max_risk_dollars"] = max_risk_dollars
 
@@ -170,9 +270,13 @@ class RiskValidatorAgent:
             lot_size = cfg.get("lot_size", 100)
             pip_value = cfg.get("pip_value", 0.1)
             # Standard lot sizing: risk_dollars / (price_risk * lot_size)
-            calculated_lots = round(max_risk_dollars / (risk * lot_size), 2)
-            calculated_lots = max(0.01, min(10.0, calculated_lots))
-            validation_checks["recommended_position_lots"] = calculated_lots
+            raw_lots = max_risk_dollars / (risk * lot_size)
+            if raw_lots < 0.01:
+                rejection_reasons.append("Minimum supported position size would exceed the configured risk limit.")
+                validation_checks["recommended_position_lots"] = 0.0
+            else:
+                calculated_lots = min(10.0, math.floor(raw_lots * 100) / 100.0)
+                validation_checks["recommended_position_lots"] = calculated_lots
         else:
             validation_checks["recommended_position_lots"] = 0.0
 

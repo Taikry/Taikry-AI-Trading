@@ -12,7 +12,7 @@ flowchart TD
         D1[Gold XAUUSD & Silver]
         D2[Forex: EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD]
         D3[Crypto: BTC, ETH, SOL, XRP]
-        D4[Verified Economic Calendar & DXY]
+        D4[Configured Economic Calendar Feed (when available)]
     end
 
     subgraph Validator [Data Freshness & Integrity]
@@ -29,12 +29,12 @@ flowchart TD
 
     subgraph Consensus [Deterministic Consensus Engine]
         C1[Independent Synthesis & Dissent Preservation]
-        C2[Strict 1:2 R:R & 0.5% Risk Gate]
+        C2[Configured R:R and Risk Gate]
         C3[Bilingual Translator: English & Khmer]
     end
 
-    subgraph Execution & Monitoring [24/7 Operations]
-        E1[FastAPI REST API - 9 Endpoints]
+    subgraph Execution & Monitoring [API, Paper Trading & Monitoring]
+        E1[FastAPI REST API]
         E2[Simulated Paper Trading Ledger]
         E3[Walk-Forward Backtesting Engine]
         E4[Make.com Automation - Scenarios S01 to S07]
@@ -91,9 +91,9 @@ docker-compose logs -f taikry-app
 3. Set your environment variables in `.env`:
 
    ```env
-   TELEGRAM_BOT_TOKEN=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
-   TELEGRAM_CHAT_ID=-1001234567890
-   TELEGRAM_ADMIN_IDS=123456789
+   TELEGRAM_BOT_TOKEN=<your-token-from-BotFather>
+   TELEGRAM_CHAT_ID=<your-target-chat-or-channel-id>
+   TELEGRAM_ADMIN_IDS=<your-admin-user-ids>
    ```
 
 4. Test delivery directly via Python:
@@ -106,7 +106,7 @@ docker-compose logs -f taikry-app
 
 ## ⚡ Make.com Integration (Scenarios S01–S07)
 
-See [`make_scenarios/MAKE_INTEGRATION_GUIDE.md`](file:///d:/test%20post%20webhook/make_scenarios/MAKE_INTEGRATION_GUIDE.md) for full blueprints:
+See [the Make integration guide](make_scenarios/MAKE_INTEGRATION_GUIDE.md) for scenario templates. Configure your public HTTPS host and credentials before activating them:
 
 - **S01:** 15-Minute Market Report Dispatcher
 - **S02:** Critical Validated Alert Dispatcher
@@ -119,6 +119,8 @@ See [`make_scenarios/MAKE_INTEGRATION_GUIDE.md`](file:///d:/test%20post%20webhoo
 ---
 
 ## 🌐 Sample Bilingual Intelligence Reports
+
+> **Illustration only:** The prices, indicator values, provider names, event descriptions, scores, and trade levels below are fictional formatting examples. They are not current market data and do not show that a live feed produced an approved trade. When required inputs are unavailable or stale, the application should report that state and avoid an actionable approval.
 
 ### English Report Sample
 
@@ -225,7 +227,7 @@ M15 Trend: BULLISH | RSI 14: 54.20 | ATR: 4.80
 
 | Issue | Root Cause | Solution |
 | :--- | :--- | :--- |
-| `Market data is stale` | Non-crypto market is in weekend closure or API timed out | Expected behavior on Saturday/Sunday for Gold and Forex. System automatically resumes Sunday 21:00 UTC. |
-| `Insufficient Risk-to-Reward (R:R < 1:2.0)` | Calculated setup does not offer minimum 1:2.0 risk profile | Agent 4 enforces institutional discipline; trade is rejected to protect capital. |
+| `Market data is stale` | Provider feed is delayed, disconnected, or the market is closed | Check the configured provider and its market calendar. Stale quotes must not be treated as current. |
+| `Insufficient Risk-to-Reward` | Calculated setup does not meet the configured minimum | Check `MIN_RISK_REWARD_RATIO`; the default minimum is 2.0. A setup below the configured floor is rejected. |
 | `Make Webhook timeout` | Make scenario inactive | Verify the Make scenario switch is turned **ON** in your dashboard. |
 | `Port 8000 already in use` | Another process is bound to port 8000 | Specify a different port: `uvicorn taikry.api.app:app --port 8080`. |

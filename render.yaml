@@ -2,21 +2,44 @@ services:
   - type: web
     name: taikry-ai-market-intelligence
     runtime: docker
+    region: singapore
     plan: free
-    healthCheckPath: /health
-    autoDeploy: true
+    numInstances: 1
+    healthCheckPath: /ping
+    autoDeployTrigger: commit
     envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: taikry-market-database
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PUBLIC_APP_URL
+        fromService:
+          name: taikry-ai-market-intelligence
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: CORS_ALLOWED_ORIGINS
+        fromService:
+          name: taikry-ai-market-intelligence
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: AUTO_START_MONITORING
         value: "true"
-      - key: TELEGRAM_BOT_TOKEN
+      - key: MT5_BRIDGE_TOKEN
         sync: false
-      - key: TELEGRAM_CHAT_ID
+      - key: SAAS_ADMIN_EMAIL
         sync: false
-      - key: MAKE_WEBHOOK_URL
+      - key: SAAS_ADMIN_PASSWORD
         sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
+
+databases:
+  - name: taikry-market-database
+    databaseName: taikry_market
+    user: taikry_app
+    region: singapore
+    plan: free
+    postgresMajorVersion: "16"
+    ipAllowList: []

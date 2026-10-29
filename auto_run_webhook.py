@@ -6,27 +6,30 @@ import urllib.error
 import urllib.request
 import os
 
-URL = os.getenv("MAKE_WEBHOOK_URL", "")
-if not URL:
-    print("[ERROR] MAKE_WEBHOOK_URL environment variable is required.")
-    import sys
-    sys.exit(1)
-
 def send_test_webhook(iteration=1, symbol="XAUUSD", timeframe="M5", action="analyze"):
+    target_url = os.getenv("MAKE_WEBHOOK_URL", "").strip()
+    if not target_url:
+        print("[ERROR] MAKE_WEBHOOK_URL environment variable is required.")
+        return False
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
     payload = {
         "symbol": symbol,
         "timeframe": timeframe,
         "action": action,
-        "test": "true",
+        "test": True,
         "iteration": iteration,
-        "chat_id": "-1004341134868",
         "timestamp": timestamp
     }
+    configured_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if configured_chat_id:
+        payload["chat_id"] = configured_chat_id
     
     data = json.dumps(payload).encode("utf-8")
+    configured_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if configured_chat_id:
+        payload["chat_id"] = configured_chat_id
     req = urllib.request.Request(
-        URL,
+        target_url,
         data=data,
         headers={"Content-Type": "application/json"}
     )
@@ -48,6 +51,9 @@ def send_test_webhook(iteration=1, symbol="XAUUSD", timeframe="M5", action="anal
         return False
 
 def main():
+    if not os.getenv("MAKE_WEBHOOK_URL", "").strip():
+        print("[ERROR] MAKE_WEBHOOK_URL environment variable is required.")
+        return
     parser = argparse.ArgumentParser(description="Auto-run webhook tester")
     parser.add_argument("--count", type=int, default=5, help="Number of requests to send (0 for infinite loop, default 5)")
     parser.add_argument("--interval", type=int, default=3, help="Interval in seconds between requests (default 3)")
@@ -56,10 +62,12 @@ def main():
     parser.add_argument("--action", type=str, default="analyze", help="Action to test")
 
     args = parser.parse_args()
+    if args.count < 0 or args.interval < 1:
+        parser.error("--count must be >= 0 and --interval must be >= 1")
 
     print(f"==================================================")
     print(f" Starting Webhook Auto-Runner")
-    print(f" Target: {URL}")
+    print(" Target: configured Make webhook")
     print(f" Total Requests: {'Infinite' if args.count == 0 else args.count}")
     print(f" Interval: {args.interval}s")
     print(f" Symbol: {args.symbol} | Timeframe: {args.timeframe}")

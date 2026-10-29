@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 
-from taikry.config import APP_NAME, APP_VERSION
+from taikry.config import APP_NAME, APP_VERSION, CORS_ALLOWED_ORIGINS, PUBLIC_APP_URL
 from taikry.database.session import init_db, SessionLocal
 from taikry.api.routes import router as api_router
 from taikry.api.saas_routes import saas_router
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         import logging
         logging.getLogger("uvicorn.error").warning(f"SaaS bootstrap notice: {err}")
 
-    # Start 24/7 autonomous monitoring thread in background by default
+    # Start the monitoring thread in this process when enabled.
     auto_monitor = os.getenv("AUTO_START_MONITORING", "true").lower() in ("true", "1", "yes")
     if auto_monitor:
         market_monitor_247.start_background()
@@ -44,13 +44,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=APP_NAME,
     version=APP_VERSION,
-    description="Institutional-grade, autonomous 24/7 AI financial market intelligence platform for Gold, Forex, and Crypto.",
+    description="Market analysis and paper-trading monitor for Gold, Forex, and Crypto. Availability depends on configured providers, market data, and host uptime.",
     lifespan=lifespan
 )
 
+cors_origins = [origin.strip().rstrip("/") for origin in CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
+for public_origin in (PUBLIC_APP_URL, os.getenv("RENDER_EXTERNAL_URL", "")):
+    public_origin = public_origin.strip().rstrip("/")
+    if public_origin and public_origin not in cors_origins:
+        cors_origins.append(public_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -12,7 +12,12 @@ Provides:
 
 import os
 import datetime
+import smtplib
+import logging
+import hmac
+from email.message import EmailMessage
 from typing import Dict, Any, List, Optional
+from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Depends, Header, Cookie, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -53,6 +58,30 @@ from taikry.saas import (
 saas_router = APIRouter()
 
 SESSION_COOKIE_NAME = "zyrox_session"
+logger = logging.getLogger(__name__)
+
+
+def _send_auth_email(recipient: str, subject: str, body: str) -> bool:
+    """Deliver verification/reset instructions without exposing tokens in API responses."""
+    from taikry.config import SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_EMAIL, SMTP_USE_TLS
+    if not (SMTP_HOST and SMTP_FROM_EMAIL):
+        return False
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = SMTP_FROM_EMAIL
+    message["To"] = recipient
+    message.set_content(body)
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as smtp:
+            if SMTP_USE_TLS:
+                smtp.starttls()
+            if SMTP_USERNAME:
+                smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+            smtp.send_message(message)
+        return True
+    except Exception:
+        logger.exception("Failed to send account email")
+        return False
 
 
 # =============================================================================
@@ -113,7 +142,7 @@ class SignUpRequest(BaseModel):
     full_name: Optional[str] = Field(default=None, description="Full name or trader handle")
     language: Optional[str] = Field(default="en", description="Interface language: en or kh")
     timezone: Optional[str] = Field(default="Asia/Phnom_Penh", description="User local timezone")
-    terms_accepted: bool = Field(default=True, description="Acceptance of Terms of Service & Privacy Policy")
+    terms_accepted: bool = Field(default=False, description="Acceptance of Terms of Service & Privacy Policy")
 
 
 class LoginRequest(BaseModel):
@@ -212,6 +241,13 @@ def signup_endpoint(payload: SignUpRequest, request: Request, response: Response
         if not success:
             raise HTTPException(status_code=400, detail=msg)
 
+        verification_token = data.get("verification_token") if data else None
+        if verification_token:
+            from taikry.config import PUBLIC_APP_URL
+            verification_url = f"{PUBLIC_APP_URL.rstrip('/')}/?verify_email={quote(verification_token)}"
+            _send_auth_email(payload.email, "Verify your TAIKRY account", f"Verify your account using this link:\n{verification_url}\n\nThis link expires in 24 hours.")
+            data.pop("verification_token", None)
+
         # Automatically log user in
         login_ok, login_msg, login_data = login_user(
             db=db,
@@ -226,10 +262,10 @@ def signup_endpoint(payload: SignUpRequest, request: Request, response: Response
                 value=login_data["session_token"],
                 httponly=True,
                 samesite="lax",
-                secure=False,  # Can be True in HTTPS production
+                secure=request.url.scheme == "https" or os.getenv("ENVIRONMENT", "production").lower() == "production",
                 max_age=30 * 86400
             )
-            data["session_token"] = login_data["session_token"]
+            data.pop("session_token", None)
 
         return {
             "success": True,
@@ -259,12 +295,13 @@ def login_endpoint(payload: LoginRequest, request: Request, response: Response):
         if not success:
             raise HTTPException(status_code=401, detail=msg)
 
+        session_token = data.pop("session_token")
         response.set_cookie(
             key=SESSION_COOKIE_NAME,
-            value=data["session_token"],
+            value=session_token,
             httponly=True,
             samesite="lax",
-            secure=False,
+            secure=request.url.scheme == "https" or os.getenv("ENVIRONMENT", "production").lower() == "production",
             max_age=30 * 86400
         )
         return {
@@ -355,11 +392,13 @@ def forgot_password_endpoint(payload: ForgotPasswordRequest):
     db = SessionLocal()
     try:
         ok, msg, token = request_password_reset(db, payload.email)
-        # Note: If email delivery is not configured, token is returned in response for development/testing
+        if token:
+            from taikry.config import PUBLIC_APP_URL
+            reset_url = f"{PUBLIC_APP_URL.rstrip('/')}/?reset_password={quote(token)}"
+            _send_auth_email(payload.email, "Reset your TAIKRY password", f"Reset your password using this link:\n{reset_url}\n\nThis link expires in 2 hours.")
         return {
             "success": True,
-            "message": msg,
-            "reset_token": token
+            "message": "If an account exists and email delivery is configured, password reset instructions will be sent."
         }
     finally:
         db.close()
@@ -511,9 +550,8 @@ async def telegram_bot_linking_webhook(request: Request):
     Verifies token, binds chat ID to user account, and responds via Telegram API.
     """
     from taikry.config import TELEGRAM_WEBHOOK_SECRET
-    # Optional webhook secret verification
     sec_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if TELEGRAM_WEBHOOK_SECRET and sec_header != TELEGRAM_WEBHOOK_SECRET:
+    if not TELEGRAM_WEBHOOK_SECRET or len(TELEGRAM_WEBHOOK_SECRET) < 32 or TELEGRAM_WEBHOOK_SECRET == "your_telegram_webhook_secret_here" or not hmac.compare_digest(sec_header, TELEGRAM_WEBHOOK_SECRET):
         raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret.")
 
     try:

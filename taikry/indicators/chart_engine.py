@@ -84,9 +84,24 @@ class XAUUSDChartEngine:
         fetch_latency_ms = round((time.time() - t0) * 1000, 2)
 
         if df is None or df.empty:
-            # Fallback guarantee
-            from taikry.data.providers import generate_synthetic_candles
-            df = generate_synthetic_candles(self.DEFAULT_SYMBOL, timeframe=tf, limit=limit)
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            open_status, open_desc = is_market_open(self.DEFAULT_SYMBOL, check_time=now_utc)
+            cfg = get_symbol_config(self.DEFAULT_SYMBOL)
+            meta = {
+                "symbol": self.DEFAULT_SYMBOL,
+                "timeframe": tf,
+                "candle_count": 0,
+                "provider": "UNAVAILABLE",
+                "provider_display": cfg.get("provider_display"),
+                "market_open": open_status,
+                "market_status_desc": open_desc,
+                "freshness_status": "UNAVAILABLE",
+                "latest_candle_utc": None,
+                "server_time_utc": now_utc.isoformat(),
+                "fetch_latency_ms": fetch_latency_ms,
+                "provider_terms_reviewed": False
+            }
+            return pd.DataFrame(), meta
 
         # Normalize timestamps & sort chronologically
         df = df.copy()
@@ -103,7 +118,7 @@ class XAUUSDChartEngine:
         if "volume" in df.columns:
             df["volume"] = df["volume"].astype(float).round(1)
         else:
-            df["volume"] = 1000.0
+            df["volume"] = np.nan
 
         # Data Freshness & Provider Audit
         now_utc = datetime.datetime.now(datetime.timezone.utc)
@@ -145,7 +160,7 @@ class XAUUSDChartEngine:
             "reference_mode": ref_mode,
             "tv_reference_symbol": tv_symbol,
             "upstream_ticker": upstream_ticker,
-            "license_type": "LICENSED_FINANCIAL_FEED",
+            "provider_terms_reviewed": False,
             "market_open": open_status,
             "market_status_desc": open_desc,
             "freshness_status": freshness_status,
@@ -163,7 +178,7 @@ class XAUUSDChartEngine:
                 "quote_type": quote_type,
                 "provider_display": provider_display,
                 "upstream_ticker": upstream_ticker,
-                "quote_characteristics": "LBMA physical spot mid-quote reference" if ref_mode == "SPOT" else "CME COMEX front-month gold futures last quote",
+                "quote_characteristics": "Reference quote definition depends on the configured upstream provider.",
                 "basis_note": "Spot and futures trade at a basis differential due to cost-of-carry and contract expiry."
             }
         }
@@ -184,7 +199,7 @@ class XAUUSDChartEngine:
         - Volume/Benchmark: Session VWAP
         Strictly causal: each row `i` only accesses data from index `<= i`.
         """
-        if len(df) < 5:
+        if df is None or df.empty or len(df) < 20:
             return df
 
         data = df.copy()
@@ -193,14 +208,14 @@ class XAUUSDChartEngine:
         # 1. Exponential Moving Averages (EMA 9, 20, 50, 100, 200)
         data["ema_9"] = calculate_ema(closes, 9).round(2)
         data["ema_20"] = calculate_ema(closes, 20).round(2)
-        data["ema_50"] = calculate_ema(closes, 50).round(2)
-        data["ema_100"] = calculate_ema(closes, 100 if len(data) >= 100 else len(data)).round(2)
-        data["ema_200"] = calculate_ema(closes, 200 if len(data) >= 200 else len(data)).round(2)
+        data["ema_50"] = calculate_ema(closes, 50).round(2) if len(data) >= 50 else np.nan
+        data["ema_100"] = calculate_ema(closes, 100).round(2) if len(data) >= 100 else np.nan
+        data["ema_200"] = calculate_ema(closes, 200).round(2) if len(data) >= 200 else np.nan
 
         # 2. Simple Moving Averages (SMA 20, 50, 200)
         data["sma_20"] = calculate_sma(closes, 20).round(2)
-        data["sma_50"] = calculate_sma(closes, 50).round(2)
-        data["sma_200"] = calculate_sma(closes, 200 if len(data) >= 200 else len(data)).round(2)
+        data["sma_50"] = calculate_sma(closes, 50).round(2) if len(data) >= 50 else np.nan
+        data["sma_200"] = calculate_sma(closes, 200).round(2) if len(data) >= 200 else np.nan
 
         # 3. Relative Strength Index (RSI 14) via Wilder's Smoothing
         delta = closes.diff()
@@ -745,6 +760,16 @@ class XAUUSDChartEngine:
         """
         raw_df, meta = self.fetch_xauusd_candles(timeframe=timeframe, limit=limit)
 
+        if raw_df is None or raw_df.empty:
+            return {
+                "success": False,
+                "status": "DATA_UNAVAILABLE",
+                "metadata": meta,
+                "summary": {"current_price": None, "rsi_14_value": None, "atr_14_value": None},
+                "candles": [],
+                "annotations": {"swings": [], "structure_breaks": [], "fair_value_gaps": [], "order_blocks": [], "liquidity_sweeps": [], "session_levels": {}}
+            }
+
         # 1. Compute technical indicators
         ind_df = self.compute_technical_indicators(raw_df)
 
@@ -779,7 +804,7 @@ class XAUUSDChartEngine:
                 "high": float(row["high"]),
                 "low": float(row["low"]),
                 "close": float(row["close"]),
-                "volume": float(row.get("volume", 0.0)),
+                "volume": _flt("volume"),
                 # EMAs
                 "ema_9": _flt("ema_9"),
                 "ema_20": _flt("ema_20"),
@@ -811,28 +836,36 @@ class XAUUSDChartEngine:
 
         # Summary Metrics
         latest_c = candles_payload[-1] if candles_payload else {}
-        rsi_val = latest_c.get("rsi_14", 50.0) or 50.0
-        rsi_zone = "OVERBOUGHT" if rsi_val >= 70 else ("OVERSOLD" if rsi_val <= 30 else "NEUTRAL")
+        rsi_val = latest_c.get("rsi_14")
+        rsi_zone = "UNAVAILABLE" if rsi_val is None else ("OVERBOUGHT" if rsi_val >= 70 else ("OVERSOLD" if rsi_val <= 30 else "NEUTRAL"))
+        ema20_value = latest_c.get("ema_20")
+        ema50_value = latest_c.get("ema_50")
+        ema200_value = latest_c.get("ema_200")
+        ema_values_valid = all(value is not None and np.isfinite(value) for value in (ema20_value, ema50_value, ema200_value))
+        if not ema_values_valid:
+            ema_alignment = "INSUFFICIENT_HISTORY"
+        elif ema20_value > ema50_value > ema200_value:
+            ema_alignment = "BULLISH_STACK"
+        elif ema20_value < ema50_value < ema200_value:
+            ema_alignment = "BEARISH_STACK"
+        else:
+            ema_alignment = "MIXED"
 
         summary = {
-            "current_price": latest_c.get("close", 0.0),
-            "open_price": latest_c.get("open", 0.0),
-            "high_price": latest_c.get("high", 0.0),
-            "low_price": latest_c.get("low", 0.0),
-            "ema_alignment": (
-                "BULLISH_STACK" if (latest_c.get("ema_20") or 0) > (latest_c.get("ema_50") or 0) > (latest_c.get("ema_200") or 0)
-                else ("BEARISH_STACK" if (latest_c.get("ema_20") or 0) < (latest_c.get("ema_50") or 0) < (latest_c.get("ema_200") or 0)
-                else "CONSOLIDATION")
-            ),
+            "current_price": latest_c.get("close"),
+            "open_price": latest_c.get("open"),
+            "high_price": latest_c.get("high"),
+            "low_price": latest_c.get("low"),
+            "ema_alignment": ema_alignment,
             "rsi_14_value": rsi_val,
             "rsi_zone": rsi_zone,
             "macd_hist_value": latest_c.get("macd_hist", 0.0),
-            "stoch_k_value": latest_c.get("stoch_k", 50.0),
-            "stoch_d_value": latest_c.get("stoch_d", 50.0),
-            "atr_14_value": latest_c.get("atr_14", 0.0),
-            "vwap_value": latest_c.get("vwap", 0.0),
-            "bb_upper": latest_c.get("bb_upper", 0.0),
-            "bb_lower": latest_c.get("bb_lower", 0.0),
+            "stoch_k_value": latest_c.get("stoch_k"),
+            "stoch_d_value": latest_c.get("stoch_d"),
+            "atr_14_value": latest_c.get("atr_14"),
+            "vwap_value": latest_c.get("vwap"),
+            "bb_upper": latest_c.get("bb_upper"),
+            "bb_lower": latest_c.get("bb_lower"),
             "active_fvgs_count": sum(1 for f in fvgs if f["status"] == "OPEN"),
             "active_order_blocks_count": sum(1 for o in order_blocks if o["status"] == "UNTESTED"),
             "recent_bos_count": sum(1 for s in structure_breaks if s["category"] == "BOS"),

@@ -85,9 +85,17 @@ def check_data_freshness(symbol: str, latest_timestamp: datetime.datetime, timef
         try:
             latest_timestamp = datetime.datetime.fromisoformat(latest_timestamp.replace("Z", "+00:00"))
         except Exception:
-            latest_timestamp = now
+            latest_timestamp = None
     elif latest_timestamp is None:
-        latest_timestamp = now
+        latest_timestamp = None
+
+    if latest_timestamp is None:
+        return {
+            "fresh": False,
+            "status": "UNKNOWN_TIMESTAMP",
+            "age_minutes": None,
+            "note": "Timestamp is missing or invalid; data freshness cannot be verified."
+        }
 
     if latest_timestamp.tzinfo is None:
         latest_timestamp = latest_timestamp.replace(tzinfo=datetime.timezone.utc)

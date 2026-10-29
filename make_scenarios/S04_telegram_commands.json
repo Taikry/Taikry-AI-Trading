@@ -42,9 +42,9 @@
       "module": "http:ActionSendRequest",
       "name": "Fetch On-Demand Analysis",
       "parameters": {
-        "url": "http://localhost:8000/api/v1/analyze",
+        "url": "https://YOUR_PUBLIC_API_HOST/api/v1/admin/analyze",
         "method": "POST",
-        "headers": [{"name": "Content-Type", "value": "application/json"}],
+        "headers": [{"name": "Content-Type", "value": "application/json"}, {"name": "X-TAIKRY-API-KEY", "value": ""}],
         "body": "{\"symbol\": \"{{if(1.message.text == '/crypto'; 'BTCUSDT'; if(1.message.text == '/forex'; 'EURUSD'; 'XAUUSD'))}}\"}"
       }
     },

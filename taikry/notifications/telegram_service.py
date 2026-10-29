@@ -9,7 +9,9 @@ Enhanced with:
 import os
 import uuid
 import datetime
+import html
 import logging
+import math
 from typing import Dict, Any, Optional, List, Tuple
 import requests
 
@@ -17,7 +19,12 @@ from taikry.config import (
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID,
     TELEGRAM_ADMIN_IDS,
-    TELEGRAM_WEBAPP_URL
+    TELEGRAM_WEBAPP_URL,
+    MAX_RISK_PER_TRADE_PERCENT,
+    RISK_PER_TRADE_PERCENT,
+    MIN_RISK_REWARD_RATIO,
+    MAX_DAILY_LOSS_PERCENT,
+    MAX_SIMULTANEOUS_POSITIONS
 )
 from taikry.database.session import SessionLocal
 from taikry.database.models import NotificationAudit
@@ -32,7 +39,7 @@ class TelegramService:
 
     def __init__(self):
         self.token = TELEGRAM_BOT_TOKEN
-        self.default_chat_id = TELEGRAM_CHAT_ID or "-1004341134868"
+        self.default_chat_id = TELEGRAM_CHAT_ID
         self.webapp_url = TELEGRAM_WEBAPP_URL
 
     def is_configured(self) -> bool:
@@ -94,6 +101,74 @@ class TelegramService:
         ])
 
         return {"inline_keyboard": keyboard}
+
+    @staticmethod
+    def _format_approved_signal(consensus_result: Dict[str, Any], label: str = "APPROVED SETUP") -> Optional[str]:
+        """Format only an approved analysis with complete, directionally valid levels."""
+        if consensus_result.get("setup_status") != "APPROVE":
+            return None
+        price_source = str(consensus_result.get("price_source") or "").upper()
+        if not price_source or any(marker in price_source for marker in ("SYNTHETIC", "UNAVAILABLE", "DEMO")):
+            return None
+        from taikry.data.validator import check_data_freshness
+        freshness = check_data_freshness(
+            str(consensus_result.get("symbol") or "XAUUSD"),
+            consensus_result.get("timestamp_utc"),
+            "M15"
+        )
+        if not freshness.get("fresh"):
+            return None
+        direction = str(consensus_result.get("proposed_direction") or "").upper()
+        if direction in ("LONG", "BUY"):
+            direction, action_kh, icon = "BUY", "ទិញ", "🟢"
+        elif direction in ("SHORT", "SELL"):
+            direction, action_kh, icon = "SELL", "លក់", "🔴"
+        else:
+            return None
+
+        try:
+            score = float(consensus_result.get("ai_score") or consensus_result.get("confidence_score"))
+            entry = float(consensus_result.get("entry_price"))
+            stop_loss = float(consensus_result.get("stop_loss"))
+            take_profit = float(consensus_result.get("take_profit_1"))
+        except (TypeError, ValueError):
+            return None
+        if not all(math.isfinite(value) for value in (score, entry, stop_loss, take_profit)):
+            return None
+        if not 80 <= score <= 95 or min(entry, stop_loss, take_profit) <= 0:
+            return None
+        if (direction == "BUY" and not stop_loss < entry < take_profit) or (direction == "SELL" and not stop_loss > entry > take_profit):
+            return None
+        computed_rr = abs(take_profit - entry) / abs(entry - stop_loss)
+        if computed_rr < MIN_RISK_REWARD_RATIO:
+            return None
+
+        symbol = html.escape(str(consensus_result.get("symbol") or "XAUUSD"))
+        label = html.escape(str(label))
+        decimals = 3 if "JPY" in symbol else (2 if entry >= 10 else 4)
+        try:
+            tp2_value = float(consensus_result.get("take_profit_2"))
+            tp2 = f"{tp2_value:.{decimals}f}" if math.isfinite(tp2_value) and tp2_value > 0 else "N/A"
+        except (TypeError, ValueError):
+            tp2 = "N/A"
+        sl_distance = abs(entry - stop_loss)
+        rr = f"1:{computed_rr:.2f}"
+
+        return f"""{icon} <b>TAIKRY AI SIGNAL — #{symbol}</b>
+━━━━━━━━━━━━━━━━━━━━
+⭐ <b>AI SCORE:</b> {score:.0f}% · {label}
+🎯 <b>ACTION:</b> {direction}
+💵 <b>ENTRY / តម្លៃចូល:</b> <code>{entry:.{decimals}f}</code>
+🛑 <b>STOP LOSS / កាត់ខាត:</b> <code>{stop_loss:.{decimals}f}</code>
+🎯 <b>TAKE PROFIT 1 / គោលដៅចំណេញទី ១:</b> <code>{take_profit:.{decimals}f}</code>
+🚀 <b>TAKE PROFIT 2 / គោលដៅចំណេញទី ២:</b> <code>{tp2}</code>
+⚖️ <b>RISK / REWARD:</b> {rr}
+🇰🇭 <b>សកម្មភាព:</b> {action_kh}
+ℹ️ សញ្ញានេះមិនដាក់បញ្ជាទៅ MT5 ឬក្រុមហ៊ុនជើងសារដោយស្វ័យប្រវត្តិទេ។"""
+
+    @staticmethod
+    def _is_telegram_admin(user_id: int) -> bool:
+        return str(user_id) in {str(admin_id) for admin_id in TELEGRAM_ADMIN_IDS}
 
     def send_message(
         self,
@@ -355,64 +430,15 @@ class TelegramService:
         symbol = consensus_result.get("symbol", "XAUUSD")
         bias = consensus_result.get("market_bias", "NEUTRAL")
         status = consensus_result.get("setup_status", "NO TRADE")
-        raw_score = consensus_result.get("ai_score") or consensus_result.get("confidence_score")
-        if raw_score is None:
-            raw_score = 0
-
-        # Enforce Score 80%-95% threshold: if below 80% or above 95%, discard unless explicitly forced
-        if not force and (raw_score < 80 or raw_score > 95):
-            logger.info(f"Alert suppressed for {symbol}: Score {raw_score}% is outside 80%-95% threshold.")
+        msg = self._format_approved_signal(consensus_result)
+        if not msg:
+            logger.info("Signal suppressed for %s: approval, score, direction, or price levels are invalid.", symbol)
             return False
-
-        score = max(80, min(95, int(raw_score if raw_score > 0 else 88)))
 
         # Deduplication check
         prev = LAST_SENT_ALERTS.get(symbol)
         if not force and prev == (bias, status) and status != "APPROVE":
             return False
-
-        # Format a focused institutional signal: BUY ENTRY / SELL ENTRY, SL, TP 1, TP 2, R:R
-        direction = consensus_result.get("proposed_direction", "").upper()
-        if not direction or direction == "NONE":
-            if "BEARISH" in bias:
-                direction = "SELL"
-            else:
-                direction = "BUY"
-
-        is_buy = direction in ["BUY", "LONG"]
-        action_tag = "BUY ENTRY" if is_buy else "SELL ENTRY"
-        icon = "🟢" if is_buy else "🔴"
-        entry = consensus_result.get("entry_price") or consensus_result.get("verified_price", 0.0)
-        sl = consensus_result.get("stop_loss")
-        tp1 = consensus_result.get("take_profit_1")
-        tp2 = consensus_result.get("take_profit_2")
-        dec = 2 if (entry > 10 or "XAU" in symbol or "XAG" in symbol) else 4
-        if "JPY" in symbol:
-            dec = 3
-
-        if not sl or sl == 0.0:
-            atr = consensus_result.get("agents", {}).get("agent_1_technical", {}).get("key_price_levels", {}).get("atr") or (entry * 0.004)
-            sl = round(entry - (1.5 * atr) if is_buy else entry + (1.5 * atr), dec)
-        if not tp1 or tp1 == 0.0:
-            sl_dist = abs(entry - sl)
-            tp1 = round(entry + (sl_dist * 2.2) if is_buy else entry - (sl_dist * 2.2), dec)
-        if not tp2 or tp2 == 0.0:
-            sl_dist = abs(entry - sl)
-            tp2 = round(entry + (sl_dist * 3.5) if is_buy else entry - (sl_dist * 3.5), dec)
-        rr = consensus_result.get("risk_reward_ratio") or "1:2.4"
-
-        msg = f"""{icon} <b>TAIKRY AI ALERT — #{symbol}</b>
-━━━━━━━━━━━━━━━━━━━━
-⭐ <b>AI CONFLUENCE SCORE:</b> <b>{score}%</b> (HIGH CONVICTION)
-🎯 <b>ACTION:</b> <b>{icon} {action_tag}</b>
-💵 <b>{action_tag}:</b> <code>{entry}</code>
-🛑 <b>STOP LOSS (SL):</b> <code>{sl}</code>
-🎯 <b>TAKE PROFIT 1 (TP 1):</b> <code>{tp1}</code>
-🚀 <b>TAKE PROFIT 2 (TP 2):</b> <code>{tp2}</code>
-⚖️ <b>RISK / REWARD:</b> {rr}
-🛡️ <b>RISK GUARD:</b> 0.5% Institutional Cap
-━━━━━━━━━━━━━━━━━━━━
-🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
 
         buttons = self.build_signal_keyboard(symbol) if with_buttons else None
         ok = self.send_message(msg, reply_markup=buttons)
@@ -420,37 +446,19 @@ class TelegramService:
             LAST_SENT_ALERTS[symbol] = (bias, status)
         return ok
 
-        report_en = consensus_result.get("report_english", "")
-        report_kh = consensus_result.get("report_khmer", "")
-        combined_text = f"{report_en}\n\n{'=' * 30}\n\n{report_kh}"
-
-        buttons = self.build_signal_keyboard(symbol) if with_buttons else None
-
-        if len(combined_text) <= 4000:
-            ok = self.send_message(combined_text, reply_markup=buttons)
-        else:
-            ok1 = self.send_message(report_en)
-            ok2 = self.send_message(report_kh, reply_markup=buttons)
-            ok = ok1 and ok2
-
-        if ok:
-            LAST_SENT_ALERTS[symbol] = (bias, status)
-
-        return ok
-
     def send_high_impact_news_alert(self, event_info: Dict[str, Any]) -> bool:
         """
         Broadcasts an immediate high-impact news catalyst alert (FOMC, PPI, CPI, NFP)
         in English and Natural Khmer with quick-action buttons.
         """
-        title = event_info.get("title", "High-Impact Catalyst")
-        title_kh = event_info.get("title_kh", "ព័ត៌មានឥទ្ធិពលខ្លាំង")
-        country = event_info.get("country", "USD")
-        time_until = event_info.get("time_until", "Imminent")
-        forecast = event_info.get("forecast", "N/A")
-        prev = event_info.get("previous", "N/A")
-        impact_en = event_info.get("gold_impact_en", "")
-        impact_kh = event_info.get("gold_impact_kh", "")
+        title = html.escape(str(event_info.get("title", "High-Impact Catalyst")))
+        title_kh = html.escape(str(event_info.get("title_kh", "ព័ត៌មានឥទ្ធិពលខ្លាំង")))
+        country = html.escape(str(event_info.get("country", "USD")))
+        time_until = html.escape(str(event_info.get("time_until", "Imminent")))
+        forecast = html.escape(str(event_info.get("forecast", "N/A")))
+        prev = html.escape(str(event_info.get("previous", "N/A")))
+        impact_en = html.escape(str(event_info.get("gold_impact_en", "")))
+        impact_kh = html.escape(str(event_info.get("gold_impact_kh", "")))
 
         msg = f"""🚨 <b>HIGH-IMPACT ECONOMIC CATALYST ALERT</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -479,10 +487,10 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
         return self.send_message(msg, reply_markup=buttons)
 
     def build_execution_keyboard(self, ticket_id: str, symbol: str) -> Dict[str, Any]:
-        """Builds interactive inline buttons for trade execution authorization."""
+        """Builds acknowledgement buttons for a manual-only trade ticket."""
         keyboard: List[List[Dict[str, Any]]] = []
         keyboard.append([
-            {"text": "🚀 Confirm & Execute on MT5", "callback_data": f"exec:confirm:{ticket_id}"},
+            {"text": "✅ Acknowledge (Manual Only)", "callback_data": f"exec:confirm:{ticket_id}"},
             {"text": "❌ Veto / Cancel", "callback_data": f"exec:veto:{ticket_id}"}
         ])
         if self.webapp_url:
@@ -497,46 +505,41 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
     def send_trade_execution_alert(self, trade_data: Dict[str, Any]) -> bool:
         """
-        Dispatches an interactive 1-click trade execution bridge alert to Telegram
-        with MT5/Binance auto-trade confirmation buttons.
+        Dispatches a manual trade ticket. This endpoint does not place broker orders.
         """
-        ticket_id = trade_data.get("ticket_id", "TKT-001")
+        ticket_id = trade_data.get("ticket_id") or f"TKT-{uuid.uuid4().hex[:8].upper()}"
         symbol = trade_data.get("symbol", "XAUUSD")
         direction = trade_data.get("direction", "BUY").upper()
         entry = trade_data.get("entry_price", 0.0)
         sl = trade_data.get("stop_loss", 0.0)
         tp1 = trade_data.get("take_profit_1", 0.0)
-        tp2 = trade_data.get("take_profit_2", 0.0)
-        lot_size = trade_data.get("lot_size", "0.08 Lots")
-        rr = trade_data.get("risk_reward_ratio", "1:2.4")
-
-        # Auto-compute TP2 if not provided
-        if (not tp2 or tp2 == 0.0) and entry and sl:
-            sl_dist = abs(entry - sl)
-            if direction in ["BUY", "LONG"]:
-                tp2 = round(entry + (sl_dist * 3.2), 2 if entry > 10 else 4)
-            else:
-                tp2 = round(entry - (sl_dist * 3.2), 2 if entry > 10 else 4)
+        tp2 = trade_data.get("take_profit_2")
+        lot_size = trade_data.get("lot_size", "N/A")
+        rr = trade_data.get("risk_reward_ratio", "N/A")
+        tp2_display = tp2 if isinstance(tp2, (int, float)) and tp2 > 0 else "N/A"
 
         is_buy = direction in ["BUY", "LONG"]
         action_tag = "BUY ENTRY" if is_buy else "SELL ENTRY"
         icon = "🟢" if is_buy else "🔴"
-        score = trade_data.get("ai_score") or trade_data.get("confidence_score") or 88
-        score = max(80, min(95, int(score)))
+        risk_pct = trade_data.get("risk_percentage")
+        risk_pct_text = f"{risk_pct}%" if isinstance(risk_pct, (int, float)) else "N/A"
+        risk_amount = trade_data.get("risk_amount_usd")
+        risk_amount_text = f"${float(risk_amount):.2f}" if isinstance(risk_amount, (int, float)) else "N/A"
 
-        msg = f"""{icon} <b>TAIKRY AI SIGNAL — #{symbol}</b>
+        msg = f"""{icon} <b>MANUAL TRADE TICKET — #{symbol}</b>
 ━━━━━━━━━━━━━━━━━━━━
-⭐ <b>AI CONFLUENCE SCORE:</b> <b>{score}%</b> (HIGH CONVICTION)
 🎯 <b>ACTION:</b> <b>{icon} {action_tag}</b>
 💵 <b>{action_tag}:</b> <code>{entry}</code>
 🛑 <b>STOP LOSS (SL):</b> <code>{sl}</code>
 🎯 <b>TAKE PROFIT 1 (TP 1):</b> <code>{tp1}</code>
-🚀 <b>TAKE PROFIT 2 (TP 2):</b> <code>{tp2}</code>
+🚀 <b>TAKE PROFIT 2 (TP 2):</b> <code>{tp2_display}</code>
 ⚖️ <b>RISK / REWARD:</b> {rr}
-📦 <b>POSITION RISK:</b> 0.5% Hard Cap ({lot_size})
+📦 <b>PAPER POSITION:</b> {lot_size}
+🛡 <b>SIMULATED RISK:</b> {risk_pct_text} ({risk_amount_text})
 🎫 <b>TICKET:</b> <code>{ticket_id}</code>
 ━━━━━━━━━━━━━━━━━━━━
-🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
+ℹ️ This is a paper-trade record and manual ticket only. No order was sent to MT5 or a broker.
+🇰🇭 នេះជាកំណត់ត្រាជួញដូរសាកល្បង និងសំបុត្រជូនដំណឹងប៉ុណ្ណោះ។ មិនមានការបញ្ជាទិញទៅ MT5 ឬក្រុមហ៊ុនជើងសារទេ។"""
 
         buttons = self.build_execution_keyboard(ticket_id, symbol)
         return self.send_message(msg, reply_markup=buttons)
@@ -552,32 +555,48 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         setups_text = ""
         for s in top_setups:
-            setups_text += f"• <b>{s['symbol']}</b>: {s['direction']} @ {s['entry']} | SL: {s['sl']} | TP: {s['tp']} (R:R {s['rr']})\n"
+            if not isinstance(s, dict):
+                continue
+            if not all(s.get(key) is not None for key in ("symbol", "direction", "entry", "sl", "tp", "timestamp_utc")):
+                continue
+            try:
+                entry, stop, target = float(s["entry"]), float(s["sl"]), float(s["tp"])
+                direction = str(s["direction"]).upper()
+                geometry_valid = (direction == "BUY" and stop < entry < target) or (direction == "SELL" and stop > entry > target)
+                from taikry.data.validator import check_data_freshness
+                freshness = check_data_freshness(str(s["symbol"]), s["timestamp_utc"], "M15")
+            except (TypeError, ValueError, KeyError):
+                continue
+            if not geometry_valid or not freshness.get("fresh") or "SYNTHETIC" in str(s.get("price_source", "")).upper():
+                continue
+            safe_symbol = html.escape(str(s["symbol"]))
+            safe_direction = html.escape(direction)
+            rr_ratio = abs(target - entry) / abs(entry - stop)
+            setups_text += f"• <b>{safe_symbol}</b>: {safe_direction} @ {entry:g} | SL: {stop:g} | TP: {target:g} (R:R 1:{rr_ratio:.2f})\n"
         if not setups_text:
-            setups_text = "• Scanning institutional order blocks across 21 assets...\n"
+            setups_text = "• No approved setup was available in the current analysis cache.\n"
 
         cat_text = ""
         for c in catalysts[:3]:
-            cat_text += f"• 🔴 <b>{c['title']}</b> ({c['country']}) — ⏳ {c.get('time_until', 'Today')} (FC: {c.get('forecast', 'N/A')})\n"
+            cat_text += f"• 🔴 <b>{html.escape(str(c.get('title', 'Event')))}</b> ({html.escape(str(c.get('country', 'N/A')))}) — ⏳ {html.escape(str(c.get('time_until', 'N/A')))} (FC: {html.escape(str(c.get('forecast', 'N/A')))})\n"
         if not cat_text:
-            cat_text = "• 🟢 No high-impact catalysts scheduled today. Clear trading skies.\n"
+            cat_text = "• No verified high-impact events were returned by the calendar feed.\n"
 
         blackout_banner = ""
-        if blackout.get("is_blackout"):
-            blackout_banner = f"\n⚠️ <b>ACTIVE NEWS BLACKOUT:</b>\n{blackout.get('advisory_kh', '')}\n"
+        if blackout.get("is_blackout") or blackout.get("status") == "UNAVAILABLE":
+            blackout_banner = f"\n⚠️ <b>NEWS RISK STATUS:</b>\n{html.escape(str(blackout.get('advisory_kh', '')))}\n"
 
         msg = f"""🌅 <b>TAIKRY AI MARKET INTELLIGENCE — DAILY EXECUTIVE BRIEFING</b>
 🇰🇭 <b>ព្រឹត្តិបត្រសង្ខេបទីផ្សារស្ថាប័នប្រចាំថ្ងៃ</b>
 📅 <i>{now_str} (Phnom Penh GMT+7)</i>
 ━━━━━━━━━━━━━━━━━━━━
-🏆 <b>TOP 3 HIGH-PROBABILITY SETUPS:</b>
+🏆 <b>APPROVED SETUPS (ZERO OR MORE):</b>
 {setups_text}
 📅 <b>TODAY'S HIGH-IMPACT CATALYSTS (Forex Factory):</b>
 {cat_text}{blackout_banner}
-🛡 <b>INSTITUTIONAL RISK PROTOCOL:</b>
-• Strict 0.5% Maximum Capital Risk per trade.
-• Minimum 1:2.0 Risk-to-Reward Floor mandatory.
-• Pre-news volatility windows locked.
+🛡 <b>RISK NOTE:</b>
+• Paper-trade risk is sized from the configured account ledger.
+• Review the reported risk and price levels before any manual broker action.
 
 🇰🇭 <i>សូមជួញដូរដោយការគ្រប់គ្រងហានិភ័យខ្ពស់បំផុត និងគោរពតាមផែនការជួញដូរ។</i>
 ━━━━━━━━━━━━━━━━━━━━
@@ -606,7 +625,7 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         if cmd in ["/start", "/help", "/menu"]:
             text = """🤖 <b>TAIKRY AI MARKET INTELLIGENCE PRO</b>
-<i>24/7 Autonomous Institutional Multi-Agent Platform</i>
+<i>Market analysis and paper-trade tools; availability depends on configured services</i>
 
 សូមស្វាគមន៍មកកាន់ប្រព័ន្ធវិភាគទីផ្សារហិរញ្ញវត្ថុឆ្លាតវៃ TAIKRY PRO!
 ជ្រើសរើសមុខងារដែលអ្នកចង់ពិនិត្យតាមរយៈប៊ូតុងអន្តរកម្មខាងក្រោម៖"""
@@ -642,44 +661,10 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
             else:
                 res = ai_consensus_engine.analyze_symbol(symbol)
 
-            direction = res.get("proposed_direction", "").upper()
-            if not direction or direction == "NONE":
-                direction = "BUY" if "BULLISH" in res.get("market_bias", "") else "SELL"
-            is_buy = direction in ["BUY", "LONG"]
-            action_tag = "BUY ENTRY" if is_buy else "SELL ENTRY"
-            icon = "🟢" if is_buy else "🔴"
-            score = res.get("ai_score") or res.get("confidence_score") or 88
-            score = max(80, min(95, int(score)))
-
-            entry = res.get("entry_price") or res.get("verified_price", 0.0)
-            sl = res.get("stop_loss")
-            tp1 = res.get("take_profit_1")
-            tp2 = res.get("take_profit_2")
-            dec = 2 if entry > 10 else 4
-            if not sl:
-                atr = res.get("agents", {}).get("agent_1_technical", {}).get("key_price_levels", {}).get("atr") or (entry * 0.004)
-                sl = round(entry - (1.5 * atr) if is_buy else entry + (1.5 * atr), dec)
-            if not tp1:
-                sl_dist = abs(entry - sl)
-                tp1 = round(entry + (sl_dist * 2.2) if is_buy else entry - (sl_dist * 2.2), dec)
-            if not tp2:
-                sl_dist = abs(entry - sl)
-                tp2 = round(entry + (sl_dist * 3.5) if is_buy else entry - (sl_dist * 3.5), dec)
-            rr = res.get("risk_reward_ratio", "1:2.4")
-
-            header_tag = "BEST SETUP" if cmd == "/best" else "HIGH CONVICTION"
-            text = f"""{icon} <b>TAIKRY AI ALERT — #{symbol}</b>
-━━━━━━━━━━━━━━━━━━━━
-⭐ <b>AI CONFLUENCE SCORE:</b> <b>{score}%</b> ({header_tag})
-🎯 <b>ACTION:</b> <b>{icon} {action_tag}</b>
-💵 <b>{action_tag}:</b> <code>{entry}</code>
-🛑 <b>STOP LOSS (SL):</b> <code>{sl}</code>
-🎯 <b>TAKE PROFIT 1 (TP 1):</b> <code>{tp1}</code>
-🚀 <b>TAKE PROFIT 2 (TP 2):</b> <code>{tp2}</code>
-⚖️ <b>RISK / REWARD:</b> {rr}
-🛡️ <b>RISK GUARD:</b> 0.5% Institutional Cap
-━━━━━━━━━━━━━━━━━━━━
-🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
+            label = "BEST SETUP" if cmd == "/best" else "APPROVED SETUP"
+            text = self._format_approved_signal(res, label)
+            if not text:
+                text = f"⚠️ <b>NO APPROVED SETUP — #{symbol}</b>\n\n🇰🇭 មិនមានសញ្ញាជួញដូរដែលបានអនុម័ត និងមានតម្លៃ Entry/SL/TP ពេញលេញទេ។ សូមរង់ចាំការវិភាគថ្មី។"
             return {
                 "text": text,
                 "reply_markup": self.build_signal_keyboard(symbol)
@@ -740,9 +725,9 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 💵 <b>Simulated Balance:</b> ${acct['current_balance']:,.2f}
 📈 <b>Realized PnL:</b> ${acct['realized_pnl']:+,.2f}
 📊 <b>Total Trades:</b> {acct['total_trades']} (Open: {acct['open_trades_count']})
-🎯 <b>Risk Per Trade:</b> 0.5% Hard Cap
-⚖️ <b>Minimum R:R:</b> 1:2.0 Mandatory
-🛑 <b>Max Daily Drawdown Stop:</b> 2.5%
+🎯 <b>Paper Risk Setting:</b> {RISK_PER_TRADE_PERCENT:g}% (maximum accepted: {MAX_RISK_PER_TRADE_PERCENT:g}%)
+⚖️ <b>Minimum R:R:</b> 1:{MIN_RISK_REWARD_RATIO:g} configured
+🛑 <b>Max Daily Drawdown Stop:</b> {MAX_DAILY_LOSS_PERCENT:g}%
 ⛔ <b>Martingale:</b> STRICTLY DISABLED"""
             buttons = {
                 "inline_keyboard": [
@@ -755,56 +740,47 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
             }
 
         if cmd in ["/digest", "/briefing"]:
+            if not self._is_telegram_admin(user_id):
+                return {"text": "⛔ Daily broadcast is restricted to Telegram administrators."}
             now_gmt7 = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7))).strftime("%Y-%m-%d %H:%M")
             from taikry.agents.consensus_engine import ai_consensus_engine
             from taikry.data.economic_calendar import economic_calendar_provider
-            from taikry.data.providers import market_data_engine
 
             top_setups = []
             for s in ["XAUUSD", "BTCUSDT", "EURUSD"]:
                 cached = getattr(ai_consensus_engine, "_ANALYSIS_CACHE", {}).get(f"{s}:quant") or getattr(ai_consensus_engine, "_ANALYSIS_CACHE", {}).get(f"{s}:auto")
                 if cached:
                     _, r = cached
+                    if not isinstance(r, dict) or r.get("setup_status") != "APPROVE":
+                        continue
                     top_setups.append({
                         "symbol": s,
-                        "direction": r.get("proposed_direction") or r.get("setup_status") or "MONITOR",
-                        "entry": r.get("entry_price") or r.get("verified_price"),
-                        "sl": r.get("stop_loss", "---"),
-                        "tp": r.get("take_profit_1", "---"),
-                        "rr": r.get("risk_reward_ratio", "1:2.0")
-                    })
-                else:
-                    p, _, _ = market_data_engine.get_verified_price(s)
-                    is_gold = "XAU" in s
-                    dec = 2 if is_gold or "USDT" in s else 4
-                    top_setups.append({
-                        "symbol": s,
-                        "direction": "MONITOR",
-                        "entry": round(p, dec),
-                        "sl": round(p * 0.9975, dec),
-                        "tp": round(p * 1.006, dec),
-                        "rr": "1:2.4"
+                        "direction": r.get("proposed_direction"),
+                        "entry": r.get("entry_price"),
+                        "sl": r.get("stop_loss"),
+                        "tp": r.get("take_profit_1"),
+                        "timestamp_utc": r.get("timestamp_utc"),
+                        "price_source": r.get("price_source")
                     })
 
             events = economic_calendar_provider.get_upcoming_high_impact_events()
             blackout = economic_calendar_provider.check_news_blackout("XAUUSD")
 
-            self.send_daily_digest({
+            sent = self.send_daily_digest({
                 "timestamp_gmt7": now_gmt7,
                 "top_setups": top_setups,
                 "catalysts": events[:3],
                 "blackout": blackout
             })
-            return {"text": f"✅ Daily intelligence digest dispatched to {self.default_chat_id}."}
+            return {"text": "✅ Daily briefing sent." if sent else "⚠️ Daily briefing could not be sent. Check Telegram configuration."}
 
         if cmd in ["/execute", "/bridge"]:
-            text = f"""⚡ <b>1-CLICK TELEGRAM & MT5 WEBHOOK BRIDGE</b>
+            text = f"""📨 <b>MANUAL TRADE TICKET</b>
 ━━━━━━━━━━━━━━━━━━━━
-🔗 <b>Bridge Status:</b> ONLINE
-🛡️ <b>Risk Policy:</b> 0.5% Hard Cap per execution
-⚖️ <b>Gate Rule:</b> Mandatory R:R >= 1:2.0 Floor
-📱 <b>Connected Chat:</b> {self.default_chat_id}
-🎯 <b>Supported Assets:</b> Gold (XAUUSD), All Forex Majors, Major Crypto (BTC/ETH/SOL)"""
+🔗 <b>MT5 Bridge:</b> Read-only market data
+🛡️ <b>Mode:</b> Simulated paper trade plus manual Telegram ticket
+⚠️ <b>Execution:</b> No order is sent to a broker from this flow
+🎯 <b>Supported Assets:</b> Gold (XAUUSD), Forex, and Crypto"""
             buttons = {
                 "inline_keyboard": [
                     [
@@ -817,15 +793,17 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         if cmd == "/status":
             from taikry.ai.llm_client import get_llm_status
+            from taikry.monitoring.engine import market_monitor_247
             st = get_llm_status()
-            online_llms = [k.upper() for k, v in st.items() if isinstance(v, dict) and v.get("status") == "ONLINE"]
+            configured_llms = [k.upper() for k, v in st.items() if isinstance(v, dict) and v.get("configured")]
+            engine_state = "RUNNING IN THIS PROCESS" if market_monitor_247.is_running else "STOPPED IN THIS PROCESS"
             text = f"""🟢 <b>SYSTEM STATUS AUDIT</b>
 ━━━━━━━━━━━━━━━━━━━━
-⚡ <b>Engine:</b> 24/7 Autonomous Institutional Sentinel
-🤖 <b>Frontier LLMs:</b> {', '.join(online_llms) if online_llms else 'Active Cascade'}
-📡 <b>Market Feeds:</b> Yahoo Finance & Binance Live
-🛡️ <b>Risk Guard:</b> ARMED (0.5% Cap)
-💬 <b>Telegram Chat ID:</b> {self.default_chat_id}"""
+⚡ <b>Engine:</b> {engine_state}
+🤖 <b>LLM keys configured (not connectivity-tested):</b> {', '.join(configured_llms) if configured_llms else 'None'}
+📡 <b>Market Feeds:</b> Check dashboard health for current source and freshness
+🛡️ <b>Paper risk setting:</b> {RISK_PER_TRADE_PERCENT:g}% per trade (maximum accepted: {MAX_RISK_PER_TRADE_PERCENT:g}%)
+💬 <b>Telegram:</b> Configuration required for delivery"""
             return {
                 "text": text,
                 "reply_markup": self.build_main_menu_keyboard()
@@ -851,7 +829,7 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         # Admin: /grantvip <user_id> [tier] [days]
         if cmd.startswith("/grantvip"):
-            is_admin = (user_id in TELEGRAM_ADMIN_IDS) or (str(user_id) in [str(x) for x in TELEGRAM_ADMIN_IDS]) or (user_id == 0)
+            is_admin = self._is_telegram_admin(user_id)
             if not is_admin:
                 return {"text": "⛔ <b>Access Denied:</b> This command requires administrator authorization."}
             parts = command.strip().split()
@@ -937,53 +915,23 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
         """
         Executes action triggered by inline button click (Callback Query).
         """
+        data = callback_data.strip()
+        admin_only_callbacks = {"train:epoch", "system:autofix", "digest:daily"}
+        if (data in admin_only_callbacks) and not self._is_telegram_admin(user_id):
+            if callback_query_id:
+                self.answer_callback_query(callback_query_id, text="Administrator authorization required.", show_alert=True)
+            return {"status": "FORBIDDEN", "message": "Administrator authorization required."}
         if callback_query_id:
             self.answer_callback_query(callback_query_id, text="⚡ Processing request...")
-
-        data = callback_data.strip()
 
         # 1. Scan asset
         if data.startswith("scan:"):
             symbol = data.split(":")[1]
             from taikry.agents.consensus_engine import ai_consensus_engine
             res = ai_consensus_engine.analyze_symbol(symbol)
-            direction = res.get("proposed_direction", "").upper()
-            if not direction or direction == "NONE":
-                direction = "BUY" if "BULLISH" in res.get("market_bias", "") else "SELL"
-            is_buy = direction in ["BUY", "LONG"]
-            action_tag = "BUY ENTRY" if is_buy else "SELL ENTRY"
-            icon = "🟢" if is_buy else "🔴"
-            score = res.get("ai_score") or res.get("confidence_score") or 88
-            score = max(80, min(95, int(score)))
-
-            entry = res.get("entry_price") or res.get("verified_price", 0.0)
-            sl = res.get("stop_loss")
-            tp1 = res.get("take_profit_1")
-            tp2 = res.get("take_profit_2")
-            dec = 2 if entry > 10 else 4
-            if not sl:
-                atr = res.get("agents", {}).get("agent_1_technical", {}).get("key_price_levels", {}).get("atr") or (entry * 0.004)
-                sl = round(entry - (1.5 * atr) if is_buy else entry + (1.5 * atr), dec)
-            if not tp1:
-                sl_dist = abs(entry - sl)
-                tp1 = round(entry + (sl_dist * 2.2) if is_buy else entry - (sl_dist * 2.2), dec)
-            if not tp2:
-                sl_dist = abs(entry - sl)
-                tp2 = round(entry + (sl_dist * 3.5) if is_buy else entry - (sl_dist * 3.5), dec)
-            rr = res.get("risk_reward_ratio", "1:2.4")
-
-            text = f"""{icon} <b>TAIKRY AI ALERT — #{symbol}</b>
-━━━━━━━━━━━━━━━━━━━━
-⭐ <b>AI CONFLUENCE SCORE:</b> <b>{score}%</b> (HIGH CONVICTION)
-🎯 <b>ACTION:</b> <b>{icon} {action_tag}</b>
-💵 <b>{action_tag}:</b> <code>{entry}</code>
-🛑 <b>STOP LOSS (SL):</b> <code>{sl}</code>
-🎯 <b>TAKE PROFIT 1 (TP 1):</b> <code>{tp1}</code>
-🚀 <b>TAKE PROFIT 2 (TP 2):</b> <code>{tp2}</code>
-⚖️ <b>RISK / REWARD:</b> {rr}
-🛡️ <b>RISK GUARD:</b> 0.5% Institutional Cap
-━━━━━━━━━━━━━━━━━━━━
-🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
+            text = self._format_approved_signal(res)
+            if not text:
+                text = f"⚠️ <b>NO APPROVED SETUP — #{symbol}</b>\n\n🇰🇭 មិនមានសញ្ញាជួញដូរដែលបានអនុម័ត និងមានតម្លៃ Entry/SL/TP ពេញលេញទេ។ សូមរង់ចាំការវិភាគថ្មី។"
             buttons = self.build_signal_keyboard(symbol)
             if message_id:
                 self.edit_message_text(text, chat_id, message_id, reply_markup=buttons)
@@ -1052,9 +1000,9 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 ━━━━━━━━━━━━━━━━━━━━
 💵 <b>Simulated Equity:</b> ${acct['current_equity']:,.2f}
 📈 <b>Realized PnL:</b> ${acct['realized_pnl']:+,.2f}
-📊 <b>Active Positions:</b> {acct['open_trades_count']} / 3 max
-🎯 <b>Risk Cap:</b> 0.5% equity ($500.00)
-⚖️ <b>Minimum R:R:</b> 1:2.0 Hard Rule"""
+📊 <b>Active Positions:</b> {acct['open_trades_count']} / {MAX_SIMULTANEOUS_POSITIONS} max
+🎯 <b>Paper Risk Setting:</b> {RISK_PER_TRADE_PERCENT:g}% equity (maximum accepted: {MAX_RISK_PER_TRADE_PERCENT:g}%)
+⚖️ <b>Minimum R:R:</b> {MIN_RISK_REWARD_RATIO:g} configured threshold"""
             buttons = {
                 "inline_keyboard": [
                     [
@@ -1071,6 +1019,8 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         # 5. Train Epoch
         elif data == "train:epoch":
+            if not self._is_telegram_admin(user_id):
+                return {"status": "FORBIDDEN", "message": "Administrator authorization required."}
             from taikry.learning.self_trainer import agent_self_trainer
             t_res = agent_self_trainer.train_epoch("XAUUSD")
             weights = t_res.get("optimized_weights") or t_res.get("updated_weights") or t_res.get("calibrated_weights") or {}
@@ -1096,6 +1046,8 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         # 6. Sentinel Auto-Fix
         elif data == "system:autofix":
+            if not self._is_telegram_admin(user_id):
+                return {"status": "FORBIDDEN", "message": "Administrator authorization required."}
             from taikry.monitoring.auto_fixer import auto_fix_engine
             fix_res = auto_fix_engine.run_diagnostic_and_fix()
             status_val = fix_res.get('status', 'SYSTEM_OPTIMIZED')
@@ -1111,18 +1063,17 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
                 self.send_message(text, chat_id=chat_id, reply_markup=buttons)
             return {"status": "SUCCESS", "action": "autofix"}
 
-        # 7. 1-Click Execution Confirmation
+        # 7. Manual ticket acknowledgement (does not execute an order)
         elif data.startswith("exec:confirm:"):
             ticket_id = data.split(":")[2]
-            text = f"""🚀 <b>TRADE EXECUTION DISPATCHED TO MT5 / BROKER</b>
+            text = f"""✅ <b>MANUAL TICKET ACKNOWLEDGED</b>
 ━━━━━━━━━━━━━━━━━━━━
-✅ <b>Status:</b> CONFIRMED & QUEUED
+✅ <b>Status:</b> Acknowledged; no broker order was placed
 🎫 <b>Ticket ID:</b> <code>{ticket_id}</code>
-🛡️ <b>Risk Gate:</b> 0.5% Hard Cap Verified
-⚖️ <b>Execution Rule:</b> SL & TP1 parameters sent to MetaTrader Bridge
+⚖️ <b>Next step:</b> Review the levels and place any order manually in MT5 if you choose.
 
 🇰🇭 <b>ភាសាខ្មែរ:</b>
-ការបញ្ជាជួញដូរត្រូវបានអនុម័តដោយជោគជ័យ។ ប្រព័ន្ធបានបញ្ជូនទិន្នន័យទៅកាន់ MetaTrader/Binance Webhook។"""
+បានទទួលស្គាល់សំបុត្រជូនដំណឹង។ មិនមានការបញ្ជាទិញទៅ MT5 ឬក្រុមហ៊ុនជើងសារទេ។ សូមពិនិត្យកម្រិតតម្លៃ ហើយបញ្ចូលការបញ្ជាទិញដោយដៃ ប្រសិនបើអ្នកសម្រេចចិត្ត។"""
             buttons = {
                 "inline_keyboard": [
                     [
@@ -1135,17 +1086,16 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
                 self.edit_message_text(text, chat_id, message_id, reply_markup=buttons)
             return {"status": "SUCCESS", "action": "execute_confirm", "ticket_id": ticket_id}
 
-        # 8. Trade Veto / Rejection
+        # 8. Cancel manual ticket
         elif data.startswith("exec:veto:"):
             ticket_id = data.split(":")[2]
-            text = f"""❌ <b>TRADE EXECUTION VETOED BY TRADER</b>
+            text = f"""❌ <b>MANUAL TICKET CANCELLED</b>
 ━━━━━━━━━━━━━━━━━━━━
-🛑 <b>Status:</b> CANCELLED / VETOED
+🛑 <b>Status:</b> Ticket cancelled; no broker order was placed
 🎫 <b>Ticket ID:</b> <code>{ticket_id}</code>
-🛡️ <b>Capital Protection:</b> 100% Preserved (0 Loss)
 
 🇰🇭 <b>ភាសាខ្មែរ:</b>
-ការបញ្ជាជួញដូរត្រូវបានបដិសេធ។ ដើមទុនត្រូវបានការពារសុវត្ថិភាព។"""
+សំបុត្រជូនដំណឹងត្រូវបានលុបចោល។ មិនមានការបញ្ជាទិញទៅក្រុមហ៊ុនជើងសារទេ។"""
             buttons = {
                 "inline_keyboard": [
                     [
@@ -1159,6 +1109,8 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         # 9. Daily Digest Callback
         elif data == "digest:daily":
+            if not self._is_telegram_admin(user_id):
+                return {"status": "FORBIDDEN", "message": "Administrator authorization required."}
             self.handle_command("/digest", user_id, chat_id)
             return {"status": "SUCCESS", "action": "digest"}
 
@@ -1193,7 +1145,6 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
             text = vip_subscription_manager.build_payment_message(method, tier_code)
             buttons = {
                 "inline_keyboard": [
-                    [{"text": "✅ ខ្ញុំបានបង់ប្រាក់រួច (Submit Proof)", "callback_data": f"sub:submitproof:{tier_code}"}],
                     [{"text": "⬅️ ត្រឡប់ក្រោយ (Back)", "callback_data": f"sub:tier:{tier_code}"}]
                 ]
             }
@@ -1205,19 +1156,15 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         elif data.startswith("sub:submitproof:"):
             tier_code = data.split(":")[2]
-            from taikry.config import TELEGRAM_ADMIN_USERNAME
-            text = f"""📸 <b>ការផ្ញើភស្តុតាងបង់ប្រាក់ (SUBMIT PAYMENT PROOF)</b>
+            text = f"""💳 <b>Checkout មិនទាន់បើកប្រើ</b>
 ━━━━━━━━━━━━━━━━━━━━
 🎯 <b>Plan:</b> {tier_code}
 👤 <b>Telegram User ID:</b> <code>{user_id}</code>
 
-សូមថតរូប Screenshot បង្កាន់ដៃផ្ទេរប្រាក់ ឬចម្លង Transaction Hash (TxID) រួចផ្ញើដោយផ្ទាល់ទៅកាន់៖
-👉 <b>@{TELEGRAM_ADMIN_USERNAME}</b>
-
-ប្រព័ន្ធនឹងផ្ទៀងផ្ទាត់ និងផ្ញើ <b>1-Time VIP Invite Link</b> ចូល VIP Channel ជូនលោកអ្នកភ្លាមៗ!"""
+🇰🇭 សូមកុំផ្ញើប្រាក់ ឬបង្កាន់ដៃតាម bot នេះ។ មិនមាន payment gateway ដែលបានភ្ជាប់ និងផ្ទៀងផ្ទាត់ទេ។
+🇬🇧 Do not send funds or payment proof through this bot. No verified payment gateway is connected."""
             buttons = {
                 "inline_keyboard": [
-                    [{"text": "📞 ឆាតទៅកាន់ Admin ឥឡូវនេះ", "url": f"https://t.me/{TELEGRAM_ADMIN_USERNAME}"}],
                     [{"text": "💳 ពិនិត្យសមាជិកភាពខ្ញុំ", "callback_data": "sub:myplan"}],
                     [{"text": "⬅️ ត្រឡប់ក្រោយ", "callback_data": f"sub:tier:{tier_code}"}]
                 ]
@@ -1250,17 +1197,17 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 
         elif data == "sub:support":
             from taikry.config import TELEGRAM_ADMIN_USERNAME
-            text = f"""📞 <b>TAIKRY VIP CONCIERGE & SUPPORT</b>
+            has_support = bool(TELEGRAM_ADMIN_USERNAME and TELEGRAM_ADMIN_USERNAME.lstrip("@").replace("_", "").isalnum())
+            contact_text = f"👉 <b>Admin:</b> @{TELEGRAM_ADMIN_USERNAME}" if has_support else "👉 <b>Admin contact is not configured.</b>"
+            text = f"""📞 <b>TAIKRY Account Support</b>
 ━━━━━━━━━━━━━━━━━━━━
-សម្រាប់ចម្ងល់អំពីការជាវកញ្ចប់ VIP, បញ្ហាតំណភ្ជាប់ Invite Link, ឬការទូទាត់ប្រាក់៖
-👉 <b>Direct Admin:</b> @{TELEGRAM_ADMIN_USERNAME}
-💬 <b>Official Support:</b> 24/7 Priority Assistance"""
-            buttons = {
-                "inline_keyboard": [
-                    [{"text": "💬 ផ្ញើសារទៅ Admin", "url": f"https://t.me/{TELEGRAM_ADMIN_USERNAME}"}],
-                    [{"text": "⬅️ ត្រឡប់ទៅមឺនុយ VIP", "callback_data": "sub:plans"}]
-                ]
-            }
+សម្រាប់ចម្ងល់អំពីគណនី ឬការចូលប្រើប្រាស់ សូមប្រើទំនាក់ទំនងដែលបានកំណត់។
+{contact_text}
+ការទូទាត់ VIP មិនទាន់អាចប្រើបានទេ។"""
+            buttons = {"inline_keyboard": []}
+            if has_support:
+                buttons["inline_keyboard"].append([{"text": "💬 ផ្ញើសារទៅ Admin", "url": f"https://t.me/{TELEGRAM_ADMIN_USERNAME.lstrip('@')}"}])
+            buttons["inline_keyboard"].append([{"text": "⬅️ ត្រឡប់ទៅមឺនុយ VIP", "callback_data": "sub:plans"}])
             if message_id:
                 self.edit_message_text(text, chat_id, message_id, reply_markup=buttons)
             else:
@@ -1321,27 +1268,36 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
             return False, None, err_msg
 
         signal_id = signal_data.get("signal_id", "SIG-UNKNOWN")
-        direction = signal_data.get("direction", "BUY").upper()
-        icon = "🟢" if direction in ["BUY", "LONG"] else "🔴"
-        action_name = "BUY" if direction in ["BUY", "LONG"] else "SELL"
-        entry = signal_data.get("entry_price", 0.0)
+        direction = str(signal_data.get("direction") or "").upper()
+        if direction not in ("BUY", "SELL", "LONG", "SHORT"):
+            return False, None, "Signal has no valid direction."
+        action_name = "BUY" if direction in ("BUY", "LONG") else "SELL"
+        icon = "🟢" if action_name == "BUY" else "🔴"
+        try:
+            entry = float(signal_data["entry_price"])
+            sl = float(signal_data["stop_loss"])
+            tp1 = float(signal_data["take_profit_1"])
+            tp2 = float(signal_data["take_profit_2"])
+            tp3 = float(signal_data["take_profit_3"])
+            score = float(signal_data.get("ai_score", signal_data.get("ai_confluence_score")))
+        except (KeyError, TypeError, ValueError):
+            return False, None, "Signal is missing required entry, stop, target, or score data."
+        levels = [entry, sl, tp1, tp2, tp3, score]
+        if not all(math.isfinite(value) for value in levels) or min(levels[:5]) <= 0 or not 80 <= score <= 95:
+            return False, None, "Signal contains invalid price levels or score."
+        if (action_name == "BUY" and not sl < entry < tp1 < tp2 < tp3) or (action_name == "SELL" and not sl > entry > tp1 > tp2 > tp3):
+            return False, None, "Signal price levels do not match the trade direction."
         entry_low = signal_data.get("entry_zone_low")
         entry_high = signal_data.get("entry_zone_high")
         entry_str = f"{entry_low:.2f} — {entry_high:.2f}" if (entry_low and entry_high) else f"{entry:.2f}"
-
-        sl = signal_data.get("stop_loss", 0.0)
-        tp1 = signal_data.get("take_profit_1", 0.0)
-        tp2 = signal_data.get("take_profit_2", 0.0)
-        tp3 = signal_data.get("take_profit_3", 0.0)
-        rr1 = signal_data.get("risk_reward_1", 2.0)
-        rr2 = signal_data.get("risk_reward_2", 3.0)
-        rr3 = signal_data.get("risk_reward_3", 4.5)
-        score = signal_data.get("ai_score") or signal_data.get("ai_confluence_score", 85)
-        timeframes = ", ".join(signal_data.get("timeframes_analyzed", ["M15", "H1", "H4"]))
-        summary = signal_data.get("consensus_summary", "Multi-agent quorum approved.")
+        risk_distance = abs(entry - sl)
+        rr1 = signal_data.get("risk_reward_1") or round(abs(tp1 - entry) / risk_distance, 2)
+        rr2 = signal_data.get("risk_reward_2") or round(abs(tp2 - entry) / risk_distance, 2)
+        rr3 = signal_data.get("risk_reward_3") or round(abs(tp3 - entry) / risk_distance, 2)
+        timeframes = ", ".join(signal_data.get("timeframes_analyzed") or ["N/A"])
         evidence = signal_data.get("supporting_evidence", [])
-        evidence_text = "\n".join([f"• {ev}" for ev in evidence[:4]]) if evidence else "• High-confluence multi-timeframe structural alignment."
-        expires_at = signal_data.get("expires_at", "6 Hours")
+        evidence_text = "\n".join([f"• {ev}" for ev in evidence[:4]]) if evidence else "• No supporting evidence was attached."
+        expires_at = signal_data.get("expires_at") or "N/A"
 
         action_khmer = "ទិញឡើង (BUY)" if action_name == "BUY" else "លក់ចុះ (SELL)"
         text = f"""⚡ <b>ZYROX AI — Read the Market. Own Your Edge.</b>
@@ -1364,9 +1320,9 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 {evidence_text}
 ⌛ <b>Valid Until:</b> {expires_at}
 
-⚠️ <i>Strict Risk Rule: Max 0.5% capital risk per trade. Inferred prices are evaluated on subsequent broker bars. No guaranteed profits.</i>
+⚠️ <i>Check the current data and your configured account risk before acting. Signal levels can become stale; no profits are guaranteed.</i>
 ━━━━━━━━━━━━━━━━━━━━
-🤖 <i>ZYROX AI 24/7 AUTO SENTINEL</i>"""
+🤖 <i>ZYROX AI Signal Monitor</i>"""
 
         buttons = self.build_signal_keyboard("XAUUSD")
         target_chat = chat_id or self.default_chat_id
@@ -1481,7 +1437,7 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
 🎯 <b>TP3 Attainment:</b> {tp3_str}
 ━━━━━━━━━━━━━━━━━━━━
 ⚖️ <i>Methodology: Verified outcomes evaluated strictly on subsequent tick/candle price action. Win Rate = Wins / (Wins + Losses) * 100%. Unresolved, ambiguous, and expired excluded from denominator. Zero lookahead bias.</i>
-🤖 <i>ZYROX AI 24/7 AUTO SENTINEL</i>"""
+🤖 <i>ZYROX AI Signal Monitor</i>"""
 
         if not self.token or not target_chat:
             return False, None, "Telegram not configured"

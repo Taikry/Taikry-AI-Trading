@@ -7,15 +7,14 @@ channel member eviction on lapse, renewal workflows, and bilingual notifications
 import time
 import datetime
 import logging
+import urllib.parse
 from typing import Dict, Any, Optional, List, Tuple
 
 from taikry.config import (
     VIP_TELEGRAM_CHAT_ID,
-    TELEGRAM_CHAT_ID,
-    BAKONG_KHQR_ACCOUNT,
-    USDT_TRC20_WALLET,
     TELEGRAM_ADMIN_USERNAME,
-    TELEGRAM_ADMIN_IDS
+    TELEGRAM_ADMIN_IDS,
+    MIN_RISK_REWARD_RATIO
 )
 from taikry.database.session import SessionLocal
 from taikry.database.models import VIPSubscriptionModel, VIPInviteLinkRecord
@@ -73,20 +72,20 @@ SUBSCRIPTION_TIERS: Dict[str, Dict[str, Any]] = {
         "is_lifetime": False,
         "daily_signal_limit": 4,
         "features_en": [
-            "2–4 High-conviction XAUUSD signals per Cambodia trading day",
-            "Real-time Entry, SL, TP1, TP2, TP3 with exact R:R calculation",
+            "Up to 4 approved XAUUSD signals per Cambodia day; there may be zero",
+            "Validated Entry, SL, TP1, TP2, and TP3 levels when available",
             "Multi-Agent AI Consensus verification (80%–95% institutional score)",
-            "Automated lifecycle event notifications (Zone Reached, TP Hit, SL Hit)",
-            "Verified daily win-rate performance tracking & Cambodia date quota",
-            "1-Time secure auto-expiring Telegram invite link"
+            "Lifecycle notifications while the monitoring service and feed are running",
+            "Performance tracking from recorded and resolved signals",
+            "Single-use expiring invite link after an administrator grants access"
         ],
         "features_kh": [
-            "សញ្ញាជួញដូរមាស XAUUSD ចំនួន 2–4 ក្នុងមួយថ្ងៃ (ម៉ោងកម្ពុជា)",
-            "កម្រិតជាក់លាក់ Entry, Stop Loss, TP1, TP2, TP3 ជាមួយអនុបាត R:R ច្បាស់លាស់",
+            "សញ្ញា XAUUSD ដែលបានអនុម័តរហូតដល់ ៤ ក្នុងមួយថ្ងៃ ហើយអាចមិនមានសោះ",
+            "បង្ហាញ Entry, SL, TP1, TP2 និង TP3 ដែលបានផ្ទៀងផ្ទាត់ នៅពេលមានទិន្នន័យ",
             "ការផ្ទៀងផ្ទាត់ដោយ AI Multi-Agent Consensus (ពិន្ទុ 80%–95%)",
-            "ការជូនដំណឹងដំណាក់កាលជួញដូរផ្ទាល់ (ដល់ Entry, ដល់ TP, ដល់ SL)",
-            "ការតាមដានស្ថិតិអត្រាឈ្នះប្រចាំថ្ងៃជាក់ស្តែង (Win-Rate Tracking)",
-            "តំណភ្ជាប់អញ្ជើញ (Invite Link) សុវត្ថិភាពខ្ពស់ ផុតកំណត់ស្វ័យប្រវត្ត"
+            "ការជូនដំណឹងដំណាក់កាល នៅពេលសេវាតាមដាន និងទិន្នន័យដំណើរការ",
+            "ស្ថិតិពីសញ្ញាដែលបានកត់ត្រា និងបិទបញ្ចប់ពិតប្រាកដ",
+            "តំណភ្ជាប់ចូលប្រើម្តង និងមានកំណត់ពេល បន្ទាប់ពីអ្នកគ្រប់គ្រងផ្តល់សិទ្ធិ"
         ]
     },
     "VIP": {
@@ -100,19 +99,19 @@ SUBSCRIPTION_TIERS: Dict[str, Dict[str, Any]] = {
         "daily_signal_limit": 999,
         "features_en": [
             "All Pro VIP features included",
-            "1-Click Trade Execution Bridge to MetaTrader 5 / Binance Webhook",
+            "Paper-trade ledger and manual Telegram ticket; no broker order is placed",
             "Full AI Agents Round-Table Debate transcripts & rationale",
             "Live Economic Calendar Pre-News Lockout Early Warning",
-            "Multi-Asset signals (XAUUSD + EURUSD + GBPUSD + BTCUSDT)",
-            "Priority direct concierge support & account risk audits"
+            "Dashboard analysis for multiple assets; automated Telegram signal engine is XAUUSD-only",
+            "Account assistance through configured support contact"
         ],
         "features_kh": [
             "រួមបញ្ចូលរាល់មុខងារទាំងអស់របស់ Pro VIP",
-            "ប្រព័ន្ធ 1-Click Trade Execution ទៅកាន់ MetaTrader 5 / Binance Webhook",
+            "កំណត់ត្រាជួញដូរសាកល្បង និងសំបុត្រជូនដំណឹង Telegram ប៉ុណ្ណោះ មិនដាក់បញ្ជា broker ទេ",
             "កំណត់ហេតុពិភាក្សា AI Round-Table Debate ទាំងស្រុង",
             "ការព្រមានចាក់សោរហានិភ័យមុនព័ត៌មានសេដ្ឋកិច្ចចេញ (News Lockout)",
-            "សញ្ញាជួញដូរទ្រព្យសកម្មចម្រុះ (មាស XAUUSD, រូបិយប័ណ្ណ Forex, BTC)",
-            "ការគាំទ្រផ្ទាល់ជាអាទិភាព VIP 24/7"
+            "ផ្ទាំងវិភាគគាំទ្រទ្រព្យសកម្មច្រើន ប៉ុន្តែម៉ាស៊ីនផ្ញើសញ្ញា Telegram គាំទ្រ XAUUSD ប៉ុណ្ណោះ",
+            "ជំនួយគណនីតាមរយៈទំនាក់ទំនងដែលបានកំណត់"
         ]
     },
     "LIFETIME": {
@@ -125,17 +124,17 @@ SUBSCRIPTION_TIERS: Dict[str, Dict[str, Any]] = {
         "is_lifetime": True,
         "daily_signal_limit": 999,
         "features_en": [
-            "Unlimited Lifetime access to all current and future AI features",
+            "Lifetime access to currently enabled features",
             "No recurring fees or monthly renewals",
             "Permanent non-expiring VIP Channel access",
-            "Direct API Webhook access for algorithmic trading",
-            "VIP Private Discord / Telegram Mastermind group"
+            "No automatic broker execution",
+            "Channel access depends on a configured Telegram channel"
         ],
         "features_kh": [
             "ទទួលបានសិទ្ធិប្រើប្រាស់ពេញមួយជីវិត មិនបាច់បង់ប្រចាំខែ",
             "ការចូលរួម VIP Channel ជាអចិន្ត្រៃយ៍",
-            "សិទ្ធិប្រើប្រាស់ API Webhook សម្រាប់ការជួញដូរស្វ័យប្រវត្ត",
-            "ការចូលរួមក្រុមសម្ងាត់ Mastermind ពិសេស"
+            "មិនមានការបញ្ជាទិញទៅក្រុមហ៊ុនជើងសារដោយស្វ័យប្រវត្តទេ",
+            "ការចូល Channel អាស្រ័យលើការកំណត់ Telegram Channel"
         ]
     }
 }
@@ -149,10 +148,8 @@ class VIPManager:
 
     def __init__(self, telegram_service: Optional[TelegramService] = None):
         self._custom_telegram = telegram_service
-        self.default_vip_channel_id = VIP_TELEGRAM_CHAT_ID or TELEGRAM_CHAT_ID or "-1004341134868"
+        self.default_vip_channel_id = VIP_TELEGRAM_CHAT_ID
         self.admin_username = TELEGRAM_ADMIN_USERNAME
-        self.bakong_account = BAKONG_KHQR_ACCOUNT
-        self.usdt_wallet = USDT_TRC20_WALLET
 
     @property
     def telegram(self) -> TelegramService:
@@ -226,7 +223,11 @@ class VIPManager:
         is_lifetime = tier_info.get("is_lifetime", False)
         days = duration_days if duration_days is not None else tier_info.get("duration_days", 30)
         target_channel = str(channel_id or self.default_vip_channel_id).strip()
-        cost = payment_amount if payment_amount is not None else tier_info.get("price_usd", 0.0)
+        # A grant is not proof of payment. Record revenue only when an amount is explicitly supplied.
+        cost = payment_amount if payment_amount is not None else 0.0
+
+        if not target_channel:
+            return {"success": False, "error": "VIP Telegram channel is not configured; no subscription was granted."}
 
         now = _now_utc()
         starts_at = now
@@ -248,8 +249,8 @@ class VIPManager:
         )
 
         if not ok or not invite_link_url:
-            logger.warning(f"Could not generate Telegram invite link for {user_str}: {link_error}. Falling back to default channel link.")
-            invite_link_url = f"https://t.me/c/{target_channel.replace('-100', '')}" if target_channel.startswith("-100") else f"https://t.me/{target_channel.lstrip('@')}"
+            logger.warning("Could not create Telegram invite link for %s: %s", user_str, link_error)
+            return {"success": False, "error": "Could not create a verified one-time VIP invite link; no subscription was granted."}
 
         db = SessionLocal()
         try:
@@ -461,6 +462,7 @@ class VIPManager:
             db.close()
 
         # Notify user
+        contact_line = f"សូមទាក់ទង @{self.admin_username} ប្រសិនបើមានចម្ងល់។" if self.admin_username else "មិនទាន់បានកំណត់ទំនាក់ទំនងអ្នកគ្រប់គ្រងទេ។"
         try:
             self.telegram.send_message(
                 text=f"""⚠️ <b>VIP SUBSCRIPTION REVOKED</b>
@@ -470,7 +472,7 @@ Reason: <i>{reason}</i>
 
 🇰🇭 <b>ភាសាខ្មែរ:</b>
 សមាជិកភាព VIP របស់អ្នកត្រូវបានបញ្ឈប់ដោយ៖ {reason}។
-ប្រសិនបើមានចម្ងល់ សូមទាក់ទង @{self.admin_username}។""",
+{contact_line}""",
                 chat_id=user_str
             )
         except Exception:
@@ -607,7 +609,7 @@ Reason: <i>{reason}</i>
             "👑 <b>TAIKRY VIP SUBSCRIPTION TIERS & MEMBERSHIP</b>",
             "🇰🇭 <b>កញ្ចប់សមាជិកភាព VIP និងសញ្ញាជួញដូរមាស XAUUSD ស្ថាប័ន</b>",
             "━━━━━━━━━━━━━━━━━━━━",
-            "ជ្រើសរើសកញ្ចប់ដែលស័ក្តិសមជាមួយគោលដៅជួញដូររបស់អ្នក៖\n"
+            "តម្លៃខាងក្រោមជាតម្លៃគម្រោងប៉ុណ្ណោះ។ ការទូទាត់ និង checkout មិនទាន់ដំណើរការទេ។ សូមកុំផ្ញើប្រាក់។\n"
         ]
 
         for code, info in SUBSCRIPTION_TIERS.items():
@@ -622,9 +624,11 @@ Reason: <i>{reason}</i>
             lines.append("")
 
         lines.append("━━━━━━━━━━━━━━━━━━━━")
-        lines.append("💳 <b>Payment Methods:</b> Bakong KHQR, USDT (TRC-20)")
-        lines.append(f"📞 <b>Admin Support:</b> @{self.admin_username}")
-        lines.append("🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>")
+        if self.admin_username:
+            lines.append(f"📞 <b>Admin Support:</b> @{self.admin_username}")
+        else:
+            lines.append("📞 <b>Admin support contact is not configured.</b>")
+        lines.append("ℹ️ Paid access requires manual administrator approval; no payment is processed by this bot.")
         return "\n".join(lines)
 
     def build_plans_keyboard(self) -> Dict[str, Any]:
@@ -645,7 +649,7 @@ Reason: <i>{reason}</i>
         return {"inline_keyboard": keyboard}
 
     def build_tier_details_message(self, tier_code: str) -> str:
-        """Constructs full detailed specification and payment options for a tier."""
+        """Constructs tier details and accurately reports that checkout is unavailable."""
         tier_key = tier_code.upper()
         info = SUBSCRIPTION_TIERS.get(tier_key, SUBSCRIPTION_TIERS["PRO"])
         badge = info.get("badge", tier_key)
@@ -654,10 +658,11 @@ Reason: <i>{reason}</i>
 
         en_feats = "\n".join([f"• {f}" for f in info["features_en"]])
         kh_feats = "\n".join([f"• {f}" for f in info["features_kh"]])
+        support_line = f"📞 Support: @{self.admin_username}" if self.admin_username else "📞 Admin support contact is not configured."
 
         text = f"""{badge}
 <b>Plan:</b> {info['name_en']}
-<b>តម្លៃ / Cost:</b> <b>{cost_str}</b>
+<b>តម្លៃគម្រោង / Planned price:</b> <b>{cost_str}</b>
 <b>សុពលភាព / Duration:</b> {dur_str}
 ━━━━━━━━━━━━━━━━━━━━
 🇰🇭 <b>អត្ថប្រយោជន៍ និងមុខងារពិសេស:</b>
@@ -666,67 +671,26 @@ Reason: <i>{reason}</i>
 🇬🇧 <b>Institutional Specifications:</b>
 {en_feats}
 ━━━━━━━━━━━━━━━━━━━━
-💳 <b>វិធីសាស្រ្តបង់ប្រាក់ (Payment Options):</b>
-1. <b>Bakong KHQR (ABA / ACLEDA / Canadia):</b> <code>{self.bakong_account}</code>
-2. <b>USDT TRC-20 Address:</b>
-<code>{self.usdt_wallet}</code>
-
-បន្ទាប់ពីផ្ទេរប្រាក់រួច សូមចុចប៊ូតុង <b>«ផ្ញើភស្តុតាងបង់ប្រាក់»</b> ឬទាក់ទងមកកាន់ @{self.admin_username} ដើម្បីទទួលបានតំណភ្ជាប់ចូល VIP ភ្លាមៗ!"""
+💳 <b>ការទូទាត់ / Checkout:</b> មិនទាន់បើកប្រើទេ។ សូមកុំផ្ញើប្រាក់ទៅអាសយដ្ឋានណាមួយ។
+<b>Payment is not available yet. No payment is processed or verified by this bot.</b>
+{support_line}"""
         return text
 
     def build_tier_details_keyboard(self, tier_code: str) -> Dict[str, Any]:
         """Builds action buttons for payment confirmation and back."""
         tier_key = tier_code.upper()
-        keyboard = [
-            [
-                {"text": "🇰🇭 បង់ប្រាក់តាម Bakong KHQR", "callback_data": f"sub:pay:bakong:{tier_key}"},
-                {"text": "🌐 បង់ប្រាក់តាម USDT TRC20", "callback_data": f"sub:pay:usdt:{tier_key}"}
-            ],
-            [
-                {"text": "✅ ខ្ញុំបានបង់ប្រាក់រួច (Submit Proof)", "callback_data": f"sub:submitproof:{tier_key}"}
-            ],
-            [
-                {"text": "⬅️ ត្រឡប់ក្រោយ (Back to Plans)", "callback_data": "sub:plans"}
-            ]
-        ]
+        keyboard = [[{"text": "ℹ️ Checkout មិនទាន់បើកប្រើ", "callback_data": f"sub:pay:unavailable:{tier_key}"}]]
+        if self.admin_username and self.admin_username.lstrip("@").replace("_", "").isalnum():
+            keyboard.append([{"text": "📞 Contact Admin", "url": f"https://t.me/{self.admin_username}"}])
+        keyboard.append([{"text": "⬅️ ត្រឡប់ក្រោយ (Back to Plans)", "callback_data": "sub:plans"}])
         return {"inline_keyboard": keyboard}
 
     def build_payment_message(self, method: str, tier_code: str) -> str:
-        """Generates dedicated payment guide with copyable credentials."""
-        tier_key = tier_code.upper()
-        info = SUBSCRIPTION_TIERS.get(tier_key, SUBSCRIPTION_TIERS["PRO"])
-        price = info.get("price_usd", 49.0)
-
-        if method.lower() == "bakong":
-            text = f"""🇰🇭 <b>ការបង់ប្រាក់តាម BAKONG KHQR</b>
+        """Returns a safe status until a payment provider is implemented."""
+        return """💳 <b>ការទូទាត់មិនទាន់អាចប្រើបាន</b>
 ━━━━━━━━━━━━━━━━━━━━
-🎯 <b>កញ្ចប់:</b> {info.get('badge')}
-💵 <b>ចំនួនទឹកប្រាក់:</b> <b>${price:,.2f} USD</b>
-🏦 <b>Bakong Account:</b> <code>{self.bakong_account}</code>
-👤 <b>ឈ្មោះគណនី:</b> TAIKRY AI TRADING SYSTEM
-📝 <b>Remark / សម្គាល់:</b> សូមដាក់ Telegram User ID ឬ Username របស់អ្នក
-
-📸 <b>របៀបធ្វើ:</b>
-1. បើកកម្មវិធីធនាគាររបស់អ្នក (ABA, ACLEDA, Sathapana, etc.)
-2. ផ្ទេរប្រាក់ចំនួន ${price:,.2f} ទៅកាន់គណនី Bakong ខាងលើ
-3. ថត Screenshot បង្កាន់ដៃផ្ទេរប្រាក់ ហើយផ្ញើមកកាន់ @{self.admin_username}
-4. ប្រព័ន្ធនឹងផ្ញើតំណភ្ជាប់ VIP Invite Link ចូល Channel ដោយស្វ័យប្រវត្ត!"""
-        else:
-            text = f"""🌐 <b>ការបង់ប្រាក់តាម USDT (TRC-20)</b>
-━━━━━━━━━━━━━━━━━━━━
-🎯 <b>កញ្ចប់:</b> {info.get('badge')}
-💵 <b>ចំនួនទឹកប្រាក់:</b> <b>${price:,.2f} USDT</b>
-🔗 <b>Network:</b> TRON (TRC-20)
-📥 <b>Deposit Address:</b>
-<code>{self.usdt_wallet}</code>
-
-⚠️ <i>សូមផ្ទៀងផ្ទាត់ Network ឱ្យបានត្រឹមត្រូវ (TRC-20) មុនពេលផ្ញើ។</i>
-
-📸 <b>របៀបធ្វើ:</b>
-1. ផ្ទេរចំនួន ${price:,.2f} USDT ទៅកាន់ Address ខាងលើ
-2. ចម្លង Transaction Hash (TxID) ហើយផ្ញើមកកាន់ @{self.admin_username}
-3. តំណភ្ជាប់ចូល VIP Channel នឹងត្រូវបានបញ្ជូនមកកាន់លោកអ្នកភ្លាមៗ!"""
-        return text
+🇰🇭 សូមកុំផ្ញើប្រាក់ ឬបង្កាន់ដៃតាម bot នេះ។ មិនមាន payment gateway ដែលភ្ជាប់ និងផ្ទៀងផ្ទាត់ទេ។
+🇬🇧 Please do not send funds using this bot. No verified payment gateway is connected."""
 
     def build_user_status_message(self, user_id: str | int) -> Tuple[str, Dict[str, Any]]:
         """Constructs personalized subscription status card."""
@@ -764,7 +728,15 @@ Reason: <i>{reason}</i>
             hours_left = max(0, int(delta.seconds // 3600))
             days_left_str = f"{days_left} ថ្ងៃ {hours_left} ម៉ោង"
 
-        invite_link = sub.get("invite_link") or "https://t.me/c/-1004341134868"
+        invite_link = sub.get("invite_link")
+        if invite_link:
+            try:
+                parsed_invite = urllib.parse.urlparse(invite_link)
+                if parsed_invite.scheme != "https" or parsed_invite.hostname not in ("t.me", "telegram.me"):
+                    invite_link = None
+            except Exception:
+                invite_link = None
+        invite_display = invite_link or "មិនទាន់មានតំណភ្ជាប់ដែលបានកំណត់"
 
         text = f"""👑 <b>ព័ត៌មានលម្អិតសមាជិកភាព VIP</b>
 ━━━━━━━━━━━━━━━━━━━━
@@ -776,17 +748,18 @@ Reason: <i>{reason}</i>
 🎫 <b>Channel:</b> <code>{sub.get('channel_id')}</code>
 
 🔗 <b>តំណភ្ជាប់ចូល VIP Channel (1-Time Expiring Link):</b>
-{invite_link}
+{invite_display}
 ━━━━━━━━━━━━━━━━━━━━
-🤖 <i>TAIKRY AI 24/7 AUTO SENTINEL</i>"""
+🤖 <i>TAIKRY AI Signal Monitor</i>"""
 
-        keyboard = {
-            "inline_keyboard": [
-                [{"text": "🚀 ចូលទៅកាន់ VIP Channel ឥឡូវនេះ", "url": invite_link}],
-                [{"text": "🔄 បន្តសុពលភាព (Renew Plan)", "callback_data": f"sub:renew:{tier_code}"}],
-                [{"text": "⬅️ ត្រឡប់ទៅមឺនុយដើម", "callback_data": "sub:plans"}]
-            ]
-        }
+        keyboard_rows = []
+        if invite_link:
+            keyboard_rows.append([{"text": "🚀 ចូលទៅកាន់ VIP Channel ឥឡូវនេះ", "url": invite_link}])
+        keyboard_rows.extend([
+            [{"text": "🔄 បន្តសុពលភាព (Renew Plan)", "callback_data": f"sub:renew:{tier_code}"}],
+            [{"text": "⬅️ ត្រឡប់ទៅមឺនុយដើម", "callback_data": "sub:plans"}]
+        ])
+        keyboard = {"inline_keyboard": keyboard_rows}
         return text, keyboard
 
     # -------------------------------------------------------------
@@ -811,8 +784,8 @@ Reason: <i>{reason}</i>
 
 🇰🇭 <b>អត្ថប្រយោជន៍ដែលអ្នកទទួលបាន:</b>
 ✓ សញ្ញាជួញដូរ XAUUSD ពី AI Consensus ស្ថាប័ន
-✓ កម្រិត Entry, SL, TP1, TP2, TP3 ជាមួយ R:R >= 1:2.0
-✓ ការជូនដំណឹងគ្រប់ដំណាក់កាលនៃ Price Action ផ្ទាល់ 24/7
+✓ កម្រិត Entry, SL, TP1, TP2, TP3 ជាមួយ R:R >= 1:{MIN_RISK_REWARD_RATIO:g}
+✓ ការជូនដំណឹងនៅពេលសេវាកំពុងដំណើរការ និងមានទិន្នន័យដែលបានផ្ទៀងផ្ទាត់
 ━━━━━━━━━━━━━━━━━━━━
 🤖 <i>TAIKRY AI MARKET INTELLIGENCE PRO</i>"""
 

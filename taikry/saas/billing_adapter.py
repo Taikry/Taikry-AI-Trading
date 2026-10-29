@@ -8,17 +8,12 @@ Supports:
 """
 
 import os
-import hmac
-import hashlib
-import datetime
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Tuple
 from sqlalchemy.orm import Session
 
-from taikry.database.session import SessionLocal
-from taikry.database.models import User, UserSubscription, SubscriptionPlan, AuditLog
+from taikry.database.models import SubscriptionPlan
 
 PAYMENT_GATEWAY_PROVIDER = os.getenv("PAYMENT_GATEWAY_PROVIDER", "unconfigured").lower()
-PAYMENT_WEBHOOK_SECRET = os.getenv("PAYMENT_WEBHOOK_SECRET", "")
 
 
 class BillingAdapter:
@@ -26,8 +21,8 @@ class BillingAdapter:
 
     @staticmethod
     def is_gateway_configured() -> bool:
-        """Returns True only if a supported payment provider is configured."""
-        return PAYMENT_GATEWAY_PROVIDER in ("stripe", "bakong_khqr", "crypto") and bool(PAYMENT_WEBHOOK_SECRET)
+        """No production provider adapter is implemented yet."""
+        return False
 
     @staticmethod
     def create_checkout_session(
@@ -45,7 +40,7 @@ class BillingAdapter:
             return False, "Selected plan not found.", {}
 
         if not BillingAdapter.is_gateway_configured():
-            return False, "Automated online payment gateway is currently under institutional onboarding. Please contact support to upgrade.", {
+            return False, "Automated online checkout is not available yet. Please contact support to upgrade.", {
                 "configured": False,
                 "plan_id": plan_id,
                 "plan_name": plan.name_en,
@@ -55,12 +50,7 @@ class BillingAdapter:
                 "support_contact": "support@zyrox.ai"
             }
 
-        # Extensible payment hook for Stripe / Bakong KHQR
-        return True, "Checkout session initialized.", {
-            "configured": True,
-            "checkout_url": f"https://checkout.zyrox.ai/pay?user={user_id}&plan={plan_id}",
-            "plan_id": plan_id
-        }
+        return False, "No payment provider adapter is available.", {"configured": False, "status": "COMING_SOON"}
 
     @staticmethod
     def process_webhook_event(
@@ -72,21 +62,9 @@ class BillingAdapter:
         Processes verified incoming webhook from payment gateway.
         Verifies HMAC signature, ensures idempotency, and updates entitlement.
         """
-        if not PAYMENT_WEBHOOK_SECRET:
-            return False, "Webhook secret not configured on backend."
-
-        # Verify HMAC-SHA256 signature
-        expected_sig = hmac.new(
-            PAYMENT_WEBHOOK_SECRET.encode(),
-            payload_bytes,
-            hashlib.sha256
-        ).hexdigest()
-
-        if not hmac.compare_digest(expected_sig, signature_header):
-            return False, "Invalid webhook signature."
-
-        # Process event idempotently...
-        return True, "Webhook processed successfully."
+        # A valid HMAC alone does not identify or authorize a payment event. There
+        # is no provider-specific parser/idempotency store/entitlement updater yet.
+        return False, "No payment provider webhook adapter is implemented; event was not processed."
 
 
 billing_adapter = BillingAdapter()

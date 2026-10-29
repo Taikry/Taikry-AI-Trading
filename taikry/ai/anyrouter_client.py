@@ -24,7 +24,21 @@ from taikry.config import (
     REASONING_MODEL,
     FAST_MODEL,
     CRITIC_MODEL,
-    FALLBACK_MODEL
+    FALLBACK_MODEL,
+    ORCAROUTER_API_KEY,
+    ORCAROUTER_BASE_URL,
+    ORCAROUTER_MODEL,
+    CLAUDE_API_KEY,
+    CLAUDE_BASE_URL,
+    CLAUDE_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    OPENAI_MODEL,
+    GROQ_API_KEY,
+    GEMINI_API_KEY,
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_BASE_URL,
+    DEEPSEEK_MODEL
 )
 
 logger = logging.getLogger("zyrox.ai.anyrouter")
@@ -523,6 +537,121 @@ class AnyRouterClient:
                 return r.fallback
             return None
 
+    def _fallback_dispatch(
+        self,
+        messages: List[Dict[str, str]],
+        target_model: str,
+        temperature: float = 0.2,
+        max_tokens: int = 1500,
+        response_format: Optional[Dict[str, Any]] = None,
+        timeout: float = 30.0
+    ) -> Optional[Dict[str, Any]]:
+        """Intelligent multi-gateway fallback when AnyRouter is unconfigured, rate-limited, or exhausted."""
+        # 1. Try OrcaRouter Gateway (deepseek/deepseek-v4-pro-0813)
+        if ORCAROUTER_API_KEY:
+            try:
+                t0 = time.time()
+                url = f"{ORCAROUTER_BASE_URL.rstrip('/')}/chat/completions"
+                headers = {"Authorization": f"Bearer {ORCAROUTER_API_KEY}", "Content-Type": "application/json"}
+                model_to_use = ORCAROUTER_MODEL or "deepseek/deepseek-v4-pro-0813"
+                payload = {"model": model_to_use, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+                if response_format:
+                    payload["response_format"] = response_format
+                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    content = choices[0].get("message", {}).get("content", "") if choices else ""
+                    return {
+                        "content": content,
+                        "raw_response": data,
+                        "model_used": f"orcarouter/{model_to_use}",
+                        "latency_ms": round((time.time() - t0) * 1000, 2),
+                        "usage": data.get("usage", {}),
+                        "attempt": 1
+                    }
+            except Exception as e:
+                logger.warning(f"[FALLBACK] OrcaRouter failed: {e}")
+
+        # 2. Try Claude (TryAI / Anthropic)
+        if CLAUDE_API_KEY:
+            try:
+                t0 = time.time()
+                url = f"{CLAUDE_BASE_URL.rstrip('/')}/chat/completions"
+                headers = {"Authorization": f"Bearer {CLAUDE_API_KEY}", "Content-Type": "application/json"}
+                model_to_use = CLAUDE_MODEL or "claude-3-7-sonnet"
+                payload = {"model": model_to_use, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+                if response_format:
+                    payload["response_format"] = response_format
+                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    content = choices[0].get("message", {}).get("content", "") if choices else ""
+                    return {
+                        "content": content,
+                        "raw_response": data,
+                        "model_used": f"claude/{model_to_use}",
+                        "latency_ms": round((time.time() - t0) * 1000, 2),
+                        "usage": data.get("usage", {}),
+                        "attempt": 1
+                    }
+            except Exception as e:
+                logger.warning(f"[FALLBACK] Claude Gateway failed: {e}")
+
+        # 3. Try OpenAI / PatewayAI
+        if OPENAI_API_KEY:
+            try:
+                t0 = time.time()
+                url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"
+                headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+                model_to_use = OPENAI_MODEL or "gpt-4o"
+                payload = {"model": model_to_use, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+                if response_format:
+                    payload["response_format"] = response_format
+                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    content = choices[0].get("message", {}).get("content", "") if choices else ""
+                    return {
+                        "content": content,
+                        "raw_response": data,
+                        "model_used": f"openai/{model_to_use}",
+                        "latency_ms": round((time.time() - t0) * 1000, 2),
+                        "usage": data.get("usage", {}),
+                        "attempt": 1
+                    }
+            except Exception as e:
+                logger.warning(f"[FALLBACK] OpenAI Gateway failed: {e}")
+
+        # 4. Try Groq (Ultra-Fast 100% Free)
+        if GROQ_API_KEY:
+            try:
+                t0 = time.time()
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+                payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+                if response_format:
+                    payload["response_format"] = response_format
+                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    content = choices[0].get("message", {}).get("content", "") if choices else ""
+                    return {
+                        "content": content,
+                        "raw_response": data,
+                        "model_used": "groq/llama-3.3-70b-versatile",
+                        "latency_ms": round((time.time() - t0) * 1000, 2),
+                        "usage": data.get("usage", {}),
+                        "attempt": 1
+                    }
+            except Exception as e:
+                logger.warning(f"[FALLBACK] Groq failed: {e}")
+
+        return None
+
     # -------------------------------------------------------------------------
     # 5. STEP H — INFERENCE DISPATCH WITH BUDGET & CONCURRENCY CONTROLS
     # -------------------------------------------------------------------------
@@ -543,19 +672,27 @@ class AnyRouterClient:
         - Concurrency throttling (semaphore)
         - Bounded retries with backoff
         - Redaction of sensitive payload headers
+        - Graceful multi-gateway fallback (OrcaRouter, Claude, OpenAI, Groq)
         """
-        if not self.is_configured():
-            raise RuntimeError("ANYROUTER_API_KEY is not configured.")
-
-        if budget_manager.is_budget_exceeded():
-            raise RuntimeError(f"AnyRouter spend limit exceeded (${budget_manager.spend_limit_usd} USD). Dispatch halted.")
-
-        # Determine target model
         target_model = model
         if not target_model and role:
             target_model = self.resolve_model_for_role(role)
         if not target_model:
             target_model = self._role_registry.orchestrator or "deepseek/deepseek-chat"
+
+        req_timeout = timeout or ANYROUTER_TIMEOUT_SECONDS
+
+        if not self.is_configured():
+            fb = self._fallback_dispatch(messages, target_model, temperature, max_tokens, response_format, req_timeout)
+            if fb:
+                return fb
+            raise RuntimeError("ANYROUTER_API_KEY is not configured and no fallback provider succeeded.")
+
+        if budget_manager.is_budget_exceeded():
+            fb = self._fallback_dispatch(messages, target_model, temperature, max_tokens, response_format, req_timeout)
+            if fb:
+                return fb
+            raise RuntimeError(f"AnyRouter spend limit exceeded (${budget_manager.spend_limit_usd} USD). Dispatch halted.")
 
         url = f"{ANYROUTER_BASE_URL}/chat/completions"
         headers = self._get_headers()
@@ -626,7 +763,12 @@ class AnyRouterClient:
                     raise ex
 
             budget_manager.record_failure()
-            raise RuntimeError(f"AnyRouter failed after {ANYROUTER_MAX_RETRIES} retries. Last error: {str(last_error)}")
+            logger.warning(f"AnyRouter failed ({last_error}). Triggering multi-provider failover...")
+            fb = self._fallback_dispatch(messages, target_model, temperature, max_tokens, response_format, req_timeout)
+            if fb:
+                logger.info(f"Fallback succeeded using {fb.get('model_used')}")
+                return fb
+            raise RuntimeError(f"AnyRouter failed after {ANYROUTER_MAX_RETRIES} retries and fallback failed. Last error: {str(last_error)}")
 
         finally:
             self._concurrency_semaphore.release()

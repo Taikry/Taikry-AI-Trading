@@ -29,10 +29,15 @@ from taikry.config import (
     ANYROUTER_API_KEY,
     GEMINI_API_KEY,
     DEEPSEEK_API_KEY,
+    DEEPSEEK_BASE_URL,
+    DEEPSEEK_MODEL,
     OPENROUTER_API_KEY,
     GROQ_API_KEY,
     MANUS_API_KEY,
     MANUS_API_URL,
+    ORCAROUTER_API_KEY,
+    ORCAROUTER_BASE_URL,
+    ORCAROUTER_MODEL,
     AI_PROVIDER
 )
 
@@ -40,18 +45,18 @@ logger = logging.getLogger("taikry.ai.llm_client")
 
 # Institutional Multi-Agent Prompt with Global News & Khmer Analysis Mandate
 LLM_SYSTEM_PROMPT = """You are the Institutional Lead Consensus Orchestrator for TAIKRY AI MARKET INTELLIGENCE PRO.
-You synthesize independent causal opinions from 4 specialized hedge-fund AI agents:
+You summarize the analysis supplied in the request:
 1. Technical Momentum Agent: Evaluates EMA 20/50/200 multi-timeframe alignment, RSI momentum/divergence, MACD expansion, ATR volatility.
 2. Institutional SMC / ICT Agent: Analyzes Buy-side/Sell-side liquidity (BSL/SSL) sweeps, Fair Value Gaps (FVG), Optimal Trade Entry (OTE 61.8%-78.6%), Dealing Range (Premium vs Discount), and Killzone timing.
-3. Macroeconomic & Global News Agent: Evaluates High-Impact global economic releases (FOMC rate decisions, PPI inflation, CPI inflation, NFP payrolls, GDP, Fed Chair Powell remarks), US Dollar Index (DXY) trajectory, and Treasury yield pressure.
-4. Risk & Capital Protection Guardian: Validates strict >= 1:2.0 Risk-to-Reward ratio, 0.5% max equity risk cap, pre-news lockout safety window (locking trades 30 minutes before high-impact FOMC/PPI/CPI events), and structural trade invalidation levels.
+3. Macroeconomic & Global News Agent: Uses only the economic events, news, and US Dollar Index (DXY) evidence explicitly supplied in the request. Treasury yield data is not assumed to be available.
+4. Risk & Capital Protection Guardian: Validates the configured minimum Risk-to-Reward ratio, configured per-trade risk cap, available news-calendar checks, and structural invalidation levels. Use risk values provided in context; never assume a default percentage or ratio.
 
 CRITICAL INSTRUCTIONS:
-1. You must perform the deep SMART CAUSE ANALYSIS (វិភាគមូលហេតុ) from all 4 AI agents FIRST.
-2. Incorporate real-time global economic news catalysts (FOMC, PPI, CPI, NFP, Fed statements) and evaluate how they influence market liquidity and direction.
-3. Provide rich synthesis and causes in BOTH English and Natural Khmer ("synthesis_summary_kh"). Explain clearly in Khmer why the market structure exists and how upcoming news impacts Gold and Forex.
-4. Only AFTER verifying all causes and confirming the pre-execution safety checklist may you provide Entry, SL, and TP levels.
-5. If any agent rejects the setup, if a high-impact news event is within the danger window, or if signals conflict, action must be "HOLD", status "REJECTED_LOCKED", and execution levels must remain "LOCKED".
+1. Use only evidence included in the request. You do not have live market, calendar, news, DXY, or yield access unless a value is explicitly supplied.
+2. Never invent agent calls, headlines, event schedules, prices, indicators, yields, or risk checks. Mark unavailable evidence as unavailable.
+3. Provide a concise synthesis in BOTH English and Natural Khmer ("synthesis_summary_kh"). Do not claim that an event or macro factor caused a move unless the supplied evidence supports it.
+4. The deterministic server-side risk validator is authoritative. Do not approve a trade from language-model reasoning alone.
+5. If the context does not contain a current approved setup with verified levels, or if required evidence is missing or conflicting, action must be "HOLD" and levels must remain "LOCKED".
 
 You must respond ONLY with a valid, parseable JSON object matching this exact schema:
 {
@@ -68,7 +73,7 @@ You must respond ONLY with a valid, parseable JSON object matching this exact sc
       "<macroeconomic, global news & DXY causes: FOMC/PPI/CPI analysis, dollar trend, interest rates>"
     ],
     "risk_causes": [
-      "<risk audit causes, R:R >= 1:2.0 check, pre-news blackout check, capital protection rules>"
+      "<risk audit causes, configured R:R check, news-calendar status, capital protection rules>"
     ],
     "checklist": {
       "multi_agent_consensus": true,
@@ -551,8 +556,18 @@ def call_deepseek(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str
         return None
 
     if DEEPSEEK_API_KEY:
-        url = "https://api.deepseek.com/chat/completions"
-        models = ["deepseek-reasoner", "deepseek-chat"]
+        base = (DEEPSEEK_BASE_URL or "https://api.deepseek.com").rstrip("/")
+        if base.endswith("/chat/completions"):
+            url = base
+        else:
+            url = f"{base}/chat/completions"
+
+        models = []
+        if DEEPSEEK_MODEL:
+            models.append(DEEPSEEK_MODEL)
+        for m in ["deepseek/deepseek-v4-pro-0813", "deepseek-reasoner", "deepseek-chat"]:
+            if m not in models:
+                models.append(m)
     else:
         url = "https://openrouter.ai/api/v1/chat/completions"
         models = [
@@ -601,6 +616,9 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
                         "status": "SUCCESS"
                     }
                     return parsed
+            elif resp.status_code == 402:
+                logger.warning(f"DeepSeek ({model}) insufficient quota / payment required (HTTP 402): {resp.text[:120]}")
+                continue
             elif resp.status_code in [401, 403]:
                 logger.warning(f"DeepSeek API key unauthorized ({resp.status_code}). Skipping DeepSeek models.")
                 break
@@ -697,6 +715,81 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
 
     return None
 
+
+
+def call_orcarouter(
+    symbol_info: Dict[str, Any],
+    timeframe: str,
+    metrics: Dict[str, Any],
+    model: Optional[str] = None,
+    timeout: int = 35
+) -> Optional[Dict[str, Any]]:
+    """Calls OrcaRouter OpenAI-compatible API gateway (https://api.orcarouter.ai/v1)."""
+    if not ORCAROUTER_API_KEY:
+        return None
+
+    url = f"{ORCAROUTER_BASE_URL.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {ORCAROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+
+    user_prompt = f"""Asset: {symbol_info.get('name', 'Asset')} ({symbol_info.get('symbol', 'UNKNOWN')})
+Category: {symbol_info.get('category', 'Trading')}
+Timeframe: {timeframe}
+Market Indicators, Macro News & Metrics:
+{json.dumps(metrics, indent=2)}
+
+Perform institutional multi-agent causal analysis first (English & Natural Khmer), incorporating global economic catalysts (FOMC, PPI, CPI, NFP), then output trade execution strictly in JSON.
+"""
+
+    models_to_try = []
+    if model:
+        models_to_try.append(model)
+    elif ORCAROUTER_MODEL:
+        models_to_try.append(ORCAROUTER_MODEL)
+    for m in ["deepseek/deepseek-v4-pro-0813", "orcarouter/auto", "orcarouter/free"]:
+        if m not in models_to_try:
+            models_to_try.append(m)
+
+    for m in models_to_try:
+        payload = {
+            "model": m,
+            "messages": [
+                {"role": "system", "content": LLM_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.2
+        }
+
+        try:
+            t0 = time.time()
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if resp.status_code == 200:
+                res_data = resp.json()
+                raw_text = res_data["choices"][0]["message"]["content"]
+                parsed = _extract_json_from_response(raw_text)
+                if parsed and ("smart_analysis" in parsed or "trade_execution" in parsed):
+                    latency = int((time.time() - t0) * 1000)
+                    parsed["_llm_meta"] = {
+                        "provider": "orcarouter",
+                        "model": m,
+                        "latency_ms": latency,
+                        "status": "SUCCESS"
+                    }
+                    return parsed
+            elif resp.status_code == 402:
+                logger.warning(f"OrcaRouter ({m}) out of credits / payment required (HTTP 402): {resp.text[:120]}")
+            elif resp.status_code == 403:
+                logger.warning(f"OrcaRouter ({m}) model access denied (HTTP 403): {resp.text[:120]}")
+            else:
+                logger.warning(f"OrcaRouter ({m}) returned HTTP {resp.status_code}: {resp.text[:120]}")
+        except Exception as e:
+            logger.warning(f"OrcaRouter ({m}) error: {e}")
+
+    return None
 
 
 def call_freellmapi(
@@ -822,13 +915,13 @@ class LLMOrchestrator:
     def __init__(self):
         self.routing_policy: Dict[str, Any] = {
             "prefer_local": True,
-            "priority_order": ["anyrouter", "groq", "gemini", "deepseek", "claude", "openai", "freellmapi", "manus"],
+            "priority_order": ["anyrouter", "orcarouter", "groq", "gemini", "deepseek", "claude", "openai", "freellmapi", "manus"],
             "circuit_breaker_max_fails": 3,
             "circuit_breaker_cooldown_sec": 60.0
         }
         self.circuit_breakers: Dict[str, Dict[str, Any]] = {
             p: {"fails": 0, "last_fail": 0.0}
-            for p in ["groq", "gemini", "deepseek", "openrouter", "claude", "openai", "manus", "freellmapi", "anyrouter"]
+            for p in ["groq", "gemini", "deepseek", "openrouter", "claude", "openai", "manus", "freellmapi", "anyrouter", "orcarouter"]
         }
 
     def get_routing_policy(self) -> Dict[str, Any]:
@@ -871,61 +964,85 @@ class LLMOrchestrator:
             cb["last_fail"] = time.time()
 
     def get_status(self) -> Dict[str, Any]:
-        """Returns the real-time configuration status of all Frontier LLM providers."""
+        """Reports key configuration and circuit state without claiming a live provider ping."""
+        def provider_status(provider: str, configured: bool) -> str:
+            if not configured:
+                return "NOT_CONFIGURED"
+            if not self.is_provider_available(provider):
+                return "CIRCUIT_BROKEN"
+            return "CONFIGURED_NOT_PROBED"
+
         return {
             "groq": {
-                "name": "Groq Cloud (100% Free - DeepSeek R1 & Llama 3.3)",
+                "name": "Groq Cloud",
                 "configured": bool(GROQ_API_KEY),
-                "status": "ONLINE" if (GROQ_API_KEY and self.is_provider_available("groq")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("groq") else "NO_API_KEY"),
-                "tier": "FREE",
+                "status": provider_status("groq", bool(GROQ_API_KEY)),
+                "reachability": "NOT_PROBED",
+                "tier": "Provider plan and usage limits apply",
                 "frontier_models": ["deepseek-r1-distill-llama-70b", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"]
             },
             "openrouter": {
                 "name": "OpenRouter (Free Tier Models)",
                 "configured": bool(OPENROUTER_API_KEY),
-                "status": "ONLINE" if (OPENROUTER_API_KEY and self.is_provider_available("openrouter")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("openrouter") else "NO_API_KEY"),
+                "status": provider_status("openrouter", bool(OPENROUTER_API_KEY)),
+                "reachability": "NOT_PROBED",
                 "tier": "FREE",
                 "frontier_models": ["deepseek/deepseek-r1:free", "meta-llama/llama-3.3-70b-instruct:free", "google/gemini-2.0-flash-exp:free"]
             },
             "gemini": {
                 "name": "Google Gemini 2.0 / 1.5 Flash (Free Tier)",
                 "configured": bool(GEMINI_API_KEY),
-                "status": "ONLINE" if (GEMINI_API_KEY and self.is_provider_available("gemini")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("gemini") else "NO_API_KEY"),
+                "status": provider_status("gemini", bool(GEMINI_API_KEY)),
+                "reachability": "NOT_PROBED",
                 "tier": "FREE",
                 "frontier_models": ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.5-flash", "gemini-2.5-pro"]
             },
             "deepseek": {
                 "name": "DeepSeek V3 / R1 Reasoner",
                 "configured": bool(DEEPSEEK_API_KEY or OPENROUTER_API_KEY),
-                "status": "ONLINE" if ((DEEPSEEK_API_KEY or OPENROUTER_API_KEY) and self.is_provider_available("deepseek")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("deepseek") else "NO_API_KEY"),
+                "status": provider_status("deepseek", bool(DEEPSEEK_API_KEY or OPENROUTER_API_KEY)),
+                "reachability": "NOT_PROBED",
                 "tier": "FREE_WITH_OPENROUTER",
                 "frontier_models": ["deepseek-r1", "deepseek-v3"]
             },
             "claude": {
                 "name": "Anthropic Claude 3.7 / 3.5 Sonnet",
                 "configured": bool(CLAUDE_API_KEY),
-                "status": "ONLINE" if (CLAUDE_API_KEY and self.is_provider_available("claude")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("claude") else "NO_API_KEY"),
+                "status": provider_status("claude", bool(CLAUDE_API_KEY)),
+                "reachability": "NOT_PROBED",
                 "tier": "PRO",
                 "frontier_models": ["claude-3-7-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku"]
             },
             "openai": {
                 "name": "OpenAI GPT-4o / o3-mini / o1",
                 "configured": bool(OPENAI_API_KEY),
-                "status": "ONLINE" if (OPENAI_API_KEY and self.is_provider_available("openai")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("openai") else "NO_API_KEY"),
+                "status": provider_status("openai", bool(OPENAI_API_KEY)),
+                "reachability": "NOT_PROBED",
                 "tier": "PRO",
                 "frontier_models": ["o3-mini", "o1", "gpt-4o", "gpt-4o-mini"]
             },
             "manus": {
                 "name": "Manus AI Agent Pro",
                 "configured": bool(MANUS_API_KEY),
-                "status": "ONLINE" if (MANUS_API_KEY and self.is_provider_available("manus")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("manus") else "NO_API_KEY"),
+                "status": provider_status("manus", bool(MANUS_API_KEY)),
+                "reachability": "NOT_PROBED",
                 "tier": "PRO",
                 "frontier_models": ["manus-agent-pro"]
             },
-                        "anyrouter": {
+            "orcarouter": {
+                "name": "OrcaRouter Gateway",
+                "configured": bool(ORCAROUTER_API_KEY),
+                "status": provider_status("orcarouter", bool(ORCAROUTER_API_KEY)),
+                "reachability": "NOT_PROBED",
+                "tier": "GATEWAY",
+                "frontier_models": ["orcarouter/auto", "orcarouter/free", "orcarouter/fusion", "deepseek/deepseek-v4-pro-0813"],
+                "docs_url": "https://orcarouter.ai"
+            },
+            "anyrouter": {
                 "name": "AnyRouter Multi-Agent Gateway",
                 "configured": bool(ANYROUTER_API_KEY),
-                "status": "ONLINE" if (ANYROUTER_API_KEY and self.is_provider_available("anyrouter")) else ("CIRCUIT_BROKEN" if not self.is_provider_available("anyrouter") else "NO_API_KEY"),
+                "status": provider_status("anyrouter", bool(ANYROUTER_API_KEY)),
+                "reachability": "NOT_PROBED",
                 "tier": "GATEWAY",
                 "frontier_models": ["anyrouter/free", "anyrouter/auto", "anyrouter/decision", "deepseek/deepseek-flash-latest"],
                 "docs_url": "https://docs.anyrouter.dev"
@@ -933,7 +1050,8 @@ class LLMOrchestrator:
             "freellmapi": {
                 "name": "FreeLLMAPI Unified Free Aggregator",
                 "configured": bool(FREELLMAPI_ENABLED and FREELLMAPI_BASE_URL),
-                "status": "ONLINE" if self.is_provider_available("freellmapi") else "CIRCUIT_BROKEN",
+                "status": "DISABLED" if not FREELLMAPI_ENABLED else provider_status("freellmapi", bool(FREELLMAPI_BASE_URL)),
+                "reachability": "NOT_PROBED",
                 "tier": "100% FREE",
                 "frontier_models": ["deepseek-r1", "llama-3.3-70b-versatile", "gemini-2.0-flash", "qwen-2.5-72b"],
                 "github_url": "https://github.com/tashfeenahmed/freellmapi"
@@ -968,7 +1086,8 @@ class LLMOrchestrator:
             "openai": call_openai,
             "manus": call_manus,
             "freellmapi": call_freellmapi,
-            "anyrouter": call_anyrouter
+            "anyrouter": call_anyrouter,
+            "orcarouter": call_orcarouter
         }
 
         provenance_log: List[Dict[str, Any]] = []
@@ -1082,15 +1201,15 @@ Analyze the chart with institutional Smart Money Concepts (SMC) & ICT methodolog
    - Action: BUY, SELL, or HOLD
    - Entry Price (exact level or tight range)
    - Stop Loss (SL) (placed safely beyond structural swing high/low or invalidation)
-   - Take Profit 1 (TP1) (conservative 1:2.0 target at nearest liquidity/FVG)
+   - Take Profit 1 (TP1) based on a measured target that meets the configured risk/reward floor
    - Take Profit 2 (TP2) (runner target at major structural swing)
-   - Risk-to-Reward Ratio (RRR >= 1:2.0 minimum)
+   - Risk-to-Reward Ratio (must meet the configured minimum provided in context)
    - Confidence (0-100%)
 5. Provide deep natural Khmer analysis (វិភាគមើលជាភាសាខ្មែរ) explaining:
    - ការវិភាគរចនាសម្ព័ន្ធទីផ្សារ (Market Structure)
    - តំបន់ FVG និង Order Block
    - ចំណុចចូល (Entry), កាត់ខាត (SL), យកចំណេញ (TP1, TP2)
-   - ការគ្រប់គ្រងហានិភ័យ (0.5% Hard Risk Cap)
+   - ការគ្រប់គ្រងហានិភ័យតាមកម្រិតដែលបានកំណត់ក្នុងបរិបទ
 
 You must respond ONLY with a valid parseable JSON object matching this schema:
 {
@@ -1158,7 +1277,7 @@ Trader Query / Note: {prompt or 'Analyze this chart thoroughly with institutiona
 Perform institutional visual chart analysis:
 1. Identify market trend, swing highs/lows, BOS, and CHoCH.
 2. Locate Fair Value Gaps (FVG) and Order Blocks (OB).
-3. Formulate high-probability Trade Execution: BUY, SELL, or HOLD with Entry, SL, TP1, TP2, R:R >= 1:2.0, and Confidence (0-100%).
+3. Formulate a trade decision only from provided evidence and configured risk rules; otherwise return HOLD with no price levels.
 4. Provide deep Natural Khmer analysis (វិភាគមើលជាភាសាខ្មែរ) explaining the structure and reason for entry.
 Respond ONLY with valid JSON matching the schema.
 """
@@ -1265,7 +1384,7 @@ def chat_with_real_ai(
     - Real multimodal vision if image/photo is sent from phone or PC.
     - Real Frontier LLMs (Groq 120B, Gemini 3 Flash, OpenRouter Llama 3.3 70B, Claude, OpenAI).
     - Real-time verified market prices & technical SMC levels.
-    - Detailed institutional trade execution (Action, Entry, SL, TP1, TP2, RRR >= 1:2.0).
+    - Trade decision and any measured levels must conform to configured risk rules and verified data.
     - វិភាគមើលជាភាសាខ្មែរ (Market Structure, FVG, Order Blocks, Liquidity, Trend).
     """
     sym = (symbol or "XAUUSD").upper().replace("/", "").replace("-", "")
@@ -1273,18 +1392,16 @@ def chat_with_real_ai(
     prov = (provider or "auto").lower()
 
     # Get live verified market data for context
-    price_val = 0.0
-    price_src = "live"
+    price_val = None
+    price_src = "N/A"
     try:
         from taikry.data.providers import market_data_engine, REFERENCE_BASE_PRICES
         p, src, _ = market_data_engine.get_verified_price(sym)
         if p and p > 0:
             price_val = round(p, 2)
             price_src = src
-        else:
-            price_val = REFERENCE_BASE_PRICES.get(sym, 4040.30)
     except Exception:
-        price_val = 4040.30
+        pass
 
     market_ctx = {
         "price": price_val,
@@ -1317,34 +1434,67 @@ def chat_with_real_ai(
                 "symbol": sym,
                 "timeframe": tf,
                 "smart_analysis": vision_res.get("smart_analysis", {}),
-                "trade_execution": vision_res.get("trade_execution", {})
+                "trade_execution": {
+                    "setup_status": "NO_APPROVED_SETUP",
+                    "action": "HOLD",
+                    "entry_price": None,
+                    "stop_loss": None,
+                    "take_profit_1": None,
+                    "take_profit_2": None,
+                    "risk_reward_ratio": "N/A",
+                    "confidence": None
+                }
             }
 
     # CASE B: Real LLM Text Analysis (Groq 120B / Gemini / OpenRouter)
     # Fast market context retrieval (instantaneous cache lookup)
-    live_bias = "BULLISH"
-    live_dir = "BUY"
-    is_gold = "XAU" in sym
-    live_sl = round(price_val - 10.0, 2) if is_gold else round(price_val * 0.995, 4)
-    live_tp1 = round(price_val + 22.0, 2) if is_gold else round(price_val * 1.010, 4)
-    live_tp2 = round(price_val + 36.0, 2) if is_gold else round(price_val * 1.018, 4)
-    live_rr = "1:2.2"
-    live_conf = 88
+    live_bias = "NEUTRAL"
+    live_dir = "HOLD"
+    live_entry = live_sl = live_tp1 = live_tp2 = None
+    live_rr = "N/A"
+    live_conf = None
+    approved_setup = None
 
     try:
         from taikry.agents.consensus_engine import _ANALYSIS_CACHE
         for k, v in list(_ANALYSIS_CACHE.items()):
             if k.startswith(f"{sym}:") and isinstance(v, (tuple, list)) and len(v) > 1:
                 cached = v[1]
-                if cached:
-                    live_bias = cached.get("market_bias", live_bias)
-                    live_dir = cached.get("proposed_direction", live_dir)
-                    live_sl = cached.get("stop_loss", live_sl)
-                    live_tp1 = cached.get("take_profit_1", live_tp1)
-                    live_tp2 = cached.get("take_profit_2", live_tp2)
-                    live_rr = cached.get("risk_reward_ratio", live_rr)
-                    live_conf = cached.get("confidence_score") or cached.get("ai_score") or 88
-                    break
+                if not isinstance(cached, dict) or cached.get("setup_status") != "APPROVE":
+                    continue
+                if not cached.get("timestamp_utc"):
+                    continue
+                direction = str(cached.get("proposed_direction") or "").upper()
+                score = cached.get("confidence_score", cached.get("ai_score"))
+                try:
+                    entry = float(cached.get("entry_price"))
+                    stop = float(cached.get("stop_loss"))
+                    target_1 = float(cached.get("take_profit_1"))
+                    score = float(score)
+                except (TypeError, ValueError):
+                    continue
+                from taikry.data.validator import check_data_freshness
+                freshness = check_data_freshness(sym, cached.get("timestamp_utc"), "M15")
+                source = str(cached.get("price_source", "")).upper()
+                direction_valid = (
+                    direction in ("LONG", "BUY") and stop < entry < target_1
+                ) or (
+                    direction in ("SHORT", "SELL") and stop > entry > target_1
+                )
+                if not direction_valid or not freshness.get("fresh") or "DEMO_SYNTHETIC" in source or not 80 <= score <= 95:
+                    continue
+                live_bias = cached.get("market_bias", "NEUTRAL")
+                live_dir = "BUY" if direction in ("LONG", "BUY") else "SELL"
+                live_entry, live_sl, live_tp1 = entry, stop, target_1
+                try:
+                    candidate_tp2 = float(cached.get("take_profit_2"))
+                    live_tp2 = candidate_tp2 if (candidate_tp2 > target_1 if live_dir == "BUY" else candidate_tp2 < target_1) else None
+                except (TypeError, ValueError):
+                    live_tp2 = None
+                live_rr = cached.get("risk_reward_ratio") or "N/A"
+                live_conf = score
+                approved_setup = cached
+                break
     except Exception:
         pass
 
@@ -1354,20 +1504,12 @@ Execution Timeframe: {tf}
 Live Market Context:
 - Current Verified Price: {price_val} ({price_src})
 - Multi-Agent Direction Bias: {live_dir} ({live_bias})
-- Proposed Invalidation/SL: {live_sl}
-- Target TP1: {live_tp1} | TP2: {live_tp2} (Target R:R: {live_rr})
+- Approved consensus setup: {"Entry=" + str(live_entry) + ", SL=" + str(live_sl) + ", TP1=" + str(live_tp1) + ", TP2=" + str(live_tp2) + ", R:R=" + str(live_rr) if approved_setup else "None; no approved fresh setup is available"}
 
 Perform full institutional trade analysis and answer the trader's query:
 1. Provide deep smart causal analysis in English (synthesis_summary_en) explaining technical indicators, SMC order block / FVG mitigation, and global news impact.
-2. Provide deep, authentic Natural Khmer analysis (synthesis_summary_kh / វិភាគមើលជាភាសាខ្មែរ) explaining why this market structure exists, how to trade it safely, and capital protection rules (0.5% Hard Risk Cap).
-3. Output exact trade_execution setup:
-   - action: "BUY", "SELL", or "HOLD"
-   - entry_price: number (near {price_val})
-   - stop_loss: number
-   - take_profit_1: number
-   - take_profit_2: number
-   - risk_reward_ratio: string (>= 1:2.0)
-   - confidence: integer (0-100)
+2. Provide clear Natural Khmer analysis (synthesis_summary_kh / វិភាគមើលជាភាសាខ្មែរ) explaining the evidence, uncertainty, and configured capital-protection rules. Do not invent a risk percentage.
+3. If an approved consensus setup is shown above, copy its exact action and price levels into trade_execution without changing them. If no approved setup is shown, action must be "HOLD" and all price levels must be null, risk_reward_ratio "N/A", and confidence null. Never invent entry, stop, target, direction, or confidence values.
 Respond strictly in JSON matching the schema.
 """
 
@@ -1485,22 +1627,28 @@ Respond strictly in JSON matching the schema.
     # If LLM succeeded:
     if llm_res:
         smart_analysis = llm_res.get("smart_analysis", {})
-        trade_execution = llm_res.get("trade_execution", {})
-        # Ensure values exist and are numeric
-        if not trade_execution.get("entry_price") or trade_execution.get("entry_price") == "LOCKED":
-            trade_execution["entry_price"] = price_val
-        if not trade_execution.get("stop_loss") or trade_execution.get("stop_loss") == "LOCKED":
-            trade_execution["stop_loss"] = live_sl
-        if not trade_execution.get("take_profit_1") or trade_execution.get("take_profit_1") == "LOCKED":
-            trade_execution["take_profit_1"] = live_tp1
-        if not trade_execution.get("take_profit_2") or trade_execution.get("take_profit_2") == "LOCKED":
-            trade_execution["take_profit_2"] = live_tp2
-        if not trade_execution.get("action"):
-            trade_execution["action"] = live_dir
-        if not trade_execution.get("risk_reward_ratio") or trade_execution.get("risk_reward_ratio") == "LOCKED":
-            trade_execution["risk_reward_ratio"] = live_rr
-        if not trade_execution.get("confidence"):
-            trade_execution["confidence"] = live_conf
+        if approved_setup:
+            trade_execution = {
+                "setup_status": "APPROVE",
+                "action": live_dir,
+                "entry_price": live_entry,
+                "stop_loss": live_sl,
+                "take_profit_1": live_tp1,
+                "take_profit_2": live_tp2,
+                "risk_reward_ratio": live_rr,
+                "confidence": live_conf
+            }
+        else:
+            trade_execution = {
+                "setup_status": "NO_APPROVED_SETUP",
+                "action": "HOLD",
+                "entry_price": None,
+                "stop_loss": None,
+                "take_profit_1": None,
+                "take_profit_2": None,
+                "risk_reward_ratio": "N/A",
+                "confidence": None
+            }
 
         return {
             "status": "SUCCESS",
@@ -1514,7 +1662,13 @@ Respond strictly in JSON matching the schema.
             "trade_execution": trade_execution
         }
 
-    # Safe High-Confluence Fallback (Consensus Engine)
+    # Safe response when no configured language model returns a result.
+    if approved_setup:
+        fallback_en = f"A fresh approved {live_dir} setup is available for {sym} at the validated levels shown in trade_execution. Review the source and risk before acting."
+        fallback_kh = f"មានសញ្ញា {live_dir} ដែលបានអនុម័តថ្មីសម្រាប់ {sym}។ សូមពិនិត្យតម្លៃ និងហានិភ័យក្នុង trade_execution មុនធ្វើសកម្មភាព។"
+    else:
+        fallback_en = f"No fresh approved trade setup is available for {sym}. Wait for a new scan with valid market data."
+        fallback_kh = f"មិនមានសញ្ញាជួញដូរដែលបានអនុម័តថ្មីសម្រាប់ {sym} ទេ។ សូមរង់ចាំការស្កេនថ្មីដែលមានទិន្នន័យត្រឹមត្រូវ។"
     return {
         "status": "SUCCESS",
         "has_photo": bool(image_base64),
@@ -1524,12 +1678,13 @@ Respond strictly in JSON matching the schema.
         "symbol": sym,
         "timeframe": tf,
         "smart_analysis": {
-            "synthesis_summary_en": f"Institutional analysis confirms {live_dir} bias on {sym} ({tf}) at ${price_val}. Price structure aligns with key SMC order block mitigation and liquidity pool sweeps.",
-            "synthesis_summary_kh": f"ការវិភាគស្ថាប័នបញ្ជាក់ថា {sym} ({tf}) ស្ថិតក្នុងនិន្នាការ {live_dir} លើតម្លៃ ${price_val}។ តម្លៃបានធ្វើតេស្តតំបន់ Order Block និងទាញយកសន្ទនីយភាព (Liquidity Sweep) ដោយអនុវត្តច្បាប់កាត់បន្ថយហានិភ័យ 0.5% Hard Cap។"
+            "synthesis_summary_en": fallback_en,
+            "synthesis_summary_kh": fallback_kh
         },
         "trade_execution": {
             "action": live_dir,
-            "entry_price": price_val,
+            "setup_status": "APPROVE" if approved_setup else "NO_APPROVED_SETUP",
+            "entry_price": live_entry,
             "stop_loss": live_sl,
             "take_profit_1": live_tp1,
             "take_profit_2": live_tp2,

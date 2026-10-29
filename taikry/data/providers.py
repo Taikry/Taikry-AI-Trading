@@ -1,8 +1,8 @@
 """
 Market Data Provider Adapters for TAIKRY AI MARKET INTELLIGENCE PRO
 Modular, replaceable provider adapters for XAUUSD, Forex, and Crypto.
-Includes intelligent FeedCircuitBreaker and high-fidelity institutional synthetic fallback.
-Guarantees sub-millisecond execution even when external financial APIs are blocked or unreachable.
+Includes a feed circuit breaker and an explicitly labeled demo-candle generator.
+Live market data is reported unavailable when no verified provider responds.
 """
 import time
 import datetime
@@ -45,31 +45,9 @@ BINANCE_INTERVAL_MAP = {
     "MN": "1M"
 }
 
-# Institutional reference base prices across universe
-# XAUUSD is dynamically initialized according to the configured reference mode (SPOT: ~$4,043.90, FUTURES: ~$4,060.80)
-REFERENCE_BASE_PRICES = {
-    "XAUUSD": 4043.90 if XAUUSD_PRICE_REFERENCE == "SPOT" else 4060.80,
-    "XAGUSD": 54.30,
-    "EURUSD": 1.1150,
-    "GBPUSD": 1.3320,
-    "USDJPY": 157.70,
-    "AUDUSD": 0.6720,
-    "USDCAD": 1.3580,
-    "USDCHF": 0.8520,
-    "NZDUSD": 0.6120,
-    "EURJPY": 175.80,
-    "GBPJPY": 210.15,
-    "BTCUSDT": 80300.0,
-    "ETHUSDT": 2335.0,
-    "SOLUSDT": 100.50,
-    "BNBUSDT": 595.0,
-    "XRPUSDT": 0.535,
-    "DOGEUSDT": 0.145,
-    "ADAUSDT": 0.355,
-    "AVAXUSDT": 26.50,
-    "LINKUSDT": 11.80,
-    "SUIUSDT": 1.95,
-}
+# Stores only prices received from a provider during this process. It is not seeded
+# with reference values, so it cannot be mistaken for a live quote.
+REFERENCE_BASE_PRICES: Dict[str, float] = {}
 
 class FeedCircuitBreaker:
     """
@@ -118,16 +96,15 @@ circuit_breaker = FeedCircuitBreaker()
 
 def generate_synthetic_candles(symbol: str, timeframe: str = "M15", limit: int = 150) -> pd.DataFrame:
     """
-    High-fidelity institutional synthetic candle generator.
-    Produces realistic OHLCV candles with genuine ATR volatility, swing highs/lows,
-    and volume when external market APIs are blocked by ISP or experiencing outages.
-    Executes in under 1ms.
+    Generates clearly labeled demo candles from a previously observed provider price.
+    This function is not used as an automatic market-data fallback.
     """
     cfg = get_symbol_config(symbol)
     sym = symbol.upper()
     base = REFERENCE_BASE_PRICES.get(sym)
     if base is None or base <= 0:
-        base = 4043.90 if ("XAU" in sym and XAUUSD_PRICE_REFERENCE == "SPOT") else (4060.80 if "XAU" in sym else 100.0)
+        logger.warning("Cannot generate demo candles for %s without a previously observed provider price.", sym)
+        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume", "source"])
     decimals = cfg.get("decimals", 2 if base > 10 else 4)
 
     is_gold = "XAU" in sym or "XAG" in sym
@@ -358,13 +335,13 @@ class YahooFinanceDataProvider(BaseDataProvider):
         }).dropna().reset_index()
         return resampled
 
-    def get_latest_price(self, symbol: str) -> Tuple[float, str]:
+    def get_latest_price(self, symbol: str) -> Tuple[float, str, Optional[datetime.datetime]]:
         if not circuit_breaker.can_try_yahoo():
-            return 0.0, "none"
+            return 0.0, "none", None
         cfg = get_symbol_config(symbol)
         primary_ticker = cfg.get("ticker_yahoo")
         if not primary_ticker:
-            return 0.0, "none"
+            return 0.0, "none", None
 
         candidate_tickers = [primary_ticker]
         if symbol.upper() == "XAUUSD":
@@ -383,26 +360,34 @@ class YahooFinanceDataProvider(BaseDataProvider):
                     if chart:
                         result = chart[0]
                         meta = result.get("meta", {})
+                        quote_ts = None
+                        market_time = meta.get("regularMarketTime")
+                        if market_time:
+                            quote_ts = datetime.datetime.fromtimestamp(float(market_time), tz=datetime.timezone.utc)
                         p = meta.get("regularMarketPrice")
-                        if p is not None and float(p) > 0:
+                        if p is not None and float(p) > 0 and quote_ts is not None:
                             circuit_breaker.record_success("yahoo")
                             p_float = float(p)
                             REFERENCE_BASE_PRICES[symbol.upper()] = p_float
                             logger.info(f"[PRICE_ALIGNMENT] Yahoo price for {symbol} ({ticker}): ${p_float:.2f}")
-                            return p_float, f"yahoo_finance:{ticker}"
+                            return p_float, f"yahoo_finance:{ticker}", quote_ts
                         quote = result.get("indicators", {}).get("quote", [{}])[0]
-                        closes = [c for c in quote.get("close", []) if c is not None]
-                        if closes:
+                        closes = quote.get("close", [])
+                        timestamps = result.get("timestamp", [])
+                        valid_indices = [i for i, close in enumerate(closes) if close is not None and i < len(timestamps)]
+                        if valid_indices:
                             circuit_breaker.record_success("yahoo")
-                            p_float = float(closes[-1])
+                            idx = valid_indices[-1]
+                            p_float = float(closes[idx])
+                            quote_ts = datetime.datetime.fromtimestamp(float(timestamps[idx]), tz=datetime.timezone.utc)
                             REFERENCE_BASE_PRICES[symbol.upper()] = p_float
                             logger.info(f"[PRICE_ALIGNMENT] Yahoo close for {symbol} ({ticker}): ${p_float:.2f}")
-                            return p_float, f"yahoo_finance:{ticker}"
+                            return p_float, f"yahoo_finance:{ticker}", quote_ts
             except Exception as e:
                 logger.debug(f"[PRICE_ALIGNMENT] Ticker {ticker} price query error: {e}")
 
         circuit_breaker.record_failure("yahoo")
-        return 0.0, "none"
+        return 0.0, "none", None
 
 
 from taikry.data.mt5_receiver import mt5_receiver
@@ -410,14 +395,14 @@ from taikry.data.mt5_receiver import mt5_receiver
 class MultiProviderMarketData:
     """
     Unified institutional market data engine with automatic failover,
-    caching, fast timeouts, and resilient synthetic fallback.
+    and caching. Missing provider data remains unavailable instead of being synthesized.
     Prioritizes real-time Windows Exness MT5 bridge data when connected and fresh.
     """
     def __init__(self):
         self.yahoo = YahooFinanceDataProvider()
         self.binance = BinanceDataProvider()
         self._candle_cache: Dict[str, Any] = {}
-        self._price_cache: Dict[str, Tuple[float, float, str, datetime.datetime]] = {}
+        self._price_cache: Dict[str, Tuple[float, float, str, Optional[datetime.datetime]]] = {}
 
     def get_candles(self, symbol: str, timeframe: str = "M15", limit: int = 200) -> pd.DataFrame:
         now = time.time()
@@ -448,14 +433,15 @@ class MultiProviderMarketData:
             if df.empty and cfg.get("binance_symbol") and circuit_breaker.can_try_binance():
                 df = self.binance.fetch_ohlcv(symbol, timeframe, limit=limit)
 
-        # Seamless fallback if network feeds are blocked/offline or returned insufficient data
+        # Do not replace missing live candles with synthetic data. Analysis callers
+        # can then distinguish an unavailable feed from a genuine market snapshot.
         min_required = min(limit, 5) if limit > 0 else 1
         if df.empty or len(df) < min_required:
             logger.warning(
                 f"[PRICE_ALIGNMENT] Live feed returned insufficient candles ({len(df)} < {min_required}) "
-                f"for {symbol}:{timeframe}. Using synthetic fallback."
+                f"for {symbol}:{timeframe}. Returning unavailable data."
             )
-            df = generate_synthetic_candles(symbol, timeframe=timeframe, limit=limit)
+            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume", "source"])
 
         self._candle_cache[cache_key] = (now, df)
         return df
@@ -474,10 +460,10 @@ class MultiProviderMarketData:
             results = list(executor.map(_fetch_tf, timeframes))
             return dict(results)
 
-    def get_verified_price(self, symbol: str) -> Tuple[float, str, datetime.datetime]:
+    def get_verified_price(self, symbol: str) -> Tuple[float, str, Optional[datetime.datetime]]:
         """
-        Returns verified current market price, authoritative source, and candle timestamp.
-        Guaranteed to respond in < 1ms on cache hits and sub-50ms on keep-alive sessions.
+        Returns the latest provider quote or candle price with its timestamp.
+        Returns price 0.0, source UNAVAILABLE, and no timestamp when no quote is verified.
         """
         now = time.time()
         sym = symbol.upper()
@@ -496,6 +482,17 @@ class MultiProviderMarketData:
             if (now - ts_cached) < 10.0 and p_val > 0:
                 return p_val, src_val, dt_val
 
+        # For crypto, fetch a current Binance ticker before using a candle close
+        # or Yahoo fallback so the quote corresponds to the supported spot feed.
+        if get_symbol_config(sym).get("category") == "Crypto" and circuit_breaker.can_try_binance():
+            binance_price, binance_source = self.binance.get_latest_price(sym)
+            if binance_price > 0:
+                quote_received_at = datetime.datetime.now(datetime.timezone.utc)
+                source = "BINANCE_SPOT" if binance_source == "binance" else binance_source.upper()
+                self._price_cache[sym] = (now, binance_price, source, quote_received_at)
+                REFERENCE_BASE_PRICES[sym] = binance_price
+                return binance_price, source, quote_received_at
+
         # 2. Check recent candle cache for this symbol (< 60s)
         for tf in ["M5", "M15", "H1"]:
             for k, (c_time, df) in self._candle_cache.items():
@@ -503,6 +500,8 @@ class MultiProviderMarketData:
                     latest = df.iloc[-1]
                     p = float(latest["close"])
                     raw_src = str(latest.get("source", "fallback"))
+                    if "DEMO_SYNTHETIC" in raw_src.upper():
+                        continue
                     src = f"FALLBACK_{raw_src.upper()}" if not raw_src.upper().startswith("FALLBACK") and raw_src.upper() != "DEMO_SYNTHETIC" else raw_src
                     ts = latest["timestamp"]
                     self._price_cache[sym] = (now, p, src, ts)
@@ -510,13 +509,12 @@ class MultiProviderMarketData:
                     return p, src, ts
 
         # 3. Direct fast price query (~40ms on keep-alive)
-        p, src = self.yahoo.get_latest_price(sym)
-        if p > 0:
-            dt_now = datetime.datetime.now(datetime.timezone.utc)
+        p, src, quote_ts = self.yahoo.get_latest_price(sym)
+        if p > 0 and quote_ts is not None:
             src_labeled = f"YAHOO_FALLBACK:{src}" if not src.startswith("YAHOO_FALLBACK") else src
-            self._price_cache[sym] = (now, p, src_labeled, dt_now)
+            self._price_cache[sym] = (now, p, src_labeled, quote_ts)
             REFERENCE_BASE_PRICES[sym] = p
-            return p, src_labeled, dt_now
+            return p, src_labeled, quote_ts
 
         # 4. Fallback to get_candles
         df = self.get_candles(sym, "M5", limit=10)
@@ -524,15 +522,14 @@ class MultiProviderMarketData:
             latest = df.iloc[-1]
             p = float(latest["close"])
             raw_src = str(latest.get("source", "market"))
-            src_labeled = f"FALLBACK_{raw_src.upper()}" if not raw_src.upper().startswith("FALLBACK") and raw_src.upper() != "DEMO_SYNTHETIC" else raw_src
-            ts = latest["timestamp"]
-            self._price_cache[sym] = (now, p, src_labeled, ts)
-            REFERENCE_BASE_PRICES[sym] = p
-            return p, src_labeled, ts
+            if "DEMO_SYNTHETIC" not in raw_src.upper():
+                src_labeled = f"FALLBACK_{raw_src.upper()}" if not raw_src.upper().startswith("FALLBACK") else raw_src
+                ts = latest["timestamp"]
+                self._price_cache[sym] = (now, p, src_labeled, ts)
+                REFERENCE_BASE_PRICES[sym] = p
+                return p, src_labeled, ts
 
-        ref_price = REFERENCE_BASE_PRICES.get(sym, 4043.90 if "XAU" in sym and XAUUSD_PRICE_REFERENCE == "SPOT" else (4060.80 if "XAU" in sym else 100.0))
-        dt_now = datetime.datetime.now(datetime.timezone.utc)
-        return ref_price, "DEMO_SYNTHETIC", dt_now
+        return 0.0, "UNAVAILABLE", None
 
 
 market_data_engine = MultiProviderMarketData()

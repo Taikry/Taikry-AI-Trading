@@ -119,24 +119,15 @@ class TechnicalAnalystAgent:
             invalidation = f"Rally above M15 resistance / EMA50 ({m15['ema_50']}) or SL {sl}"
             rationale = f"Confluence of bearish HTF alignment with downward momentum. Score: {bear_score}/100."
         else:
-            # Subtle bias resolution based on price vs EMA20
-            is_bull_tilt = curr_price >= m15.get("ema_20", curr_price)
-            bias = "BULLISH" if is_bull_tilt else "BEARISH"
-            confidence = 52
-            setup_eligible = True
+            # Do not manufacture direction from a small EMA tilt when the score
+            # matrix has not found enough evidence for a directional setup.
+            bias = "NEUTRAL"
+            confidence = 0
+            setup_eligible = False
             entry = curr_price
-            if is_bull_tilt:
-                sl = round(curr_price - (1.5 * atr), 4)
-                tp1 = round(curr_price + (3.0 * atr), 4)
-                tp2 = round(curr_price + (4.8 * atr), 4)
-                invalidation = f"Drop below M15 support or SL {sl}"
-                rationale = f"Intraday bullish mean-reversion setup above short-term EMA. Score: {bull_score}/100."
-            else:
-                sl = round(curr_price + (1.5 * atr), 4)
-                tp1 = round(curr_price - (3.0 * atr), 4)
-                tp2 = round(curr_price - (4.8 * atr), 4)
-                invalidation = f"Rally above M15 resistance or SL {sl}"
-                rationale = f"Intraday bearish pullback setup below short-term EMA. Score: {bear_score}/100."
+            sl = tp1 = tp2 = None
+            invalidation = "No directional setup passed the technical score threshold."
+            rationale = f"Technical evidence is mixed or insufficient for direction (bull {bull_score}/100, bear {bear_score}/100)."
 
         return {
             "agent_id": self.AGENT_ID,

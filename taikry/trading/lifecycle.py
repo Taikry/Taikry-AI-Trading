@@ -49,7 +49,7 @@ from taikry.database.models import (
 )
 from taikry.notifications.telegram_service import telegram_service
 from taikry.notifications.make_webhook_dispatcher import dispatch_to_make
-from taikry.config import TELEGRAM_CHAT_ID
+from taikry.config import TELEGRAM_CHAT_ID, RISK_PER_TRADE_PERCENT
 
 logger = logging.getLogger("taikry.trading.lifecycle")
 
@@ -95,8 +95,8 @@ class SignalLifecycleManager:
         stop_loss: float,
         take_profit_1: float,
         take_profit_2: Optional[float] = None,
-        risk_reward: str = "1:2.0",
-        ai_score: int = 85,
+        risk_reward: str = "N/A",
+        ai_score: Optional[int] = None,
         timeframe: str = "M15",
         initial_state: SignalState = SignalState.WAITING_CONFIRMATION,
         trigger_cause: str = "Multi-agent institutional consensus approval"
@@ -430,8 +430,8 @@ class SignalLifecycleManager:
                               SignalState.STOP_HIT,
                             f"Stop loss triggered at {price:.2f}",
                             price,
-                            reason_en=f"Stop loss triggered at {price:.2f}. Capital preserved under 0.5% risk limit.",
-                            reason_kh=f"ចំណុចទប់ស្កាត់ខាតត្រូវបានកាត់នៅ {price:.2f}។ មូលធនត្រូវបានការពារក្រោមដែនកំណត់ហានិភ័យ 0.5%។",
+                            reason_en=f"Stop loss triggered at {price:.2f}. Planned risk was capped at {RISK_PER_TRADE_PERCENT:g}% of equity.",
+                            reason_kh=f"តម្លៃបានប៉ះ Stop Loss នៅ {price:.2f}។ ហានិភ័យដែលបានកំណត់គឺមិនលើស {RISK_PER_TRADE_PERCENT:g}% នៃទុនគណនីទេ។",
                             event_type=LifecycleEventType.SL_HIT
                         )
                         if ev:
@@ -556,7 +556,7 @@ class SignalLifecycleManager:
             "trigger_cause": trigger_cause,
             "reason_en": reason_en,
             "reason_kh": reason_kh,
-            "chat_id": TELEGRAM_CHAT_ID or "-1004341134868",
+            **({"chat_id": TELEGRAM_CHAT_ID} if TELEGRAM_CHAT_ID else {}),
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
         try:

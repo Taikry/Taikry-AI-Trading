@@ -88,16 +88,17 @@
             <svg class="top-btn-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
           </label>
           <select id="llm-provider-select" name="llm-provider-select" aria-label="AI Engine Provider" class="top-llm-select" onchange="onLLMProviderChange(this.value)">
-            <option value="auto">Auto Fleet (Claude 3.7 ➔ o3-mini ➔ Gemini 2.5 ➔ DeepSeek R1)</option>
-            <option value="anyrouter">AnyRouter Multi-Agent Gateway (78 Models)</option>
-            <option value="freellmapi">FreeLLMAPI Fleet (GitHub Open-Source Free Aggregator)</option>
-            <option value="claude">Claude 3.7 Sonnet / 3.5 Sonnet</option>
-            <option value="openai">OpenAI o3-mini / o1 / GPT-4o</option>
-            <option value="gemini">Google Gemini 2.5 Pro / Flash</option>
-            <option value="deepseek">DeepSeek R1 Reasoner / V3</option>
-            <option value="manus">Manus AI Pro Agent</option>
-            <option value="ensemble">All Frontier Models Ensemble</option>
-            <option value="quant">Multi-Agent Quant Engine</option>
+            <option value="auto">Auto (configured providers)</option>
+            <option value="anyrouter">AnyRouter Gateway</option>
+            <option value="orcarouter">OrcaRouter Gateway</option>
+            <option value="freellmapi">FreeLLMAPI endpoint</option>
+            <option value="claude">Anthropic Claude</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="manus">Manus</option>
+            <option value="ensemble">Configured provider ensemble</option>
+            <option value="quant">Deterministic Python agents (no cloud LLM)</option>
           </select>
         </div>
 
@@ -106,9 +107,9 @@
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span id="t-top-ask-ai">Ask AI</span>
         </button>
-        <button class="top-action-btn btn-quick-trade" onclick="executePlanTradeBridge()" title="1-Click Simulated Execution">
+        <button class="top-action-btn btn-quick-trade" onclick="executePlanTradeBridge()" title="Record a simulated paper trade and send a manual ticket">
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          <span id="t-top-trade">1-Click Trade</span>
+          <span id="t-top-trade">Paper Trade</span>
         </button>
         <button class="top-action-btn btn-top-alert" onclick="armCurrentAlert()" title="Arm Price Alert">
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -140,7 +141,7 @@
         </button>
         <div class="status-badge status-badge-compact">
           <div class="status-dot"></div>
-          <span id="system-status-text">24/7 ACTIVE</span>
+          <span id="system-status-text">SYSTEM STATUS</span>
         </div>
       </div>
     </header>
@@ -151,7 +152,7 @@
     <div class="crypto-forex-ticker-ribbon" id="crypto-forex-ticker" title="Click any market instrument to load chart instantly">
       <div class="ticker-ribbon-tag">
         <span class="ticker-live-dot"></span>
-        <span class="ticker-tag-text">24/7 LIVE</span>
+        <span class="ticker-tag-text">LIVE FEED</span>
       </div>
       <div class="ticker-ribbon-viewport">
         <div class="ticker-ribbon-track" id="ticker-ribbon-track">
@@ -298,11 +299,11 @@
           <!-- Rendered dynamically by app.js with live prices, tick animations, and change % -->
         </div>
 
-        <!-- Bottom Desk 24/7 Scanning Card -->
+        <!-- Monitoring status card; scanning depends on the running host and configured data feeds. -->
         <div class="desk-signal-card">
           <div class="desk-signal-header">
             <div class="desk-dot-pulse"></div>
-            <span class="desk-title">AI DESK · 24/7 AUTO</span>
+            <span class="desk-title">AI DESK · MONITORING</span>
           </div>
           <div class="desk-desc">Scanning liquidity sweeps, order blocks & OTE sweet spots across all assets.</div>
           <div class="desk-dev-footer" onclick="openDeveloperModal()" title="Click to view Developer Profile & Contact">
@@ -338,12 +339,12 @@
           <!-- Pinned Macro Event Catalyst -->
           <div class="macro-catalyst-pill" id="macro-catalyst-badge" onclick="toggleMacroDrawer()" title="Click to view Forex Factory macro calendar">
             <span class="macro-fire-icon">⚡</span>
-            <span id="macro-catalyst-text">FOMC in 1d 3h · High Impact</span>
+            <span id="macro-catalyst-text">No verified calendar data</span>
           </div>
 
           <div class="chart-meta-tags">
-            <span class="meta-tag meta-tag-range" id="disp-structure-range">Target Range: OTE 0.705</span>
-            <span class="meta-tag meta-tag-live">● Live Chart</span>
+            <span class="meta-tag meta-tag-range" id="disp-structure-range">Structure: not measured</span>
+            <span class="meta-tag meta-tag-live">Chart data depends on provider</span>
             <button class="btn-toggle-deepdive" onclick="toggleDeepDiveTray()" title="Toggle SMC & Causes Deep Dive Panel">
               <span>🏛️ Analysis Tray</span> <span id="deepdive-arrow">▾</span>
             </button>
@@ -462,12 +463,12 @@
                       <option value="claude">🔮 Anthropic Claude 3.7 / 3.5 Sonnet</option>
                       <option value="openai">🎯 OpenAI o3-mini / GPT-4o</option>
                       <option value="manus">⚡ Manus AI Autonomous Agent</option>
-                      <option value="quant">🛡️ Quant Engine (Offline · 100% Free)</option>
+                      <option value="quant">🛡️ Deterministic agents (no cloud LLM)</option>
                     </select>
                   </div>
                   <div class="adv-item">
                     <span class="adv-label">Risk Floor:</span>
-                    <span class="adv-badge adv-badge-emerald">1:2.0 Mandatory Minimum R:R</span>
+                    <span class="adv-badge adv-badge-emerald">Configured Minimum R:R</span>
                   </div>
                 </div>
               </div>
@@ -539,8 +540,8 @@
                     <span class="agent-mini-icon">🛡️</span>
                     <span class="agent-mini-name">Risk Arbiter</span>
                   </div>
-                  <div class="agent-mini-val val-green" id="c-agent-4-status">ARMED (0.5% Cap)</div>
-                  <div class="agent-mini-sub" id="c-agent-4-sub">Strict R:R >= 1:2.0 Floor</div>
+                  <div class="agent-mini-val" id="c-agent-4-status">CHECKING</div>
+                  <div class="agent-mini-sub" id="c-agent-4-sub">Risk limits depend on server configuration</div>
                 </div>
               </div>
 
@@ -572,7 +573,7 @@
 
                 <!-- Plan Details & Rationale -->
                 <div class="plan-details-text">
-                  <p id="plan-detail-floor">Mandatory 1:2.0 risk-reward floor strictly enforced. Never stretched.</p>
+                  <p id="plan-detail-floor">The server-configured risk-reward floor is checked for each approved setup.</p>
                   <p id="plan-detail-inval"><b>Invalidation:</b> <span id="plan-inval-price">Awaiting setup criteria...</span></p>
                   <p id="plan-detail-why"><b>Why SELL / BUY:</b> <span id="plan-why-text">Awaiting multi-agent consensus run.</span></p>
                   <p id="plan-detail-why-kh" class="khmer-text"><b>🇰🇭 វិភាគមូលហេតុ:</b> <span id="plan-why-kh">កំពុងរង់ចាំការវិភាគកម្រិតស្ថាប័ន...</span></p>
@@ -617,33 +618,33 @@
             <div class="cockpit-subpane" id="pane-cockpit-bot">
               <div class="cockpit-ai-header">
                 <span class="ai-lightning-icon">🤖</span>
-                <span class="ai-tag-title">Autonomous 24/7 Paper Sentinel</span>
+                <span class="ai-tag-title">Paper Trade Sentinel</span>
               </div>
               <div class="bot-overview-grid">
                 <div class="bot-metric-card">
                   <div class="bot-metric-title">Trading Mode</div>
-                  <div class="bot-metric-val val-green">Paper Simulated (0.5% Hard Cap)</div>
+                  <div class="bot-metric-val val-green">Paper simulated · risk limit configured per ticket</div>
                 </div>
                 <div class="bot-metric-card">
                   <div class="bot-metric-title">Daily Signal Quota</div>
-                  <div class="bot-metric-val val-blue">UNLIMITED (Institutional Pro)</div>
+                  <div class="bot-metric-val val-blue" id="cockpit-bot-quota">Not checked</div>
                 </div>
                 <div class="bot-metric-card">
                   <div class="bot-metric-title">Active Positions</div>
-                  <div class="bot-metric-val" id="cockpit-bot-open">0 / 3 max</div>
+                  <div class="bot-metric-val" id="cockpit-bot-open">Unavailable</div>
                 </div>
               </div>
               <div class="bot-callout-box">
-                <p>💡 <b>Institutional AI Execution Rule:</b> No orders are filled during pre-news blackouts or if R:R is below 1:2.0.</p>
+                <p>💡 <b>Paper trading:</b> The ticket uses the saved risk and R:R limits. It does not place a broker order.</p>
                 <div class="bot-actions-row">
-                  <button class="btn btn-gold btn-sm" id="btn-cockpit-live-debate" onclick="runCockpitLiveDebate()">⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)</button>
+                  <button class="btn btn-gold btn-sm" id="btn-cockpit-live-debate" onclick="runCockpitLiveDebate()">📋 Review Agent Evidence (ពិនិត្យភស្តុតាង)</button>
                   <button class="btn btn-outline btn-sm" onclick="showPlansModal()">See Tier Specs & Quota</button>
                 </div>
               </div>
               <div class="cockpit-bot-debate-box" id="cockpit-bot-debate-container">
                 <div class="bot-debate-placeholder">
                   <span class="debate-pulse-icon">💬</span>
-                  <span>Click <b>"Run Live Agent Debate"</b> to hear all 4 institutional AI agents evaluate <b><span id="cockpit-debate-active-sym">XAUUSD</span></b> in real time (English & Khmer).</span>
+                  <span>Click <b>"Review Agent Evidence"</b> to review the latest technical, SMC, macro, and risk-agent findings for <b><span id="cockpit-debate-active-sym">XAUUSD</span></b> in English and Khmer.</span>
                 </div>
               </div>
 
@@ -835,17 +836,17 @@
                 <span class="agent-bias-badge badge-gold" id="smart-synthesis-badge">MULTI-AGENT CONSENSUS</span>
               </div>
 
-              <!-- Real AI LLM Fleet Status Bar -->
+              <!-- Cloud LLM provider configuration -->
               <div class="llm-fleet-bar" id="llm-fleet-bar">
-                <span class="llm-fleet-title">⚡ AI Fleet:</span>
-                <span class="llm-pill llm-pill-groq" id="llm-badge-groq" title="Groq Cloud (Free DeepSeek R1 & Llama 3.3)">⚡ Groq (Free R1)</span>
-                <span class="llm-pill llm-pill-gemini" id="llm-badge-gemini" title="Google Gemini Flash (Free Tier)">✨ Gemini (Free)</span>
-                <span class="llm-pill llm-pill-openrouter" id="llm-badge-openrouter" title="OpenRouter (Free :free models)">🌐 OpenRouter (Free)</span>
+                <span class="llm-fleet-title">⚡ Cloud providers:</span>
+                <span class="llm-pill llm-pill-groq" id="llm-badge-groq" title="Groq provider configuration">⚡ Groq</span>
+                <span class="llm-pill llm-pill-gemini" id="llm-badge-gemini" title="Google Gemini provider configuration">✨ Gemini</span>
+                <span class="llm-pill llm-pill-openrouter" id="llm-badge-openrouter" title="OpenRouter provider configuration">🌐 OpenRouter</span>
                 <span class="llm-pill llm-pill-deepseek" id="llm-badge-deepseek" title="DeepSeek R1 / V3">🔴 DeepSeek R1/V3</span>
                 <span class="llm-pill llm-pill-claude" id="llm-badge-claude" title="Anthropic Claude 3.7 / 3.5">🟣 Claude 3.7/3.5</span>
                 <span class="llm-pill llm-pill-openai" id="llm-badge-openai" title="OpenAI o3/o1/4o">🟢 OpenAI o3/o1/4o</span>
                 <span class="llm-pill llm-pill-manus" id="llm-badge-manus" title="Manus AI Agent Pro">🟠 Manus AI Pro</span>
-                <span class="llm-active-meta" id="llm-active-meta">🤖 Mode: Real Frontier LLM Orchestration</span>
+                <span class="llm-active-meta" id="llm-active-meta">🤖 LLM call not reported</span>
               </div>
 
               <!-- Synthesis Rationale Box -->
@@ -892,7 +893,7 @@
                     <span class="agent-bias-badge badge-neutral" id="cause4-bias">WAIT</span>
                   </div>
                   <ul class="cause-bullets" id="cause4-bullets">
-                    <li>Auditing R:R >= 1:2.0 rule and max 0.5% portfolio risk...</li>
+                    <li>Checking the configured risk and reward rules...</li>
                   </ul>
                 </div>
               </div>
@@ -904,7 +905,7 @@
                   <span class="chk-pill" id="chk-trend">⚪ HTF Trend Alignment</span>
                   <span class="chk-pill" id="chk-smc">⚪ SMC Liquidity / OTE</span>
                   <span class="chk-pill" id="chk-macro">⚪ Macro Dollar Bias</span>
-                  <span class="chk-pill" id="chk-rr">⚪ 1:2.0+ R:R Verified</span>
+                  <span class="chk-pill" id="chk-rr">⚪ Configured R:R Floor</span>
                 </div>
               </div>
             </div>
@@ -975,16 +976,16 @@
             <button class="ai-tab-btn" id="ai-tab-ledger" onclick="switchAiSidebarTab('ledger', this)">💼 Ledger</button>
             <button class="btn-collapse-ai" onclick="toggleAiSidebarCollapse()" title="Toggle Assistant Width">▶</button>
           </div>
-          <!-- Context Status Line & Real AI Model Selector -->
+          <!-- Provider selector; actual reachability is only known after a provider call. -->
           <div class="ai-context-indicator">
-            <span class="ai-ctx-label">REAL AI</span>
-            <select id="ai-chat-provider-select" class="ai-provider-select" title="Choose Active Real AI Frontier Model">
-              <option value="auto">⚡ Auto (Groq 120B / Gemini 3 Vision)</option>
-              <option value="gemini">♊ Google Gemini (Multimodal Vision)</option>
-              <option value="groq">🚀 Groq LPU (GPT-OSS 120B Ultra-Fast)</option>
-              <option value="openrouter">🌐 OpenRouter (Llama 3.3 70B)</option>
+            <span class="ai-ctx-label">CLOUD LLM</span>
+            <select id="ai-chat-provider-select" class="ai-provider-select" title="Choose a configured cloud LLM provider">
+              <option value="auto">⚡ Auto (configured providers)</option>
+              <option value="gemini">♊ Google Gemini</option>
+              <option value="groq">🚀 Groq Cloud</option>
+              <option value="openrouter">🌐 OpenRouter</option>
             </select>
-            <span class="ai-ctx-online"><span class="pulse-dot-green"></span> Live</span>
+            <span class="ai-ctx-status" id="ai-chat-provider-status">Checking configuration…</span>
           </div>
         </div>
 
@@ -1013,7 +1014,7 @@
             <button class="chat-chip" onclick="triggerPhotoUpload()">📷 ផ្ញើរូបក្រាហ្វិក (Upload Photo)</button>
             <button class="chat-chip" onclick="sendQuickPrompt('Best institutional setups now')">✨ Best setups</button>
             <button class="chat-chip" onclick="sendQuickPrompt('Macro news & FOMC impact')">🌐 Macro news</button>
-            <button class="chat-chip" onclick="sendQuickPrompt('Institutional risk check 0.5% cap')">🛡️ Risk audit</button>
+            <button class="chat-chip" onclick="sendQuickPrompt('Risk check against configured server limits')">🛡️ Risk audit</button>
           </div>
 
           <!-- Photo Attachment Preview Tray (Phone & PC) -->
@@ -1039,10 +1040,10 @@
           </div>
         </div>
 
-        <!-- ================= PANE 2: 1-CLICK FAST TRADE ================= -->
+        <!-- ================= PANE 2: PAPER TRADE TICKET ================= -->
         <div class="ai-sidebar-pane" id="ai-pane-trade">
           <div class="fast-trade-pane">
-            <div class="pane-sec-title">1-Click Execution Bridge</div>
+            <div class="pane-sec-title">Paper Trade & Manual Ticket</div>
             <div class="fast-trade-asset-card">
               <div class="fast-trade-sym" id="ft-sym-display">XAUUSD</div>
               <div class="fast-trade-price text-gold" id="ft-price-display">---</div>
@@ -1069,18 +1070,18 @@
               </div>
               <div class="ft-input-row">
                 <label for="ft-lots-input">Lots:</label>
-                <input type="text" id="ft-lots-input" class="ft-input" value="" readonly title="Calculated Lot Size" placeholder="Auto-calculated (0.5% risk)" aria-label="Calculated Lot Size">
+                <input type="text" id="ft-lots-input" class="ft-input" value="" readonly title="Calculated Lot Size" placeholder="Not calculated" aria-label="Calculated Lot Size">
               </div>
               <div class="ft-input-row">
                 <label>Risk Cap:</label>
-                <span class="ft-val-text text-green">0.5% Capital Protection</span>
+                <span class="ft-val-text text-green">Set paper-ticket risk in Preferences</span>
               </div>
             </div>
-            <button class="btn btn-gold btn-full mt-16" onclick="executePlanTradeBridge()">
-              Execute Order Ticket
+            <button class="btn btn-gold btn-full mt-16" id="btn-cockpit-execute" onclick="executePlanTradeBridge()">
+              <span id="t-cockpit-execute">Record Paper Trade & Send Manual Ticket</span>
             </button>
             <div class="fast-trade-meta">
-              <span>Risk Guard: 0.5% Floor · Auto Ledger Sync</span>
+              <span>Simulated only · No order is sent to MT5 or a broker</span>
             </div>
           </div>
         </div>
@@ -1147,7 +1148,7 @@
           </div>
           <div class="overlay-header-actions">
             <button class="btn btn-gold" id="btn-trigger-debate" onclick="triggerAgentsDebate()">
-              🎙️ <span id="t-run-debate-btn">Start Live AI Debate</span>
+              📋 <span id="t-run-debate-btn">Review Agent Evidence</span>
             </button>
             <button class="btn-close-overlay" onclick="switchNavPane('terminal')">✕ Back to Terminal</button>
           </div>
@@ -1247,23 +1248,23 @@
         <div class="subsystems-grid">
           <div class="subsystem-box">
             <div class="subsystem-name">📡 Market Feeds</div>
-            <div class="subsystem-status-val" id="subsys-feeds">HEALTHY (18ms)</div>
+            <div class="subsystem-status-val" id="subsys-feeds">NOT CHECKED</div>
           </div>
           <div class="subsystem-box">
-            <div class="subsystem-name">🤖 Real AI LLMs</div>
-            <div class="subsystem-status-val" id="subsys-llm">ONLINE (Auto)</div>
+            <div class="subsystem-name">🤖 Cloud LLM providers</div>
+            <div class="subsystem-status-val" id="subsys-llm">NOT CHECKED</div>
           </div>
           <div class="subsystem-box">
             <div class="subsystem-name">🛡️ Risk Guard</div>
-            <div class="subsystem-status-val" id="subsys-risk">ARMED (0.5% Cap)</div>
+            <div class="subsystem-status-val" id="subsys-risk">CONFIGURED RISK POLICY</div>
           </div>
           <div class="subsystem-box">
             <div class="subsystem-name">💾 Database WAL</div>
-            <div class="subsystem-status-val" id="subsys-db">OPTIMIZED</div>
+            <div class="subsystem-status-val" id="subsys-db">NOT CHECKED</div>
           </div>
           <div class="subsystem-box">
             <div class="subsystem-name">⚡ Make Webhook</div>
-            <div class="subsystem-status-val" id="subsys-webhook">CONNECTED</div>
+            <div class="subsystem-status-val" id="subsys-webhook">NOT CHECKED</div>
           </div>
         </div>
 
@@ -1329,7 +1330,7 @@
         <div class="overlay-header">
           <div>
             <div class="overlay-title">💼 <span id="t-portfolio-title">Paper Portfolio & Health Audit</span></div>
-            <div class="overlay-subtitle">0.5% Hard Risk Protection & System Health Audit</div>
+              <div class="overlay-subtitle">Configured Risk Protection & System Health Audit</div>
           </div>
           <button class="btn-close-overlay" onclick="togglePortfolioDrawer()">✕ Close</button>
         </div>
@@ -1340,8 +1341,8 @@
             <div class="card-title">🛡 <span id="t-health-title">Service Health Audit</span></div>
           </div>
           <div class="health-list">
-            <div class="health-row"><span>Market Feeds:</span> <b class="val-green" id="h-feeds">VERIFIED ACTIVE</b></div>
-            <div class="health-row"><span>Make Webhook:</span> <b class="val-gold">CONNECTED (200 OK)</b></div>
+            <div class="health-row"><span>Market Feeds:</span> <b class="val-gold" id="h-feeds">NOT CHECKED</b></div>
+            <div class="health-row"><span>Make Webhook:</span> <b class="val-gold">CONFIGURATION NOT CHECKED</b></div>
             <div class="health-row"><span>Live Trading:</span> <b class="val-red">DISABLED (PAPER ONLY)</b></div>
             <div class="health-row"><span>Cycles Completed:</span> <b id="h-cycles">0</b></div>
           </div>
@@ -1394,8 +1395,8 @@
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Risk Protection Mode</div>
-            <div class="section-kpi-val text-green">0.5% Hard Cap</div>
-            <div class="section-kpi-sub">Mandatory R:R ≥ 1:2.0</div>
+            <div class="section-kpi-val text-green">Configured paper risk</div>
+            <div class="section-kpi-sub">Paper-ticket limit · maximum accepted risk 2%</div>
           </div>
         </div>
 
@@ -1699,7 +1700,7 @@
           <div class="section-kpi-card">
             <div class="section-kpi-label">Bot Connection</div>
             <div class="section-kpi-val text-green" id="tg-bot-status">VERIFYING...</div>
-            <div class="section-kpi-sub" id="tg-bot-username">Bot: @TaikryTradingBot</div>
+            <div class="section-kpi-sub" id="tg-bot-username">Bot username: not configured</div>
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Configured Channel / Chat</div>
@@ -1708,49 +1709,49 @@
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Delivery Health</div>
-            <div class="section-kpi-val text-green" id="tg-delivery-health">100% OK</div>
-            <div class="section-kpi-sub">Exponential Retry Backoff Active</div>
+            <div class="section-kpi-val text-muted" id="tg-delivery-health">Not verified</div>
+            <div class="section-kpi-sub">Delivery health is not measured here</div>
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Bilingual Formats</div>
             <div class="section-kpi-val text-gold">Khmer + English</div>
-            <div class="section-kpi-sub">Strict Telegram HTML Markdown</div>
+            <div class="section-kpi-sub">Telegram HTML formatting</div>
           </div>
         </div>
 
         <div class="section-grid-2col">
           <div class="section-card">
             <div class="section-card-title">
-              <span>🇰🇭 Khmer Telegram Signal Preview</span>
+              <span>🇰🇭 Khmer Telegram Preview (no live setup)</span>
             </div>
             <div class="telegram-preview-card" id="tg-preview-kh">
               <div class="tg-msg-head">⚡ <b>ZYROX AI — សញ្ញាជួញដូរមាស (XAUUSD)</b></div>
               <div class="tg-msg-body">
-                <div>🎯 <b>ទិសដៅ:</b> <span class="val-green">BUY (ទិញ)</span></div>
-                <div>📍 <b>ចំណុចចូល (Entry):</b> <code>4,043.50 – 4,045.00</code></div>
-                <div>🛑 <b>កាត់ខាត (SL):</b> <code>4,032.00</code></div>
-                <div>🎯 <b>ចំណេញ ១ (TP1):</b> <code>4,068.00</code> (1:2.0+ R:R)</div>
-                <div>🎯 <b>ចំណេញ ២ (TP2):</b> <code>4,082.00</code></div>
-                <div>⭐ <b>ពិន្ទុភាពជឿជាក់:</b> 88% (4-Agent Consensus)</div>
-                <div>⚠️ <b>សុពលភាព:</b> ដរាបណាតម្លៃមិនបំបែកក្រោម 4,032.00</div>
+                <div>🎯 <b>ទិសដៅ:</b> រង់ចាំការអនុម័ត (WAIT)</div>
+                <div>📍 <b>ចំណុចចូល (Entry):</b> <code>N/A</code></div>
+                <div>🛑 <b>កាត់ខាត (SL):</b> <code>N/A</code></div>
+                <div>🎯 <b>ចំណេញ ១ (TP1):</b> <code>N/A</code></div>
+                <div>🎯 <b>ចំណេញ ២ (TP2):</b> <code>N/A</code></div>
+                <div>⭐ <b>ពិន្ទុភាពជឿជាក់:</b> N/A</div>
+                <div>⚠️ <b>សុពលភាព:</b> មិនមានសញ្ញាផ្ទាល់បច្ចុប្បន្ន</div>
               </div>
             </div>
           </div>
 
           <div class="section-card">
             <div class="section-card-title">
-              <span>🇬🇧 English Telegram Signal Preview</span>
+              <span>🇬🇧 English Telegram Preview (no live setup)</span>
             </div>
             <div class="telegram-preview-card" id="tg-preview-en">
               <div class="tg-msg-head">⚡ <b>ZYROX AI — INSTITUTIONAL TRADE SIGNAL</b></div>
               <div class="tg-msg-body">
-                <div>🎯 <b>Asset / Direction:</b> <span class="val-green">XAUUSD · BUY</span></div>
-                <div>📍 <b>Entry Zone:</b> <code>4,043.50 – 4,045.00</code></div>
-                <div>🛑 <b>Stop Loss (SL):</b> <code>4,032.00</code></div>
-                <div>🎯 <b>Take Profit 1:</b> <code>4,068.00</code> (R:R ≥ 1:2.0 Floor)</div>
-                <div>🎯 <b>Take Profit 2:</b> <code>4,082.00</code></div>
-                <div>⭐ <b>Setup Score:</b> 88% (Qualified Institutional Gate)</div>
-                <div>🛡 <b>Risk:</b> Maximum 0.5% Capital Allocation</div>
+                <div>🎯 <b>Asset / Direction:</b> XAUUSD · WAIT</div>
+                <div>📍 <b>Entry Zone:</b> <code>N/A</code></div>
+                <div>🛑 <b>Stop Loss (SL):</b> <code>N/A</code></div>
+                <div>🎯 <b>Take Profit 1:</b> <code>N/A</code></div>
+                <div>🎯 <b>Take Profit 2:</b> <code>N/A</code></div>
+                <div>⭐ <b>Setup Score:</b> N/A</div>
+                <div>🛡 <b>Risk:</b> Selected in paper-trading preferences</div>
               </div>
             </div>
           </div>
@@ -1783,8 +1784,8 @@
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Broker / Server</div>
-            <div class="section-kpi-val" id="mt5-broker-name">Exness</div>
-            <div class="section-kpi-sub" id="mt5-server-name">Exness-Real / Demo</div>
+            <div class="section-kpi-val" id="mt5-broker-name">Not connected</div>
+            <div class="section-kpi-sub" id="mt5-server-name">No server reported</div>
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Feed Staleness / Age</div>
@@ -1862,21 +1863,21 @@
             <div class="settings-field">
               <label class="settings-label" for="setting-risk-floor">Mandatory Risk:Reward Floor</label>
               <select id="setting-risk-floor" class="settings-select">
-                <option value="2.0">1:2.0 Minimum (Institutional Floor)</option>
+                <option value="2.0">Paper-ticket floor: 1:2.0</option>
                 <option value="2.5">1:2.5 Strict</option>
                 <option value="3.0">1:3.0 Elite Asymmetric Only</option>
               </select>
-              <span class="settings-help">Signals below this floor are automatically disqualified as WAIT / NO TRADE.</span>
+              <span class="settings-help">This browser preference applies to paper tickets. The server uses its configured floor for analysis.</span>
             </div>
 
             <div class="settings-field">
-              <label class="settings-label" for="setting-risk-cap">Max Risk Per Trade Cap</label>
+              <label class="settings-label" for="setting-risk-cap">Max Risk Per Paper Trade</label>
               <select id="setting-risk-cap" class="settings-select">
-                <option value="0.5">0.5% Hard Cap (Strict Capital Preservation)</option>
-                <option value="1.0">1.0% Standard Conservative</option>
-                <option value="2.0">2.0% Maximum Aggressive</option>
+                <option value="0.5">0.5% risk preference</option>
+                <option value="1.0">1.0% risk preference</option>
+                <option value="2.0">2.0% risk preference (server maximum)</option>
               </select>
-              <span class="settings-help">Lot sizing formula adjusts volume to never exceed this percentage.</span>
+              <span class="settings-help">Saved in this browser and applied to paper tickets. Server rejects values above 2%.</span>
             </div>
 
             <div class="settings-field">
@@ -1963,10 +1964,10 @@
           <div class="p-15">
             <div style="background: rgba(0, 217, 154, 0.05); border: 1px solid rgba(0, 217, 154, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
               <div style="color: #00D99A; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
-                💡 Unified Free Models Aggregator / ច្រកភ្ជាប់ម៉ូដែល AI ឥតគិតថ្លៃ (100% Free Gateway)
+                💡 Optional FreeLLMAPI Provider Proxy / ច្រកភ្ជាប់ម៉ូដែល AI តាមការកំណត់
               </div>
               <p style="color: #87A99A; font-size: 12px; margin: 0 0 6px 0; line-height: 1.5;">
-                <strong>English:</strong> FreeLLMAPI pools free developer tier API keys (Groq, Gemini, OpenRouter, Cerebras, SambaNova, HuggingFace, GitHub Models) into a single OpenAI-compatible endpoint with automatic fallback. You can run it locally with Docker or deploy it to <strong>Render / Railway</strong> for 24/7 cloud availability without keeping your PC powered on.
+                <strong>English:</strong> FreeLLMAPI can route requests through configured provider keys using an OpenAI-compatible interface. It is disabled until an administrator configures it. Local Docker runs only while your machine is on; cloud availability depends on the host plan, and free plans may sleep.
               </p>
               <p style="color: #87A99A; font-size: 12px; margin: 0; line-height: 1.5;">
                 <strong>ភាសាខ្មែរ:</strong> FreeLLMAPI ប្រមូលផ្តុំកូនសោ API ឥតគិតថ្លៃជាច្រើនបញ្ចូលគ្នាទៅជា OpenAI endpoint តែមួយ។ អ្នកអាចដំណើរការវាលើកុំព្យូទ័រតាម Docker ឬដាក់ពង្រាយលើ Cloud (Render/Railway) ដើម្បីដំណើរការ 24 ម៉ោងដោយមិនចាំបាច់បើក PC ចោលឡើយ។
@@ -1986,8 +1987,8 @@
               </div>
               <div class="settings-field">
                 <label class="settings-label" for="freellmapi-api-key">API Key (Optional / Default)</label>
-                <input type="password" id="freellmapi-api-key" class="settings-input" placeholder="sk-freellmapi-default" value="sk-freellmapi-default">
-                <span class="settings-help">Bearer token if your FreeLLMAPI instance enforces proxy authentication.</span>
+                <input type="password" id="freellmapi-api-key" class="settings-input" placeholder="Leave blank unless configured on the proxy">
+                <span class="settings-help">Optional bearer token used only if your FreeLLMAPI proxy requires authentication.</span>
               </div>
             </div>
 
@@ -2089,7 +2090,7 @@
               </div>
               <div class="agent-chip" id="chip-agent-5">
                 <div class="agent-chip-name">5. Risk Guardian</div>
-                <div class="agent-chip-badge text-gold" id="badge-agent-5">R:R ≥ 2.0 / 0.5% CAP</div>
+                <div class="agent-chip-badge text-gold" id="badge-agent-5">Risk checks on paper tickets</div>
               </div>
               <div class="agent-chip" id="chip-agent-6">
                 <div class="agent-chip-name">6. Independent Critic</div>
@@ -2171,9 +2172,9 @@
             <div class="section-kpi-sub">Requires Renewal Notice</div>
           </div>
           <div class="section-kpi-card">
-            <div class="section-kpi-label">Total Cumulative Revenue</div>
+            <div class="section-kpi-label">Payments Recorded by Admin</div>
             <div class="section-kpi-val text-gold" id="admin-kpi-revenue">$0</div>
-            <div class="section-kpi-sub">Bakong KHQR & USDT</div>
+            <div class="section-kpi-sub">Amounts entered during grants; not gateway-verified</div>
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Expired / Revoked</div>
@@ -2410,7 +2411,7 @@
 
             <div id="saas-telegram-unlinked-box" style="margin-top: 12px;">
               <p style="font-size: 12px; color: var(--zyrox-muted, #87A99A); line-height: 1.5;">
-                Pair your account with the official ZYROX AI Telegram bot to receive instant, institutional BUY/SELL signals with exact Stop Loss, Take Profit, 1:2.0+ R:R, and risk cap alerts on your smartphone.
+                Pair your account with the configured ZYROX AI Telegram bot to receive approved BUY/SELL alerts with validated Stop Loss, Take Profit, reward-floor, and risk details.
               </p>
               <div style="margin-top: 14px;">
                 <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">⚡ Connect Telegram (Instant 1-Click)</button>
@@ -2442,7 +2443,7 @@
                     <input type="checkbox" id="pref-signals" checked> Real-time Trading Signals (BUY / SELL setups)
                   </label>
                   <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="checkbox" id="pref-risk" checked> 0.5% Hard Risk Cap & Invalidation Warnings
+                    <input type="checkbox" id="pref-risk" checked> Configured Risk Cap & Invalidation Warnings
                   </label>
                   <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                     <input type="checkbox" id="pref-macro" checked> High-Impact Macro Economic Events (NFP, CPI, FOMC)
@@ -2630,7 +2631,7 @@
           <span class="dev-tech-pill">Lightweight Charts Pro Dual-Workspace Engine</span>
           <span class="dev-tech-pill">Real-time Smart Money Concepts (ICT/SMC)</span>
           <span class="dev-tech-pill">Telegram Mini App & Automated VIP Management</span>
-          <span class="dev-tech-pill">Bakong KHQR & USDT Smart Ingestion</span>
+          <span class="dev-tech-pill">Payment gateway not connected</span>
           <span class="dev-tech-pill">Python 3.12 · FastAPI · High-Concurrency Async</span>
         </div>
       </div>
@@ -2656,11 +2657,11 @@
         <div class="bridge-metrics-grid">
           <div class="bridge-metric-card">
             <span class="bmc-label">Broker / Terminal</span>
-            <span class="bmc-val" id="bmc-broker-val">Exness (MetaTrader 5)</span>
+            <span class="bmc-val" id="bmc-broker-val">Not connected</span>
           </div>
           <div class="bridge-metric-card">
             <span class="bmc-label">Account Server</span>
-            <span class="bmc-val" id="bmc-server-val">Exness-Real / Demo</span>
+            <span class="bmc-val" id="bmc-server-val">No server reported</span>
           </div>
           <div class="bridge-metric-card">
             <span class="bmc-label">Last Tick Age</span>
@@ -2706,6 +2707,10 @@
 
       <!-- Tab 1: Plans & Features -->
       <div class="vip-modal-content" id="vip-tab-content-plans">
+        <div class="vip-payment-box">
+          <div class="vip-payment-title">Paid checkout is not connected</div>
+          <div class="vip-payment-grid">Displayed prices are planned only. This panel can grant access administratively; it does not collect or verify customer payments. Do not send funds using this page.</div>
+        </div>
         <div class="vip-tier-grid">
           <!-- Pro VIP -->
           <div class="vip-tier-card">
@@ -2713,11 +2718,11 @@
             <div class="vip-card-price">$49</div>
             <div class="vip-card-period">/ 30 Days (ប្រចាំខែ)</div>
             <ul class="vip-perks-list">
-              <li class="vip-perk-item">✓ <b>2–4 Gold Signals/day:</b> XAUUSD strictly targeted</li>
-              <li class="vip-perk-item">✓ <b>Multi-Agent Consensus:</b> 80%–95% Score Floor</li>
-              <li class="vip-perk-item">✓ <b>Exact Levels:</b> Entry, SL, TP1, TP2, TP3 (R:R 1:2.0+)</li>
-              <li class="vip-perk-item">✓ <b>Lifecycle Alerts:</b> Zone Reached, TP/SL Hit 24/7</li>
-              <li class="vip-perk-item">✓ <b>1-Time Secure Link:</b> Auto-expiring VIP invite</li>
+              <li class="vip-perk-item">✓ <b>Up to 4 approved Gold Signals/day:</b> may be fewer or none</li>
+              <li class="vip-perk-item">✓ <b>Multi-Agent Consensus:</b> approved signal score gate is 80%–95%</li>
+              <li class="vip-perk-item">✓ <b>Validated Levels:</b> Entry, SL, TP1, TP2, TP3 when present in an approved setup</li>
+              <li class="vip-perk-item">✓ <b>Lifecycle Alerts:</b> Zone Reached, TP/SL Hit while monitoring is running</li>
+              <li class="vip-perk-item">✓ <b>Invite Link:</b> one-time, expiring link after an administrator grant</li>
             </ul>
             <button class="btn btn-outline btn-full btn-sm" onclick="prefillGrantForm('PRO', 30)">⚡ Grant Pro VIP</button>
           </div>
@@ -2729,11 +2734,11 @@
             <div class="vip-card-period">/ 90 Days (3 ខែ - Most Popular)</div>
             <ul class="vip-perks-list">
               <li class="vip-perk-item">✓ <b>All Pro Features Included</b></li>
-              <li class="vip-perk-item">✓ <b>1-Click Bridge:</b> Auto MT5 / Binance Webhook</li>
-              <li class="vip-perk-item">✓ <b>AI Agents Debate:</b> Live round-table transcripts</li>
+              <li class="vip-perk-item">✓ <b>Manual Trade Ticket:</b> Simulated paper ledger and Telegram notice; no broker order is placed</li>
+              <li class="vip-perk-item">✓ <b>AI Agents Debate:</b> transcripts when the configured agents respond</li>
               <li class="vip-perk-item">✓ <b>Pre-News Lockout:</b> Forex Factory high-impact guard</li>
-              <li class="vip-perk-item">✓ <b>Multi-Asset:</b> Gold + Forex Majors + BTC</li>
-              <li class="vip-perk-item">✓ <b>Concierge Support:</b> 24/7 VIP assistance</li>
+              <li class="vip-perk-item">✓ <b>Multi-Asset Analysis:</b> dashboard analysis; Telegram signal engine is XAUUSD-only</li>
+              <li class="vip-perk-item">✓ <b>Support:</b> Contact support for account assistance</li>
             </ul>
             <button class="btn btn-gold btn-full btn-sm" onclick="prefillGrantForm('VIP', 90)">⚡ Grant Elite VIP</button>
           </div>
@@ -2744,22 +2749,21 @@
             <div class="vip-card-price">$299</div>
             <div class="vip-card-period">Permanent / មួយជីវិត (No Recurring Fees)</div>
             <ul class="vip-perks-list">
-              <li class="vip-perk-item">✓ <b>Permanent Access:</b> All current and future AI tools</li>
+              <li class="vip-perk-item">✓ <b>Permanent Access:</b> currently enabled features</li>
               <li class="vip-perk-item">✓ <b>Never Expires:</b> Zero renewal hassles</li>
               <li class="vip-perk-item">✓ <b>Permanent Channel Access:</b> No monthly links</li>
-              <li class="vip-perk-item">✓ <b>Algorithmic Webhooks:</b> Direct quantitative API</li>
-              <li class="vip-perk-item">✓ <b>Private Mastermind:</b> Elite institutional traders</li>
+              <li class="vip-perk-item">✓ <b>Manual Tickets:</b> no automated broker orders</li>
+              <li class="vip-perk-item">✓ <b>Channel Access:</b> requires a configured Telegram channel</li>
             </ul>
             <button class="btn btn-outline btn-full btn-sm" onclick="prefillGrantForm('LIFETIME', 36500)">⚡ Grant Lifetime</button>
           </div>
         </div>
 
         <div class="vip-payment-box">
-          <div class="vip-payment-title">💳 Payment Options (Bakong KHQR & USDT):</div>
+          <div class="vip-payment-title">💳 Paid checkout is not available yet</div>
           <div class="vip-payment-grid">
-            <div>🇰🇭 <b>Bakong KHQR:</b> <code class="vip-code-cyan">taikry_financial@aclb</code></div>
-            <div>🌐 <b>USDT (TRC-20):</b> <code class="vip-code-green">TYD6xNf3bQeXG8sWpZ29jL4v1k8mR7q9Aa</code></div>
-            <div>👨‍💻 <b>Developer & Tech Lead:</b> <span class="vip-code-gold">Heng Taikry</span> · Telegram: <a href="https://t.me/+855968288832" target="_blank" rel="noopener noreferrer" class="dev-support-link"><b>0968288832</b></a></div>
+            <div>🇰🇭 Automated payment processing and verification are not connected. Do not send funds using this dashboard.</div>
+            <div>👨‍💻 <b>Developer & Tech Lead:</b> <span class="vip-code-gold">Heng Taikry</span></div>
           </div>
         </div>
       </div>
@@ -2875,11 +2879,11 @@
       <span class="mob-nav-icon">📋</span>
       <span class="mob-nav-label">Watchlist</span>
     </button>
-    <button type="button" class="mob-nav-item" id="mob-nav-ai" onclick="switchMobileView('ai')" title="Real AI Multimodal Assistant">
+    <button type="button" class="mob-nav-item" id="mob-nav-ai" onclick="switchMobileView('ai')" title="Cloud AI Assistant">
       <span class="mob-nav-icon">🤖</span>
       <span class="mob-nav-label">AI Chat</span>
     </button>
-    <button type="button" class="mob-nav-item" id="mob-nav-trade" onclick="switchMobileView('trade')" title="1-Click Fast Execution Bridge">
+    <button type="button" class="mob-nav-item" id="mob-nav-trade" onclick="switchMobileView('trade')" title="Paper trade and manual ticket">
       <span class="mob-nav-icon">⚡</span>
       <span class="mob-nav-label">Fast Trade</span>
     </button>
