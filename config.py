@@ -13,6 +13,8 @@ AI_PROVIDER = os.getenv("AI_PROVIDER", "auto").lower()
 
 # Real AI LLM API Keys & Endpoints (Frontier Models: Claude 3.7/3.5, OpenAI o3/o1/GPT-4o, Gemini 2.5, DeepSeek V3/R1)
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", os.getenv("ANTHROPIC_API_KEY", ""))
+CLAUDE_BASE_URL = os.getenv("CLAUDE_BASE_URL", "https://api.anthropic.com/v1").rstrip("/")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "").strip()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "").strip()

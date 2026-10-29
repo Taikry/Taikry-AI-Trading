@@ -21,6 +21,8 @@ from taikry.config import (
     FREELLMAPI_BASE_URL,
     FREELLMAPI_DEFAULT_MODEL,
     CLAUDE_API_KEY,
+    CLAUDE_BASE_URL,
+    CLAUDE_MODEL,
     OPENAI_API_KEY,
     OPENAI_BASE_URL,
     OPENAI_MODEL,
@@ -122,7 +124,7 @@ def _extract_json_from_response(raw_text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def call_claude(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 5) -> Optional[Dict[str, Any]]:
+def call_claude(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 35) -> Optional[Dict[str, Any]]:
     """
     Calls Anthropic Claude API with latest Frontier models:
     - Claude 3.7 Sonnet (claude-3-7-sonnet-20250219)
@@ -175,18 +177,38 @@ def call_claude(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, 
                 logger.warning(f"Claude via AnyRouter notice: {e}")
         return None
 
-    models = [
+    models = []
+    if CLAUDE_MODEL:
+        models.append(CLAUDE_MODEL)
+    for m in [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-opus-4-6",
         "claude-3-7-sonnet-20250219",
         "claude-3-5-sonnet-latest",
         "claude-3-5-sonnet-20241022",
         "claude-3-5-haiku-latest",
         "claude-3-opus-latest"
-    ]
-    url = "https://api.anthropic.com/v1/messages"
+    ]:
+        if m not in models:
+            models.append(m)
+
+    base_endpoint = (CLAUDE_BASE_URL or "https://api.anthropic.com/v1").rstrip("/")
+    if base_endpoint.endswith("/v1"):
+        url = f"{base_endpoint}/messages"
+    else:
+        url = f"{base_endpoint}/v1/messages"
+
     headers = {
         "x-api-key": CLAUDE_API_KEY,
+        "Authorization": f"Bearer {CLAUDE_API_KEY}",
         "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
+        "content-type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
 
     user_prompt = f"""Asset: {symbol_info.get('name', 'Asset')} ({symbol_info.get('symbol', 'UNKNOWN')})
@@ -239,7 +261,7 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
     return None
 
 
-def call_openai(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 3) -> Optional[Dict[str, Any]]:
+def call_openai(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 35) -> Optional[Dict[str, Any]]:
     """
     Calls OpenAI API with latest Frontier models:
     - o3-mini (reasoning frontier)
@@ -373,7 +395,7 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
     return None
 
 
-def call_gemini(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 5) -> Optional[Dict[str, Any]]:
+def call_gemini(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 35) -> Optional[Dict[str, Any]]:
     """
     Calls Google Gemini API with latest Frontier models:
     - Gemini 2.5 Pro
@@ -516,7 +538,7 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
     return None
 
 
-def call_deepseek(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 3) -> Optional[Dict[str, Any]]:
+def call_deepseek(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 35) -> Optional[Dict[str, Any]]:
     """
     Calls DeepSeek API with Frontier reasoning and chat models:
     - meta-llama/llama-3.3-70b-instruct
@@ -591,7 +613,7 @@ Perform institutional multi-agent causal analysis first (English & Natural Khmer
     return None
 
 
-def call_manus(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 5) -> Optional[Dict[str, Any]]:
+def call_manus(symbol_info: Dict[str, Any], timeframe: str, metrics: Dict[str, Any], timeout: int = 35) -> Optional[Dict[str, Any]]:
     """
     Calls Manus AI Agent API (manus.ai / manus.im).
     Supports task-based agent endpoints and OpenAI-compatible inference completions.
