@@ -231,3 +231,70 @@ M15 Trend: BULLISH | RSI 14: 54.20 | ATR: 4.80
 | `Insufficient Risk-to-Reward` | Calculated setup does not meet the configured minimum | Check `MIN_RISK_REWARD_RATIO`; the default minimum is 2.0. A setup below the configured floor is rejected. |
 | `Make Webhook timeout` | Make scenario inactive | Verify the Make scenario switch is turned **ON** in your dashboard. |
 | `Port 8000 already in use` | Another process is bound to port 8000 | Specify a different port: `uvicorn taikry.api.app:app --port 8080`. |
+---
+
+## 🔬 ZYROX AI — 11-Agent Deep Research & Pre-News Engine
+
+Production-grade multi-agent research and pre-news quantitative analysis system for **Gold (XAUUSD)**, **Forex (EURUSD, GBPUSD, USDJPY)**, and **Crypto (BTCUSDT, ETHUSDT, SOLUSDT)** with bilingual English & Khmer (`ភាសាខ្មែរ`) reporting.
+
+### 🤖 11 Specialized Logical Research Agents
+
+| Agent | Responsibility | Guarantee / Rule |
+| :--- | :--- | :--- |
+| **1. News & Source Verification** | Real-time RSS feeds (Investing.com, MarketWatch) | Preserves publication timestamps & direct URLs |
+| **2. Economic Calendar** | FairEconomy/ForexFactory feed parsing | Event time, forecast, previous, and actual metrics |
+| **3. Macro & Central Bank** | DXY index strength & Fed/ECB monetary stance | Correlates macro bias with target asset |
+| **4. Forex & USD Impact** | Currency sensitivities across majors | USD correlation matrix & yield divergence |
+| **5. Gold/XAUUSD Specialist** | Bullion safe-haven & real yield analysis | Yahoo PAXG-USD/Gold verified spot pricing |
+| **6. Crypto Specialist** | Spot trends on BTC/ETH/SOL | Derivs (funding/OI/liq) marked unverified if feed absent |
+| **7. Technical & ICT/SMC** | EMA (20/50/200), RSI, ATR, Order Blocks, FVGs | **Strictly deterministic code** — zero LLM hallucination |
+| **8. Quantitative Scenarios** | Bullish, Bearish, and Base Case setups | Enforces strict Risk/Reward floor (min 1:2.0) |
+| **9. Independent Critic** | Trapped retail, late-buyer squeeze, sentiment extremes | Contrarian safety checks against FOMO |
+| **10. Risk Guardian** | Capital preservation, pre-news lockout, spread check | Mandatory no-trade lockout inside high-impact events |
+| **11. Final Synthesizer** | Dual-language report generation (Sections A–K) | Native Khmer (`ភាសាខ្មែរ`) & institutional English |
+
+### ⏱ Pre-News Research Windows
+
+Automated contextual analysis aligned to Cambodia Local Time (`UTC+7`):
+- `60_30_MIN`: Background research, macro regime, institutional sentiment.
+- `15_5_MIN`: Quantitative scenario planning and spread risk preparation.
+- `1_2_MIN`: Pre-release lockout verification and spread blowout warning.
+- `AT_RELEASE`: Captures verified official actual figures once published.
+- `1_5_MIN_POST`: Initial impulse reaction and deviation vs. consensus analysis.
+
+### 📑 Structured Output Format (Sections A–K)
+
+Every pre-news intelligence brief returns:
+- **Section A:** Executive Summary (Bilingual English / Khmer)
+- **Section B:** Verified Current Price & Data Timestamp
+- **Section C:** Upcoming News Event, Source, Forecast, Previous, Actual
+- **Section D:** Macro Impact & Affected Asset Classes
+- **Section E:** Technical Structure & ICT/SMC Levels (OB, FVG, Swing H/L)
+- **Section F:** Bullish Scenario (Trigger, TP1/TP2, SL, Invalidation)
+- **Section G:** Bearish Scenario (Trigger, TP1/TP2, SL, Invalidation)
+- **Section H:** Base Case / No-Trade Condition (Capital Protection)
+- **Section I:** Volatility & Spread Blowout Warning
+- **Section J:** Verified Sources & Data Freshness Status
+- **Section K:** Uncertainties & Missing Inputs (Integrity Transparency)
+
+### 🔌 REST API Endpoints
+
+```bash
+# 1. Trigger Deep Pre-News Research Brief
+POST /api/v1/research/pre-news
+Content-Type: application/json
+{
+  "symbol": "XAUUSD",
+  "timeframe": "M15",
+  "force_refresh": false
+}
+
+# 2. Inspect Authenticated Model Catalog & Routing Health
+GET /api/v1/router/catalog
+```
+
+### 💰 Cost Controls & Multi-Gateway Failover
+
+- **Budget Cap:** Hard $15.00/month maximum spend with request token accounting.
+- **Failover Routing:** Automatic sub-1.4s failover between AnyRouter, Groq Cloud (`openai/gpt-oss-120b`, `qwen/qwen3.8-27b`), and OpenRouter Free Tier (`nvidia/nemotron-3.5-lightning:free`).
+- **Data Protection:** Numerical calculations are strictly deterministic. LLMs never invent prices, calendar figures, technical indicators, or sources.
