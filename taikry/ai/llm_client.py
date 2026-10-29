@@ -1498,12 +1498,29 @@ def chat_with_real_ai(
     except Exception:
         pass
 
+    deep_research_data = None
+    try:
+        from taikry.agents.deep_research_engine import deep_research_engine
+        dr_res = deep_research_engine.run_deep_research(sym, timeframe=tf)
+        deep_research_data = dr_res.get("sections")
+    except Exception as e:
+        logger.debug(f"Deep research engine notice: {e}")
+
+    macro_note = ""
+    cal_note = ""
+    if deep_research_data:
+        cal = deep_research_data.get("C_upcoming_news_calendar", {})
+        macro = deep_research_data.get("D_macro_impact", {})
+        cal_note = f"Upcoming Catalyst: {cal.get('event_name')} ({cal.get('currency')}) at {cal.get('event_time_utc')} | Forecast: {cal.get('forecast')} | Previous: {cal.get('previous')} | Blackout: {cal.get('blackout_status')}"
+        macro_note = f"DXY Index: {macro.get('dxy_index')} ({macro.get('dxy_trend')}) | Monetary Regime: {macro.get('monetary_policy_regime')}"
+
     llm_prompt = f"""Trader Query: {query}
 Asset: {sym}
 Execution Timeframe: {tf}
 Live Market Context:
 - Current Verified Price: {price_val} ({price_src})
 - Multi-Agent Direction Bias: {live_dir} ({live_bias})
+- Macro & Calendar Context: {cal_note} | {macro_note}
 - Approved consensus setup: {"Entry=" + str(live_entry) + ", SL=" + str(live_sl) + ", TP1=" + str(live_tp1) + ", TP2=" + str(live_tp2) + ", R:R=" + str(live_rr) if approved_setup else "None; no approved fresh setup is available"}
 
 Perform full institutional trade analysis and answer the trader's query:
@@ -1659,7 +1676,8 @@ Respond strictly in JSON matching the schema.
             "symbol": sym,
             "timeframe": tf,
             "smart_analysis": smart_analysis,
-            "trade_execution": trade_execution
+            "trade_execution": trade_execution,
+            "deep_research": deep_research_data
         }
 
     # Safe response when no configured language model returns a result.
@@ -1690,6 +1708,7 @@ Respond strictly in JSON matching the schema.
             "take_profit_2": live_tp2,
             "risk_reward_ratio": live_rr,
             "confidence": live_conf
-        }
+        },
+        "deep_research": deep_research_data
     }
 

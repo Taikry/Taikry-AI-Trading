@@ -35,7 +35,7 @@ def test_risk_validator_rejects_insufficient_rr():
 def test_risk_validator_approves_valid_setup(monkeypatch):
     """Risk validator approves setups with valid R:R >= 1:2.0 and risk sizing."""
     from taikry.data.economic_calendar import economic_calendar_provider
-    monkeypatch.setattr(economic_calendar_provider, "check_news_blackout", lambda sym: {"is_blackout": False, "advisory_en": None, "advisory_kh": None})
+    monkeypatch.setattr(economic_calendar_provider, "check_news_blackout", lambda sym: {"is_blackout": False, "status": "CLEAR", "advisory_en": None, "advisory_kh": None})
 
     fake_a1 = {
         "bias": "BULLISH",
@@ -55,7 +55,8 @@ def test_risk_validator_approves_valid_setup(monkeypatch):
         price_timestamp=datetime.datetime.now(datetime.timezone.utc),
         agent1_report=fake_a1,
         agent2_report=fake_a2,
-        agent3_report=fake_a3
+        agent3_report=fake_a3,
+        spread_price=0.20
     )
     assert res["decision"] == "APPROVE"
     assert "1:2.2" in res["calculated_rr"]

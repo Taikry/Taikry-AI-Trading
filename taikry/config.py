@@ -62,8 +62,9 @@ ANYROUTER_API_KEY = _credential("ANYROUTER_API_KEY")
 ANYROUTER_BASE_URL = os.getenv("ANYROUTER_BASE_URL", "https://anyrouter.dev/api/v1").rstrip("/")
 ANYROUTER_TIMEOUT_SECONDS = float(os.getenv("ANYROUTER_TIMEOUT_SECONDS", "30.0"))
 ANYROUTER_MAX_RETRIES = int(os.getenv("ANYROUTER_MAX_RETRIES", "2"))
-ANYROUTER_SPEND_LIMIT_USD = float(os.getenv("ANYROUTER_SPEND_LIMIT_USD", "10.0"))
+ANYROUTER_SPEND_LIMIT_USD = float(os.getenv("ANYROUTER_SPEND_LIMIT_USD", "15.0"))
 ANYROUTER_CONCURRENCY_LIMIT = int(os.getenv("ANYROUTER_CONCURRENCY_LIMIT", "3"))
+PAID_FALLBACK_ENABLED = os.getenv("PAID_FALLBACK_ENABLED", "false").lower() in ("true", "1", "yes")
 
 
 # FreeLLMAPI Integration (OpenAI-compatible unified free-tier proxy from GitHub: https://github.com/tashfeenahmed/freellmapi)

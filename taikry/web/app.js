@@ -4060,6 +4060,61 @@ Model: ${providerTag}
           </div>
         ` : ""}
 
+        ${data.deep_research ? `
+          <div class="chat-deep-research-container" style="margin-top:10px; background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:6px;">
+              <span style="font-weight:700; color:#38bdf8; font-size:12px;">🔬 11-Agent Pre-News & Deep Research</span>
+              <span style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px;">Window: ${escapeHtml(data.deep_research.C_upcoming_news_calendar?.blackout_status || 'STANDARD')}</span>
+            </div>
+            
+            ${data.deep_research.C_upcoming_news_calendar ? `
+              <div style="font-size:11px; margin-bottom:8px; background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:4px;">
+                <b style="color:#f59e0b;">📅 Upcoming Catalyst:</b> ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_name)} (${escapeHtml(data.deep_research.C_upcoming_news_calendar.currency)})
+                <span style="color:#94a3b8; margin-left:6px;">Forecast: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.forecast)} | Prev: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.previous)}</span>
+                <div style="font-size:10.5px; color:#38bdf8; margin-top:2px;">⏱ Countdown: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.countdown || '')} · Local: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_time_cambodia || '')}</div>
+              </div>
+            ` : ""}
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+              ${data.deep_research.F_bullish_scenario ? `
+                <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:8px; font-size:11px;">
+                  <div style="font-weight:700; color:#10b981; margin-bottom:4px;">🟢 Bullish Scenario</div>
+                  <div style="color:#94a3b8; font-size:10px;">Trigger: <span style="color:#fff;">${escapeHtml(data.deep_research.F_bullish_scenario.confirmation_trigger || '---')}</span></div>
+                  <div style="color:#94a3b8; font-size:10px;">TP1: <span style="color:#10b981;">$${data.deep_research.F_bullish_scenario.target_1 || '---'}</span> | TP2: <span style="color:#10b981;">$${data.deep_research.F_bullish_scenario.target_2 || '---'}</span></div>
+                  <div style="color:#94a3b8; font-size:10px;">SL: <span style="color:#ef4444;">$${data.deep_research.F_bullish_scenario.stop_loss || '---'}</span></div>
+                  <div style="color:#cbd5e1; font-size:9.5px; margin-top:3px;">❌ Inval: ${escapeHtml(data.deep_research.F_bullish_scenario.invalidation || '---')}</div>
+                </div>
+              ` : ""}
+
+              ${data.deep_research.G_bearish_scenario ? `
+                <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:8px; font-size:11px;">
+                  <div style="font-weight:700; color:#ef4444; margin-bottom:4px;">🔴 Bearish Scenario</div>
+                  <div style="color:#94a3b8; font-size:10px;">Trigger: <span style="color:#fff;">${escapeHtml(data.deep_research.G_bearish_scenario.confirmation_trigger || '---')}</span></div>
+                  <div style="color:#94a3b8; font-size:10px;">TP1: <span style="color:#10b981;">$${data.deep_research.G_bearish_scenario.target_1 || '---'}</span> | TP2: <span style="color:#10b981;">$${data.deep_research.G_bearish_scenario.target_2 || '---'}</span></div>
+                  <div style="color:#94a3b8; font-size:10px;">SL: <span style="color:#ef4444;">$${data.deep_research.G_bearish_scenario.stop_loss || '---'}</span></div>
+                  <div style="color:#cbd5e1; font-size:9.5px; margin-top:3px;">❌ Inval: ${escapeHtml(data.deep_research.G_bearish_scenario.invalidation || '---')}</div>
+                </div>
+              ` : ""}
+            </div>
+
+            ${data.deep_research.H_base_case_no_trade ? `
+              <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:6px; padding:6px 8px; font-size:10.5px; margin-bottom:6px; color:#fde047;">
+                <b>🛡 Base Case:</b> ${escapeHtml(data.deep_research.H_base_case_no_trade.condition || '')}
+              </div>
+            ` : ""}
+
+            ${data.deep_research.I_volatility_spread_warning ? `
+              <div style="font-size:10px; color:#f87171; margin-bottom:4px;">
+                ⚠️ <b>Spread Warning:</b> ${escapeHtml(data.deep_research.I_volatility_spread_warning.warning_kh || data.deep_research.I_volatility_spread_warning.warning_en || '')}
+              </div>
+            ` : ""}
+
+            <div style="font-size:9.5px; color:#64748b; margin-top:6px; border-top:1px solid rgba(255,255,255,0.05); padding-top:4px;">
+              📊 Sources: ${escapeHtml((data.deep_research.J_source_list_and_freshness?.news_sources || []).join(' · ') || 'Investing.com · MarketWatch · FairEconomy')}
+            </div>
+          </div>
+        ` : ""}
+
         <div class="chat-setup-actions">
           <button class="btn-chat-apply" onclick="applySetupToFastTrade('${action}', '${entry}', '${sl}', '${tp1}')" title="Send to 1-Click Fast Trade Panel">
             ⚡ បញ្ជូនទៅ Fast Trade

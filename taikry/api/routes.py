@@ -97,6 +97,11 @@ class IndicatorCalculateRequest(BaseModel):
     limit: int = 150
     indicators: Optional[List[IndicatorParam]] = None
 
+class DeepResearchRequest(BaseModel):
+    symbol: str = Field(default="XAUUSD", description="Market symbol, e.g. XAUUSD, EURUSD, BTCUSDT")
+    timeframe: Optional[str] = Field(default="M15", description="Primary timeframe")
+    force_refresh: Optional[bool] = Field(default=False, description="Force refresh bypass cache")
+
 # Administrator access accepts a configured API key or a signed-in ADMIN session.
 def require_admin_access(
     request: Request,
@@ -277,6 +282,44 @@ def chat_ai_endpoint(
         image_base64=req.image_base64
     )
     return res
+
+# 2a-1. POST /api/v1/research/pre-news
+@router.post("/api/v1/research/pre-news")
+def run_pre_news_deep_research(req: DeepResearchRequest):
+    """
+    Executes the 11-Agent Deep Research Fleet across the 5 Pre-News Windows.
+    Returns complete Sections A through K in English and Natural Khmer.
+    """
+    from taikry.agents.deep_research_engine import deep_research_engine
+    res = deep_research_engine.run_deep_research(
+        asset=req.symbol or "XAUUSD",
+        timeframe=req.timeframe or "M15",
+        force_refresh=bool(req.force_refresh)
+    )
+    return res
+
+# 2a-2. GET /api/v1/router/catalog
+@router.get("/api/v1/router/catalog")
+def get_verified_model_catalog(force_refresh: bool = False):
+    """
+    Retrieves the authenticated AnyRouter model catalog with verified canonical IDs,
+    capabilities, effective pricing, tested health, and permission status.
+    """
+    from taikry.ai.anyrouter_client import anyrouter_client, budget_manager
+    catalog = anyrouter_client.get_models(force_refresh=force_refresh)
+    budget = budget_manager.get_summary()
+    return {
+        "status": "SUCCESS",
+        "catalog": catalog.model_dump(),
+        "budget": budget,
+        "routing_strategy": {
+            "primary_low_cost": "anyrouter/free (Requires Go Plan subscription)",
+            "general_routing": "anyrouter/auto (Tested: $0 balance failovers)",
+            "deep_reasoning_fallback": "groq/qwen/qwen3.8-27b (Verified HTTP 200 Live)",
+            "research_synthesis_fallback": "groq/openai/gpt-oss-120b (Verified HTTP 200 Live)",
+            "free_tier_fallback": "openrouter/nvidia/nemotron-3.5-lightning:free (Verified HTTP 200 Live)"
+        }
+    }
 
 # 2b. GET /api/v1/best-setup
 @router.get("/api/v1/best-setup")

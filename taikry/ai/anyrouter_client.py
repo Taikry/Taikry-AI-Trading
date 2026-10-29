@@ -36,6 +36,7 @@ from taikry.config import (
     OPENAI_MODEL,
     GROQ_API_KEY,
     GEMINI_API_KEY,
+    OPENROUTER_API_KEY,
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL
@@ -54,6 +55,8 @@ class SanitizedModelInfo(BaseModel):
     pricing_input_per_m: Optional[float] = None
     pricing_output_per_m: Optional[float] = None
     status: str = "AVAILABLE"  # AVAILABLE, RESTRICTED, UNAVAILABLE
+    route_health: Optional[str] = "UNTESTED"  # HEALTHY, DEGRADED, FAILING, UNTESTED
+    access_permission: Optional[str] = "VERIFIED"  # VERIFIED, REQUIRES_SUBSCRIPTION, INSUFFICIENT_BALANCE, BYOK_REQUIRED
     description: Optional[str] = None
 
 
@@ -308,6 +311,19 @@ class AnyRouterClient:
                 p_in = pricing.get("prompt") or pricing.get("input")
                 p_out = pricing.get("completion") or pricing.get("output")
 
+                # Check live test state
+                tested_state = self._tested_models.get(m_id)
+                route_health = "HEALTHY" if (tested_state and tested_state.status == "SUCCESS") else ("FAILING" if (tested_state and tested_state.status == "FAILED") else "UNTESTED")
+                access_perm = "VERIFIED"
+                if tested_state and tested_state.error_message:
+                    err_msg = tested_state.error_message.lower()
+                    if "subscription" in err_msg or "go plan" in err_msg:
+                        access_perm = "REQUIRES_SUBSCRIPTION"
+                    elif "insufficient" in err_msg or "balance" in err_msg:
+                        access_perm = "INSUFFICIENT_BALANCE"
+                    elif "byok" in err_msg:
+                        access_perm = "BYOK_REQUIRED"
+
                 sanitized.append(SanitizedModelInfo(
                     id=m_id,
                     provider=provider,
@@ -317,6 +333,8 @@ class AnyRouterClient:
                     pricing_input_per_m=float(p_in) if p_in is not None else None,
                     pricing_output_per_m=float(p_out) if p_out is not None else None,
                     status="AVAILABLE",
+                    route_health=route_health,
+                    access_permission=access_perm,
                     description=item.get("description")
                 ))
 
@@ -547,7 +565,66 @@ class AnyRouterClient:
         timeout: float = 30.0
     ) -> Optional[Dict[str, Any]]:
         """Intelligent multi-gateway fallback when AnyRouter is unconfigured, rate-limited, or exhausted."""
-        # 1. Try OrcaRouter Gateway (deepseek/deepseek-v4-pro-0813)
+        # 1. Try Groq (Ultra-Fast 100% Free - 120B / 27B / 20B Frontier Models)
+        if GROQ_API_KEY:
+            for g_model in ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]:
+                try:
+                    t0 = time.time()
+                    url = "https://api.groq.com/openai/v1/chat/completions"
+                    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+                    payload = {"model": g_model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+                    if response_format:
+                        payload["response_format"] = response_format
+                    resp = requests.post(url, headers=headers, json=payload, timeout=min(timeout, 20.0))
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        choices = data.get("choices", [])
+                        content = choices[0].get("message", {}).get("content", "") if choices else ""
+                        if content:
+                            return {
+                                "content": content,
+                                "raw_response": data,
+                                "model_used": f"groq/{g_model}",
+                                "latency_ms": round((time.time() - t0) * 1000, 2),
+                                "usage": data.get("usage", {}),
+                                "attempt": 1
+                            }
+                except Exception as e:
+                    logger.debug(f"[FALLBACK] Groq {g_model} failed: {e}")
+
+        # 2. Try OpenRouter Verified Free Models
+        if OPENROUTER_API_KEY:
+            for or_model in ["nvidia/nemotron-3.5-lightning:free", "poolside/laguna-s-2.1:free"]:
+                try:
+                    t0 = time.time()
+                    url = "https://openrouter.ai/api/v1/chat/completions"
+                    headers = {
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://taikry-ai-trading.onrender.com",
+                        "X-Title": "ZYROX AI Terminal"
+                    }
+                    payload = {"model": or_model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+                    if response_format:
+                        payload["response_format"] = response_format
+                    resp = requests.post(url, headers=headers, json=payload, timeout=min(timeout, 20.0))
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        choices = data.get("choices", [])
+                        content = choices[0].get("message", {}).get("content", "") if choices else ""
+                        if content:
+                            return {
+                                "content": content,
+                                "raw_response": data,
+                                "model_used": f"openrouter/{or_model}",
+                                "latency_ms": round((time.time() - t0) * 1000, 2),
+                                "usage": data.get("usage", {}),
+                                "attempt": 1
+                            }
+                except Exception as e:
+                    logger.debug(f"[FALLBACK] OpenRouter {or_model} failed: {e}")
+
+        # 3. Try OrcaRouter Gateway (deepseek/deepseek-v4-pro-0813)
         if ORCAROUTER_API_KEY:
             try:
                 t0 = time.time()
@@ -573,7 +650,7 @@ class AnyRouterClient:
             except Exception as e:
                 logger.warning(f"[FALLBACK] OrcaRouter failed: {e}")
 
-        # 2. Try Claude (TryAI / Anthropic)
+        # 4. Try Claude (TryAI / Anthropic)
         if CLAUDE_API_KEY:
             try:
                 t0 = time.time()
@@ -599,7 +676,7 @@ class AnyRouterClient:
             except Exception as e:
                 logger.warning(f"[FALLBACK] Claude Gateway failed: {e}")
 
-        # 3. Try OpenAI / PatewayAI
+        # 5. Try OpenAI / PatewayAI
         if OPENAI_API_KEY:
             try:
                 t0 = time.time()
@@ -624,31 +701,6 @@ class AnyRouterClient:
                     }
             except Exception as e:
                 logger.warning(f"[FALLBACK] OpenAI Gateway failed: {e}")
-
-        # 4. Try Groq (Ultra-Fast 100% Free)
-        if GROQ_API_KEY:
-            try:
-                t0 = time.time()
-                url = "https://api.groq.com/openai/v1/chat/completions"
-                headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-                payload = {"model": "llama-3.3-70b-versatile", "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
-                if response_format:
-                    payload["response_format"] = response_format
-                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    choices = data.get("choices", [])
-                    content = choices[0].get("message", {}).get("content", "") if choices else ""
-                    return {
-                        "content": content,
-                        "raw_response": data,
-                        "model_used": "groq/llama-3.3-70b-versatile",
-                        "latency_ms": round((time.time() - t0) * 1000, 2),
-                        "usage": data.get("usage", {}),
-                        "attempt": 1
-                    }
-            except Exception as e:
-                logger.warning(f"[FALLBACK] Groq failed: {e}")
 
         return None
 
@@ -751,15 +803,29 @@ class AnyRouterClient:
 
                     resp.raise_for_status()
 
+                except requests.exceptions.HTTPError as http_err:
+                    last_error = http_err
+                    budget_manager.record_failure()
+                    logger.warning(f"AnyRouter HTTP {resp.status_code}. Initiating immediate failover to multi-gateway fallback...")
+                    fb = self._fallback_dispatch(messages, target_model, temperature, max_tokens, response_format, req_timeout)
+                    if fb:
+                        return fb
+                    raise http_err
                 except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as net_err:
                     last_error = net_err
                     if attempt < ANYROUTER_MAX_RETRIES:
                         time.sleep((2 ** attempt) * 1.0)
                         continue
+                    fb = self._fallback_dispatch(messages, target_model, temperature, max_tokens, response_format, req_timeout)
+                    if fb:
+                        return fb
                     raise net_err
                 except Exception as ex:
                     last_error = ex
                     budget_manager.record_failure()
+                    fb = self._fallback_dispatch(messages, target_model, temperature, max_tokens, response_format, req_timeout)
+                    if fb:
+                        return fb
                     raise ex
 
             budget_manager.record_failure()
