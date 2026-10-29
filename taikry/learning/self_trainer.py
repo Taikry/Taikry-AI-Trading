@@ -25,28 +25,42 @@ AGENT_METADATA = {
         "avatar": "🏛️",
         "specialization": "Liquidity Sweeps, Order Blocks & FVG Alignment",
         "color": "#8b5cf6",
-        "baseline_weight": 0.35
+        "baseline_weight": 0.30
     },
     "technical_analyst": {
         "name": "Agent 1: Multi-Timeframe Technical & Trend",
         "avatar": "📈",
         "specialization": "EMA Ribbons, RSI Momentum & Volume Breakouts",
         "color": "#06b6d4",
-        "baseline_weight": 0.25
+        "baseline_weight": 0.22
     },
     "risk_validator": {
         "name": "Agent 4: Capital Protection & Risk Arbiter",
         "avatar": "🛡️",
         "specialization": "Configurable paper-trading risk limits, negative R:R veto, and spread checks",
         "color": "#f59e0b",
-        "baseline_weight": 0.20
+        "baseline_weight": 0.18
     },
     "macro_analyst": {
         "name": "Agent 3: Macro Catalyst & DXY Cross-Check",
         "avatar": "🌐",
         "specialization": "Forex Factory News, Yields & Monetary Catalysts",
         "color": "#3b82f6",
-        "baseline_weight": 0.20
+        "baseline_weight": 0.14
+    },
+    "orderflow_sentiment_analyst": {
+        "name": "Agent 8: Order Flow / CVD / Liquidity Sentiment",
+        "avatar": "🌊",
+        "specialization": "CVD Divergence, Volume Delta, Bid-Ask Absorption & Liquidity Pool Detection",
+        "color": "#10b981",
+        "baseline_weight": 0.08
+    },
+    "fractal_mtf_analyst": {
+        "name": "Agent 9: Multi-Timeframe Fractal Trend Analyst",
+        "avatar": "🔭",
+        "specialization": "EMA Fractal Alignment D1/H4/H1/M15/M5, Counter-Trend Trap Detection",
+        "color": "#f97316",
+        "baseline_weight": 0.08
     }
 }
 
