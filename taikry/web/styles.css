@@ -8077,3 +8077,51 @@ body.chart-rotated-fullscreen .cockpit-widget-card {
   white-space: pre-wrap;
   color: var(--zyrox-text, #EAFFF5);
 }
+/* ==========================================================================
+   CSS CLASSES REPLACING INLINE STYLES (Complies with webhint / CSP standards)
+   ========================================================================== */
+.dev-contact-svg { display: inline; vertical-align: middle; margin-right: 2px; }
+.plan-armed-svg { display: inline; vertical-align: middle; margin-right: 4px; }
+.chat-chip-research { border-color: rgba(56, 189, 248, 0.5) !important; color: #38bdf8 !important; }
+.ml-auto { margin-left: auto; }
+.lh-16 { line-height: 1.6; }
+.lh-18 { line-height: 1.8; }
+.hidden-initially { display: none; }
+.table-scroll-280 { max-height: 280px; overflow-y: auto; }
+.table-scroll-380 { max-height: 380px; overflow-y: auto; }
+.table-scroll-480 { max-height: 480px; overflow-y: auto; }
+.text-title-lg { font-size: 1.1rem; }
+.badge-no-underline { text-decoration: none; font-size: 11px; }
+.freellmapi-banner { background: rgba(0, 217, 154, 0.05); border: 1px solid rgba(0, 217, 154, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+.freellmapi-banner-title { color: #00D99A; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.freellmapi-banner-p { color: #87A99A; font-size: 12px; margin: 0 0 6px 0; line-height: 1.5; }
+.freellmapi-banner-p-last { color: #87A99A; font-size: 12px; margin: 0; line-height: 1.5; }
+.test-output-scroll { white-space: pre-wrap; max-height: 150px; overflow-y: auto; }
+.models-pool-container { background: rgba(0, 0, 0, 0.3); border: 1px solid #20372C; border-radius: 6px; padding: 10px; }
+.models-list-scroll { max-height: 120px; overflow-y: auto; }
+.select-compact { width: auto !important; padding: 4px 8px !important; }
+.mb-16 { margin-bottom: 16px; }
+.admin-search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.admin-search-input { max-width: 300px; }
+.input-readonly-dim { opacity: 0.8; background: #0b1511 !important; }
+.mt-12 { margin-top: 12px; }
+.mt-14 { margin-top: 14px; }
+.mt-16 { margin-top: 16px; }
+.mt-24-bordered { margin-top: 24px; border-top: 1px solid var(--zyrox-border, #20372C); padding-top: 14px; }
+.card-title-bordered { font-size: 13px; border-top: 1px solid var(--zyrox-border, #20372C); padding-top: 16px; }
+.grid-2col { grid-template-columns: 1fr 1fr !important; }
+.grid-2col-mt10 { grid-template-columns: 1fr 1fr !important; margin-top: 10px; }
+.badge-telegram-unlinked { background: rgba(0, 217, 154, 0.15); color: #00D99A; border: 1px solid #00D99A; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+.telegram-unlinked-desc { font-size: 12px; color: var(--zyrox-muted, #87A99A); line-height: 1.5; }
+.telegram-pairing-box { margin-top: 14px; background: #060B09; border: 1px solid #20372C; padding: 12px; border-radius: 6px; }
+.telegram-pairing-title { font-size: 11px; color: #87A99A; margin-bottom: 6px; }
+.flex-gap-8 { display: flex; gap: 8px; }
+.telegram-link-input { font-size: 11px; color: #16E6AB !important; }
+.telegram-linked-header { display: flex; align-items: center; justify-content: space-between; background: #060B09; border: 1px solid #20372C; padding: 12px; border-radius: 6px; }
+.telegram-user-title { font-weight: 600; color: #EAFFF5; }
+.telegram-chatid-text { font-size: 11px; color: #87A99A; }
+.pref-group-title { font-size: 12px; font-weight: 600; color: #EAFFF5; margin-bottom: 8px; }
+.pref-checkbox-list { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #87A99A; }
+.pref-checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.danger-zone-title { font-size: 11px; color: #ff5252; font-weight: 600; }
+.danger-zone-desc { font-size: 11px; color: #87A99A; margin: 4px 0 8px 0; }

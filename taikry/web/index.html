@@ -132,7 +132,7 @@
           </div>
           <div class="dev-info-col">
             <span class="dev-name">Heng Taikry</span>
-            <span class="dev-contact-sub"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" style="display:inline; vertical-align:middle; margin-right:2px;"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg> 0968288832</span>
+            <span class="dev-contact-sub"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" class="dev-contact-svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg> 0968288832</span>
           </div>
         </div>
         <button class="top-action-btn btn-account-saas" id="top-btn-account" onclick="switchNavPane('account')" title="SaaS Account, 14-Day Free Trial & Quotas">
@@ -581,7 +581,7 @@
 
                 <!-- Armed Alert Sub-Card -->
                 <div class="plan-armed-banner" id="plan-armed-banner">
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="display:inline; vertical-align:middle; margin-right:4px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" class="plan-armed-svg"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                   <span id="plan-armed-text">Alert ready to arm on qualified setup verification</span>
                 </div>
               </div>
@@ -1015,7 +1015,7 @@
             <button class="chat-chip" onclick="sendQuickPrompt('Best institutional setups now')">✨ Best setups</button>
             <button class="chat-chip" onclick="sendQuickPrompt('Macro news & FOMC impact')">🌐 Macro news</button>
             <button class="chat-chip" onclick="sendQuickPrompt('Risk check against configured server limits')">🛡️ Risk audit</button>
-            <button class="chat-chip" onclick="sendQuickPrompt('Pre-news deep research report for ' + (currentSymbol || 'XAUUSD'))" style="border-color:rgba(56,189,248,0.5); color:#38bdf8;">🔬 Pre-News Research</button>
+            <button class="chat-chip chat-chip-research" onclick="sendQuickPrompt('Pre-news deep research report for ' + (currentSymbol || 'XAUUSD'))">🔬 Pre-News Research</button>
           </div>
 
           <!-- Photo Attachment Preview Tray (Phone & PC) -->
@@ -1473,7 +1473,7 @@
           <button class="section-filter-btn" onclick="filterMarketsTable('COMMODITIES', this)">Precious Metals (Gold & Silver)</button>
           <button class="section-filter-btn" onclick="filterMarketsTable('FOREX', this)">Forex Majors & Crosses</button>
           <button class="section-filter-btn" onclick="filterMarketsTable('CRYPTO', this)">Cryptocurrency Fleet</button>
-          <div style="margin-left: auto;">
+          <div class="ml-auto">
             <input type="text" id="markets-table-search" class="watchlist-search-input" placeholder="Search symbol or name..." oninput="onMarketsTableSearch(this.value)">
           </div>
         </div>
@@ -1645,7 +1645,7 @@
             <div class="section-card-title">
               <span>🛡 Data Completeness & Methodology</span>
             </div>
-            <div class="text-sm text-secondary" style="line-height: 1.6;">
+            <div class="text-sm text-secondary lh-16">
               <p><b>Institutional Grading Rule:</b> All metrics are calculated exclusively from verified signals saved in PostgreSQL database. Unfavorable candles that touch both Stop Loss and Take Profit within the same candle are graded with conservative execution rules.</p>
               <p class="mt-8"><b>Zero Fabricated Win Rates:</b> When database is empty or new pair is initialized, metrics explicitly show "--" awaiting verified forward results.</p>
             </div>
@@ -1805,7 +1805,7 @@
             <span>🚀 Connect Your Windows Exness MT5 in 30 Seconds</span>
           </div>
           <div class="bridge-instruction-box">
-            <ol class="bib-steps" style="line-height: 1.8;">
+            <ol class="bib-steps lh-18">
               <li>Ensure Exness MetaTrader 5 is installed and running on your Windows PC.</li>
               <li>In MT5, enable: <code>Tools ➔ Options ➔ Expert Advisors ➔ Allow algorithmic trading</code>.</li>
               <li>In your Windows command prompt / PowerShell, launch the bridge:
@@ -1918,7 +1918,7 @@
             </div>
 
             <!-- Smoke Test Telemetry Card -->
-            <div id="anyrouter-smoke-result-box" class="smoke-result-box mb-15" style="display: none;">
+            <div id="anyrouter-smoke-result-box" class="smoke-result-box mb-15 hidden-initially">
               <div class="flex-between mb-5">
                 <span class="text-bold text-xs" id="smoke-status-title">SMOKE TEST TELEMETRY</span>
                 <span class="text-xs text-muted" id="smoke-time"></span>
@@ -1927,7 +1927,7 @@
             </div>
 
             <!-- Discovered Models Table -->
-            <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+            <div class="table-responsive table-scroll-280">
               <table class="market-table" id="anyrouter-models-table">
                 <thead>
                   <tr>
@@ -1953,8 +1953,8 @@
         <div class="section-card mt-20" id="card-freellmapi-gateway">
           <div class="section-card-title flex-between">
             <div class="flex-row gap-10 align-center">
-              <span style="font-size: 1.1rem;">🌐 FreeLLMAPI Unified Open-Source Fleet</span>
-              <a href="https://github.com/tashfeenahmed/freellmapi" target="_blank" rel="noopener noreferrer" class="badge badge-outline" style="text-decoration:none; font-size:11px;">
+              <span class="text-title-lg">🌐 FreeLLMAPI Unified Open-Source Fleet</span>
+              <a href="https://github.com/tashfeenahmed/freellmapi" target="_blank" rel="noopener noreferrer" class="badge badge-outline badge-no-underline">
                 ⭐ github.com/tashfeenahmed/freellmapi
               </a>
             </div>
@@ -1963,14 +1963,14 @@
             </div>
           </div>
           <div class="p-15">
-            <div style="background: rgba(0, 217, 154, 0.05); border: 1px solid rgba(0, 217, 154, 0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
-              <div style="color: #00D99A; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+            <div class="freellmapi-banner">
+              <div class="freellmapi-banner-title">
                 💡 Optional FreeLLMAPI Provider Proxy / ច្រកភ្ជាប់ម៉ូដែល AI តាមការកំណត់
               </div>
-              <p style="color: #87A99A; font-size: 12px; margin: 0 0 6px 0; line-height: 1.5;">
+              <p class="freellmapi-banner-p">
                 <strong>English:</strong> FreeLLMAPI can route requests through configured provider keys using an OpenAI-compatible interface. It is disabled until an administrator configures it. Local Docker runs only while your machine is on; cloud availability depends on the host plan, and free plans may sleep.
               </p>
-              <p style="color: #87A99A; font-size: 12px; margin: 0; line-height: 1.5;">
+              <p class="freellmapi-banner-p-last">
                 <strong>ភាសាខ្មែរ:</strong> FreeLLMAPI ប្រមូលផ្តុំកូនសោ API ឥតគិតថ្លៃជាច្រើនបញ្ចូលគ្នាទៅជា OpenAI endpoint តែមួយ។ អ្នកអាចដំណើរការវាលើកុំព្យូទ័រតាម Docker ឬដាក់ពង្រាយលើ Cloud (Render/Railway) ដើម្បីដំណើរការ 24 ម៉ោងដោយមិនចាំបាច់បើក PC ចោលឡើយ។
               </p>
             </div>
@@ -2001,20 +2001,20 @@
               <span class="text-muted text-xs align-self-center" id="freellmapi-status-label">Standby</span>
             </div>
 
-            <div id="freellmapi-test-output-box" class="smoke-result-box mb-15" style="display: none;">
+            <div id="freellmapi-test-output-box" class="smoke-result-box mb-15 hidden-initially">
               <div class="flex-between mb-5">
                 <span class="text-bold text-xs" id="freellmapi-telemetry-title">FREELLMAPI TELEMETRY</span>
                 <span class="text-xs text-muted" id="freellmapi-test-time"></span>
               </div>
-              <div class="text-xs font-mono" id="freellmapi-test-output" style="white-space: pre-wrap; max-height: 150px; overflow-y: auto;"></div>
+              <div class="text-xs font-mono test-output-scroll" id="freellmapi-test-output"></div>
             </div>
 
-            <div id="freellmapi-models-container" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid #20372C; border-radius: 6px; padding: 10px;">
+            <div id="freellmapi-models-container" class="models-pool-container hidden-initially">
               <div class="flex-between mb-5">
                 <span class="text-xs text-bold text-gold">DISCOVERED MODELS POOL (<span id="freellmapi-models-count">0</span>)</span>
                 <button class="btn btn-outline btn-xs" onclick="document.getElementById('freellmapi-models-container').style.display='none'">✕ Close</button>
               </div>
-              <div id="freellmapi-models-list" class="flex-row gap-5 flex-wrap" style="max-height: 120px; overflow-y: auto;"></div>
+              <div id="freellmapi-models-list" class="flex-row gap-5 flex-wrap models-list-scroll"></div>
             </div>
           </div>
         </div>
@@ -2061,7 +2061,7 @@
           <div class="section-card-title flex-between">
             <span>🛡 Agent Control Center & Institutional Deep Analysis</span>
             <div class="flex-row gap-10 align-center">
-              <select id="deep-analysis-symbol" class="settings-select" title="Select Market Symbol for Deep Analysis" aria-label="Select Market Symbol for Deep Analysis" style="width: auto; padding: 4px 8px;">
+              <select id="deep-analysis-symbol" class="settings-select select-compact" title="Select Market Symbol for Deep Analysis" aria-label="Select Market Symbol for Deep Analysis">
                 <option value="XAUUSD">XAUUSD (Gold)</option>
                 <option value="BTCUSDT">BTCUSDT (Bitcoin)</option>
                 <option value="EURUSD">EURUSD</option>
@@ -2112,7 +2112,7 @@
             </div>
 
             <!-- Deep Analysis Trace Inspector Box -->
-            <div id="deep-analysis-trace-box" class="deep-trace-inspector" style="display: none;">
+            <div id="deep-analysis-trace-box" class="deep-trace-inspector hidden-initially">
               <div class="flex-between border-bottom pb-10 mb-10">
                 <div>
                   <span class="text-bold text-lg" id="trace-symbol">XAUUSD</span>
@@ -2269,7 +2269,7 @@
             <button class="btn btn-outline btn-xs" onclick="loadAdminSaaSData()">🔄 Reload SaaS Users</button>
           </div>
           <!-- SaaS KPI Stats -->
-          <div class="section-kpi-grid mt-10" style="margin-bottom: 16px;">
+          <div class="section-kpi-grid mt-10 mb-16">
             <div class="section-kpi-card">
               <div class="section-kpi-label">Registered Accounts</div>
               <div class="section-kpi-val text-green" id="admin-saas-total-users">0</div>
@@ -2293,11 +2293,11 @@
           </div>
 
           <!-- User Directory Search & Table -->
-          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-            <input type="text" id="admin-user-search-input" class="vip-input-field" placeholder="Search by email or name..." style="max-width: 300px;" oninput="filterAdminUsers(this.value)">
+          <div class="admin-search-row">
+            <input type="text" id="admin-user-search-input" class="vip-input-field admin-search-input" placeholder="Search by email or name..." oninput="filterAdminUsers(this.value)">
             <button class="btn btn-outline btn-sm" onclick="loadAdminSaaSData()">Search</button>
           </div>
-          <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+          <div class="table-responsive table-scroll-380">
             <table class="table-terminal">
               <thead>
                 <tr>
@@ -2374,7 +2374,7 @@
               </div>
               <div class="vip-input-wrap">
                 <label class="vip-input-label" for="acc-email">Email Address</label>
-                <input type="email" class="vip-input-field" id="acc-email" readonly style="opacity: 0.8; background: #0b1511;">
+                <input type="email" class="vip-input-field input-readonly-dim" id="acc-email" readonly>
               </div>
               <div class="vip-input-wrap">
                 <label class="vip-input-label" for="acc-language">Terminal Language</label>
@@ -2388,15 +2388,15 @@
                 <input type="text" class="vip-input-field" id="acc-timezone" value="Asia/Phnom_Penh (UTC+7)">
               </div>
             </div>
-            <div style="margin-top: 14px;">
+            <div class="mt-14">
               <button class="btn btn-gold btn-sm" onclick="saveUserProfile()">💾 Update Profile</button>
             </div>
 
             <!-- Password Update Box -->
-            <div class="section-card-title mt-20" style="font-size: 13px; border-top: 1px solid var(--zyrox-border, #20372C); padding-top: 16px;">
+            <div class="section-card-title mt-20 card-title-bordered">
               <span>🔑 Change Account Password</span>
             </div>
-            <div class="vip-grant-form-grid" style="grid-template-columns: 1fr 1fr; margin-top: 10px;">
+            <div class="vip-grant-form-grid grid-2col-mt10">
               <div class="vip-input-wrap">
                 <label class="vip-input-label" for="acc-old-pass">Current Password</label>
                 <input type="password" class="vip-input-field" id="acc-old-pass" placeholder="••••••••">
@@ -2406,7 +2406,7 @@
                 <input type="password" class="vip-input-field" id="acc-new-pass" placeholder="••••••••">
               </div>
             </div>
-            <div style="margin-top: 12px;">
+            <div class="mt-12">
               <button class="btn btn-outline btn-sm" onclick="updateUserPassword()">🛡 Change Password</button>
             </div>
           </div>
@@ -2415,65 +2415,65 @@
           <div class="section-card">
             <div class="section-card-title">
               <span>✈️ Telegram Intelligence Webhook Linking</span>
-              <span class="badge" id="saas-telegram-status-badge" style="background: rgba(0, 217, 154, 0.15); color: #00D99A; border: 1px solid #00D99A; padding: 2px 8px; border-radius: 4px; font-size: 11px;">NOT LINKED</span>
+              <span class="badge badge-telegram-unlinked" id="saas-telegram-status-badge">NOT LINKED</span>
             </div>
 
-            <div id="saas-telegram-unlinked-box" style="margin-top: 12px;">
-              <p style="font-size: 12px; color: var(--zyrox-muted, #87A99A); line-height: 1.5;">
+            <div id="saas-telegram-unlinked-box" class="mt-12">
+              <p class="telegram-unlinked-desc">
                 Pair your account with the configured ZYROX AI Telegram bot to receive approved BUY/SELL alerts with validated Stop Loss, Take Profit, reward-floor, and risk details.
               </p>
-              <div style="margin-top: 14px;">
+              <div class="mt-14">
                 <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">⚡ Connect Telegram (Instant 1-Click)</button>
               </div>
-              <div id="saas-telegram-token-display" style="display: none; margin-top: 14px; background: #060B09; border: 1px solid #20372C; padding: 12px; border-radius: 6px;">
-                <div style="font-size: 11px; color: #87A99A; margin-bottom: 6px;">Secure 15-Minute One-Time Pairing Link:</div>
-                <div style="display: flex; gap: 8px;">
-                  <input type="text" id="saas-telegram-link-url" readonly class="vip-input-field" style="font-size: 11px; color: #16E6AB;">
+              <div id="saas-telegram-token-display" class="telegram-pairing-box hidden-initially">
+                <div class="telegram-pairing-title">Secure 15-Minute One-Time Pairing Link:</div>
+                <div class="flex-gap-8">
+                  <input type="text" id="saas-telegram-link-url" readonly class="vip-input-field telegram-link-input">
                   <button class="btn btn-outline btn-xs" onclick="copyTelegramLink()">📋 Copy</button>
                   <a id="saas-telegram-link-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-gold btn-xs">🚀 Open Bot</a>
                 </div>
               </div>
             </div>
 
-            <div id="saas-telegram-linked-box" style="display: none; margin-top: 12px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; background: #060B09; border: 1px solid #20372C; padding: 12px; border-radius: 6px;">
+            <div id="saas-telegram-linked-box" class="mt-12 hidden-initially">
+              <div class="telegram-linked-header">
                 <div>
-                  <div style="font-weight: 600; color: #EAFFF5;" id="saas-telegram-user-display">@username</div>
-                  <div style="font-size: 11px; color: #87A99A;" id="saas-telegram-chatid-display">Chat ID: --</div>
+                  <div class="telegram-user-title" id="saas-telegram-user-display">@username</div>
+                  <div class="telegram-chatid-text" id="saas-telegram-chatid-display">Chat ID: --</div>
                 </div>
                 <button class="btn btn-danger btn-xs" onclick="unlinkTelegramAccount()">Disconnect</button>
               </div>
 
               <!-- Notification Preferences -->
-              <div style="margin-top: 16px;">
-                <div style="font-size: 12px; font-weight: 600; color: #EAFFF5; margin-bottom: 8px;">Granular Alert Preferences:</div>
-                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #87A99A;">
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <div class="mt-16">
+                <div class="pref-group-title">Granular Alert Preferences:</div>
+                <div class="pref-checkbox-list">
+                  <label class="pref-checkbox-label">
                     <input type="checkbox" id="pref-signals" checked> Real-time Trading Signals (BUY / SELL setups)
                   </label>
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <label class="pref-checkbox-label">
                     <input type="checkbox" id="pref-risk" checked> Configured Risk Cap & Invalidation Warnings
                   </label>
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <label class="pref-checkbox-label">
                     <input type="checkbox" id="pref-macro" checked> High-Impact Macro Economic Events (NFP, CPI, FOMC)
                   </label>
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <label class="pref-checkbox-label">
                     <input type="checkbox" id="pref-briefing" checked> Daily Morning Market Intelligence Briefing
                   </label>
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                  <label class="pref-checkbox-label">
                     <input type="checkbox" id="pref-trial" checked> 14-Day Free Trial Expiration Reminders
                   </label>
                 </div>
-                <div style="margin-top: 12px;">
+                <div class="mt-12">
                   <button class="btn btn-outline btn-xs" onclick="saveNotificationPreferences()">💾 Save Alert Preferences</button>
                 </div>
               </div>
             </div>
 
             <!-- Danger Zone: Delete Account -->
-            <div style="margin-top: 24px; border-top: 1px solid var(--zyrox-border, #20372C); padding-top: 14px;">
-              <div style="font-size: 11px; color: #ff5252; font-weight: 600;">Danger Zone:</div>
-              <p style="font-size: 11px; color: #87A99A; margin: 4px 0 8px 0;">Permanently delete your account, session credentials, and associated data.</p>
+            <div class="mt-24-bordered">
+              <div class="danger-zone-title">Danger Zone:</div>
+              <p class="danger-zone-desc">Permanently delete your account, session credentials, and associated data.</p>
               <button class="btn btn-danger btn-xs" onclick="confirmDeleteAccount()">🗑️ Delete Account</button>
             </div>
           </div>
@@ -2504,7 +2504,7 @@
             <div class="section-card-title">
               <span>📝 Open a Support Ticket</span>
             </div>
-            <div class="vip-grant-form-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="vip-grant-form-grid grid-2col">
               <div class="vip-input-wrap">
                 <label class="vip-input-label" for="ticket-category">Category *</label>
                 <select class="vip-input-field" id="ticket-category">
@@ -2534,7 +2534,7 @@
               <label class="vip-input-label" for="ticket-message">Detailed Description *</label>
               <textarea class="vip-input-field" id="ticket-message" rows="5" placeholder="Provide full details, error messages, symbol, or timeframe..."></textarea>
             </div>
-            <div style="margin-top: 14px;">
+            <div class="mt-14">
               <button class="btn btn-gold btn-sm" onclick="submitSupportTicket()">📩 Submit Support Ticket</button>
             </div>
           </div>
@@ -2544,7 +2544,7 @@
             <div class="section-card-title">
               <span>📋 My Ticket History</span>
             </div>
-            <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+            <div class="table-responsive table-scroll-480">
               <table class="table-terminal">
                 <thead>
                   <tr>
