@@ -2335,7 +2335,7 @@ async function runCockpitBestSetup() {
   if (statText) statText.innerText = "FINDING BEST SETUP...";
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/best-setup?category=${currentChipFilter}`);
+    const res = await fetch(`${API_BASE}/api/v1/best-setup?category=${currentChipFilter}`, { credentials: "include" });
     const data = await res.json();
     if (data.best_setup) {
       const best = data.best_setup;
@@ -2345,8 +2345,10 @@ async function runCockpitBestSetup() {
 
       const toast = document.getElementById("cockpit-status-toast");
       if (toast) {
-        toast.innerHTML = `<span class="toast-clock">🏆</span> <b>Best Institutional Setup Detected: ${best.symbol} (${best.market_bias}) — R:R ${best.risk_reward_ratio}</b>`;
+        toast.innerHTML = `<span class="toast-clock">🏆</span> <b>Best Institutional Setup Detected: ${best.symbol} (${best.market_bias || best.setup_status}) — R:R ${best.risk_reward_ratio || 'N/A'}</b>`;
       }
+    } else {
+      await triggerScan();
     }
   } catch (err) {
     console.error("Best setup error:", err);
@@ -3963,11 +3965,13 @@ async function submitChatMessage() {
     const resp = await fetch("/api/v1/ai/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(payload)
     });
 
     if (!resp.ok) {
-      throw new Error(`API HTTP ${resp.status}`);
+      const errJson = await resp.json().catch(() => ({}));
+      throw new Error(errJson.detail || `API HTTP ${resp.status}`);
     }
 
     const data = await resp.json();
@@ -4023,19 +4027,19 @@ Model: ${providerTag}
         <div class="chat-setup-grid">
           <div class="chat-setup-item">
             <div class="chat-setup-lbl">Entry Price</div>
-            <div class="chat-setup-val val-gold">$${entry}</div>
+            <div class="chat-setup-val val-gold">${(entry !== "---" && entry !== null && entry !== undefined) ? '$' + entry : '---'}</div>
           </div>
           <div class="chat-setup-item">
             <div class="chat-setup-lbl">Stop Loss (SL)</div>
-            <div class="chat-setup-val val-red">$${sl}</div>
+            <div class="chat-setup-val val-red">${(sl !== "---" && sl !== null && sl !== undefined) ? '$' + sl : '---'}</div>
           </div>
           <div class="chat-setup-item">
             <div class="chat-setup-lbl">Take Profit 1 (TP1)</div>
-            <div class="chat-setup-val val-green">$${tp1}</div>
+            <div class="chat-setup-val val-green">${(tp1 !== "---" && tp1 !== null && tp1 !== undefined) ? '$' + tp1 : '---'}</div>
           </div>
           <div class="chat-setup-item">
             <div class="chat-setup-lbl">Take Profit 2 (TP2)</div>
-            <div class="chat-setup-val val-green">$${tp2}</div>
+            <div class="chat-setup-val val-green">${(tp2 !== "---" && tp2 !== null && tp2 !== undefined) ? '$' + tp2 : '---'}</div>
           </div>
           <div class="chat-setup-item chat-setup-grid-full">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -4132,7 +4136,7 @@ Model: ${providerTag}
     console.error("AI Chat Error:", err);
     typingMsg.querySelector(".chat-text").innerHTML = `
       <div style="color:var(--accent-red); font-size:11.5px;">
-        ⚠️ The selected cloud LLM provider is unavailable (${escapeHtml(err.message)}). Check its configuration or choose another provider.
+        ⚠️ AI Chat notice: ${escapeHtml(err.message || 'Service temporarily unavailable')}. Please retry or choose another provider.
       </div>
     `;
     stream.scrollTop = stream.scrollHeight;
