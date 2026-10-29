@@ -5881,3 +5881,17 @@ async function testFreeLLMAPIInference() {
 function initFreeLLMAPIUI() {
   pingFreeLLMAPI();
 }
+
+
+/* =====================================================================
+   ZYROX AI — SCHEMA STUDIO BRIDGE CONTROLLER
+   ===================================================================== */
+window.openSchemaStudio = function() {
+  const root = document.getElementById("schema-studio-root");
+  if (root) {
+    root.style.display = "block";
+    if (window.initSchemaStudio) {
+      window.initSchemaStudio();
+    }
+  }
+};

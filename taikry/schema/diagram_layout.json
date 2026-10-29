@@ -1,0 +1,206 @@
+{
+  "viewport": {
+    "zoom": 1.1,
+    "pan_x": 50,
+    "pan_y": 50
+  },
+  "nodes": {
+    "agent_debate_sessions": {
+      "x": 60,
+      "y": 60,
+      "width": 320,
+      "domain": "AI & Intelligence",
+      "collapsed": false
+    },
+    "agent_learning_models": {
+      "x": 460,
+      "y": 60,
+      "width": 320,
+      "domain": "AI & Intelligence",
+      "collapsed": false
+    },
+    "agent_opinions": {
+      "x": 860,
+      "y": 60,
+      "width": 320,
+      "domain": "AI & Intelligence",
+      "collapsed": false
+    },
+    "consensus_reports": {
+      "x": 1260,
+      "y": 60,
+      "width": 320,
+      "domain": "AI & Intelligence",
+      "collapsed": false
+    },
+    "ai_usage_records": {
+      "x": 60,
+      "y": 740,
+      "width": 320,
+      "domain": "Core",
+      "collapsed": false
+    },
+    "schema_migrations": {
+      "x": 460,
+      "y": 740,
+      "width": 320,
+      "domain": "Core",
+      "collapsed": false
+    },
+    "vip_invite_links": {
+      "x": 860,
+      "y": 740,
+      "width": 320,
+      "domain": "Core",
+      "collapsed": false
+    },
+    "xauusd_daily_reports": {
+      "x": 1260,
+      "y": 740,
+      "width": 320,
+      "domain": "Core",
+      "collapsed": false
+    },
+    "audit_logs": {
+      "x": 60,
+      "y": 1420,
+      "width": 320,
+      "domain": "System & Audit",
+      "collapsed": false
+    },
+    "system_health_audits": {
+      "x": 460,
+      "y": 1420,
+      "width": 320,
+      "domain": "System & Audit",
+      "collapsed": false
+    },
+    "backtest_jobs": {
+      "x": 60,
+      "y": 1760,
+      "width": 320,
+      "domain": "Trading & Signals",
+      "collapsed": false
+    },
+    "paper_trades": {
+      "x": 460,
+      "y": 1760,
+      "width": 320,
+      "domain": "Trading & Signals",
+      "collapsed": false
+    },
+    "signal_lifecycle_events": {
+      "x": 860,
+      "y": 1760,
+      "width": 320,
+      "domain": "Trading & Signals",
+      "collapsed": false
+    },
+    "signal_lifecycles": {
+      "x": 1260,
+      "y": 1760,
+      "width": 320,
+      "domain": "Trading & Signals",
+      "collapsed": false
+    },
+    "xauusd_telegram_signals": {
+      "x": 60,
+      "y": 2100,
+      "width": 320,
+      "domain": "Trading & Signals",
+      "collapsed": false
+    },
+    "market_snapshots": {
+      "x": 60,
+      "y": 2440,
+      "width": 320,
+      "domain": "Market Data",
+      "collapsed": false
+    },
+    "support_tickets": {
+      "x": 460,
+      "y": 2440,
+      "width": 320,
+      "domain": "Market Data",
+      "collapsed": false
+    },
+    "notification_audits": {
+      "x": 60,
+      "y": 2780,
+      "width": 320,
+      "domain": "Notifications",
+      "collapsed": false
+    },
+    "notification_preferences": {
+      "x": 460,
+      "y": 2780,
+      "width": 320,
+      "domain": "Notifications",
+      "collapsed": false
+    },
+    "system_alert_auto_fixes": {
+      "x": 860,
+      "y": 2780,
+      "width": 320,
+      "domain": "Notifications",
+      "collapsed": false
+    },
+    "telegram_links": {
+      "x": 1260,
+      "y": 2780,
+      "width": 320,
+      "domain": "Notifications",
+      "collapsed": false
+    },
+    "subscription_plans": {
+      "x": 60,
+      "y": 3460,
+      "width": 320,
+      "domain": "Auth & SaaS",
+      "collapsed": false
+    },
+    "trial_grants": {
+      "x": 460,
+      "y": 3460,
+      "width": 320,
+      "domain": "Auth & SaaS",
+      "collapsed": false
+    },
+    "user_sessions": {
+      "x": 860,
+      "y": 3460,
+      "width": 320,
+      "domain": "Auth & SaaS",
+      "collapsed": false
+    },
+    "user_subscriptions": {
+      "x": 1260,
+      "y": 3460,
+      "width": 320,
+      "domain": "Auth & SaaS",
+      "collapsed": false
+    },
+    "users": {
+      "x": 150,
+      "y": 250,
+      "width": 320,
+      "domain": "Auth & SaaS",
+      "collapsed": false
+    },
+    "verification_tokens": {
+      "x": 460,
+      "y": 3800,
+      "width": 320,
+      "domain": "Auth & SaaS",
+      "collapsed": false
+    },
+    "vip_subscriptions": {
+      "x": 860,
+      "y": 3800,
+      "width": 320,
+      "domain": "Auth & SaaS",
+      "collapsed": false
+    }
+  },
+  "custom_relationships": []
+}
