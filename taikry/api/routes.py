@@ -12,6 +12,9 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Depends, Header, Query, Cookie, Request
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 from pydantic import BaseModel, Field
 
 from taikry.config import (
@@ -371,15 +374,12 @@ def get_best_market_setup(category: str = "ALL"):
     }
 
 # 2b. SSE Real-Time Streaming Endpoint (High Performance, Low Latency Push)
-@router.get("/api/v1/stream/signals")
+@router.get("/api/v1/stream/signals", response_class=StreamingResponse, include_in_schema=False)
 async def stream_signals_sse(request: Request, symbol: str = "XAUUSD"):
     """
     Server-Sent Events (SSE) Real-Time Signal Stream for high-performance dashboard clients.
     Pushes live setup signals and price delta updates with sub-second latency.
     """
-    from fastapi.responses import StreamingResponse
-    import asyncio
-    import json
 
     async def event_generator():
         last_sent_price = 0.0
