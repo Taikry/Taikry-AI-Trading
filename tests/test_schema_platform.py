@@ -210,3 +210,4 @@ def test_environments_metadata():
     assert "local" in env_ids
     assert "staging" in env_ids
     assert "production" in env_ids
+

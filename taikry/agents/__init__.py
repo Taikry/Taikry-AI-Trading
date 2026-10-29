@@ -3,6 +3,7 @@ TAIKRY AI MARKET INTELLIGENCE PRO — Multi-Agent Package
 ======================================================
 Exposes all specialized institutional agents and the central Dynamic Agent Registry.
 """
+from taikry.agents.data_quality_agent import data_quality_agent, MarketDataQualityAgent, DataQualityOutput
 from taikry.agents.technical_analyst import technical_analyst_agent, TechnicalAnalystAgent
 from taikry.agents.ict_smc_analyst import ict_smc_analyst_agent, IctSmcAnalystAgent
 from taikry.agents.macro_analyst import macro_analyst_agent, MacroAnalystAgent

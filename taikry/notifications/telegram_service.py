@@ -1573,6 +1573,11 @@ Pre-news lockout in effect. Wide spreads and volatile slippage anticipated.
         from taikry.database.models import (
             SignalLifecycleEventModel, EventDeliveryStatus, SignalLifecycleModel
         )
+        from taikry.config import TELEGRAM_SEND_LIFECYCLE_EVENTS
+        if not TELEGRAM_SEND_LIFECYCLE_EVENTS:
+            logger.info("send_lifecycle_event_notification: Telegram lifecycle notifications are suppressed by policy.")
+            return False, None, "LIFECYCLE_NOTIFICATIONS_DISABLED_BY_POLICY"
+
         idempotency_key = event_dict.get("idempotency_key")
         if not idempotency_key:
             return False, None, "Missing idempotency_key"

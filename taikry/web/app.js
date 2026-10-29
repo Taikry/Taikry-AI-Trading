@@ -1902,10 +1902,10 @@ async function runCockpitLiveDebate() {
     });
   } catch (err) {
     console.error("Cockpit Live Debate Error:", err);
-    container.innerHTML = `<div class="bot-debate-placeholder"><span style="color:#ef4444">⚠️ Live debate notice: ${escapeHtml(err.message || 'Please retry in a moment.')}</span></div>`;
+    container.innerHTML = `<div class="bot-debate-placeholder"><span style="color:#ef4444">⚠️ Live debate notice: ${escapeHtml(err.message || 'Please retry in a moment.')}</span><div style="margin-top:10px;"><button class="btn btn-gold btn-sm" onclick="runCockpitLiveDebate()">🔄 Retry Live Debate (ព្យាយាមម្តងទៀត)</button></div></div>`;
   } finally {
     if (btn) {
-      btn.innerHTML = `📋 Review Agent Evidence (ពិនិត្យភស្តុតាង)`;
+      btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
       btn.disabled = false;
     }
   }

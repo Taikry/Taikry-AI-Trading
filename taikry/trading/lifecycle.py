@@ -47,7 +47,7 @@ from taikry.database.models import (
     LifecycleEventType,
     EventDeliveryStatus
 )
-from taikry.notifications.telegram_service import telegram_service
+# from taikry.notifications.telegram_service import telegram_service (lazy imported in _notify_transition to avoid circular import)
 from taikry.notifications.make_webhook_dispatcher import dispatch_to_make
 from taikry.config import TELEGRAM_CHAT_ID, RISK_PER_TRADE_PERCENT
 
@@ -537,11 +537,19 @@ class SignalLifecycleManager:
             "original_telegram_message_id": signal_data.get("telegram_message_id")
         }
 
-        # 1. Telegram Alert with atomic idempotency
-        try:
-            telegram_service.send_lifecycle_event_notification(event_dict)
-        except Exception as e:
-            logger.warning(f"Failed to dispatch Telegram lifecycle notification: {e}")
+        # 1. Telegram Alert with atomic idempotency (policy-controlled)
+        from taikry.config import TELEGRAM_SEND_LIFECYCLE_EVENTS
+        if TELEGRAM_SEND_LIFECYCLE_EVENTS:
+            try:
+                from taikry.notifications.telegram_service import telegram_service
+                telegram_service.send_lifecycle_event_notification(event_dict)
+            except Exception as e:
+                logger.warning(f"Failed to dispatch Telegram lifecycle notification: {e}")
+        else:
+            logger.info(
+                f"Telegram lifecycle dispatch suppressed by policy (TELEGRAM_SEND_LIFECYCLE_EVENTS=False). "
+                f"Event {event_type.value} recorded for signal {signal_data['signal_id']} in internal state engine."
+            )
 
         # 2. Make.com Webhook Dispatch
         payload = {

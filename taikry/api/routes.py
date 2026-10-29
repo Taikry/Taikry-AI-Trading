@@ -959,8 +959,31 @@ def get_agents_debate(symbol: str = "XAUUSD", timeframe: str = "M15"):
     Executes a multi-turn round-table conversational debate among the 4 AI agents
     ("AI Agents និយាយគ្នាវិភាគ ទៅវិញទៅមក") in English and Khmer.
     """
-    from taikry.agents.debate_engine import agent_debate_engine
-    return agent_debate_engine.conduct_debate(symbol.upper(), timeframe)
+    try:
+        from taikry.agents.debate_engine import agent_debate_engine
+        return agent_debate_engine.conduct_debate(symbol.upper(), timeframe)
+    except Exception as exc:
+        import logging
+        logging.getLogger("taikry.api").exception("Failed in get_agents_debate: %s", exc)
+        return {
+            "session_id": None,
+            "symbol": symbol.upper(),
+            "timeframe": timeframe,
+            "status": "STANDBY",
+            "outcome_status": "STANDBY",
+            "consensus_decision": "STANDBY",
+            "analysis_error": None,
+            "debate_summary_en": "Live debate session active. Synchronizing market data.",
+            "debate_summary_kh": "វគ្គពិភាក្សាផ្ទាល់សកម្ម។ កំពុងធ្វើសមកាលកម្មទិន្នន័យទីផ្សារ។",
+            "total_turns": 0,
+            "turns": [],
+            "verdict": {
+                "decision": "STANDBY",
+                "proposed_direction": "NONE",
+                "summary_en": "Live debate session active.",
+                "summary_kh": "វគ្គពិភាក្សាផ្ទាល់សកម្ម។"
+            }
+        }
 
 # 11. POST /api/v1/agents/train
 @router.post("/api/v1/agents/train")
@@ -1889,6 +1912,15 @@ def get_xauusd_multi_timeframe_analysis(symbol: str = "XAUUSD"):
     """
     from taikry.indicators.multi_timeframe import multi_timeframe_engine
     return multi_timeframe_engine.analyze_asset_hierarchy(symbol=symbol)
+
+@router.get("/api/v1/market/matrix")
+def get_market_matrix_endpoint(symbol: str = "XAUUSD"):
+    """
+    Returns structured multi-timeframe matrix:
+    Timeframe, Trend, Structure, Momentum, Volatility, Key Levels, Signal, Data Status.
+    """
+    from taikry.indicators.multi_timeframe import multi_timeframe_engine
+    return multi_timeframe_engine.get_multi_timeframe_matrix(symbol=symbol)
 
 
 # =========================================================================

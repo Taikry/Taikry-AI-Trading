@@ -119,6 +119,10 @@ USDT_TRC20_WALLET = os.getenv("USDT_TRC20_WALLET", "")
 TELEGRAM_ADMIN_USERNAME = os.getenv("TELEGRAM_ADMIN_USERNAME", "")
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_WEBHOOK_SECRET = _credential("TELEGRAM_WEBHOOK_SECRET")
+
+# Signal Delivery Policy:
+# Telegram strictly dispatches primary AI signals (capped at 4/4 per day); lifecycle transitions (TP/SL/BE) are kept in local UI/database only
+TELEGRAM_SEND_LIFECYCLE_EVENTS: bool = os.getenv("TELEGRAM_SEND_LIFECYCLE_EVENTS", "false").strip().lower() in ("true", "1", "yes")
 PUBLIC_APP_URL = os.getenv("PUBLIC_APP_URL", os.getenv("RENDER_EXTERNAL_URL", "")).strip().rstrip("/")
 CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()

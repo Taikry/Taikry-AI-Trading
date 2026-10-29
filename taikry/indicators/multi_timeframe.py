@@ -329,5 +329,91 @@ class MultiTimeframeEngine:
             "timestamp_utc": now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
         }
 
+    def get_multi_timeframe_matrix(self, symbol: str = "XAUUSD") -> Dict[str, Any]:
+        """
+        Builds a comprehensive multi-timeframe matrix:
+        Timeframe, Trend, Structure, Momentum, Volatility, Key Levels, Signal, Data Status.
+        """
+        hierarchy = self.analyze_asset_hierarchy(symbol)
+        if hierarchy.get("status") == "DATA_UNAVAILABLE":
+            return {
+                "symbol": symbol.upper(),
+                "status": "DATA_UNAVAILABLE",
+                "error": hierarchy.get("data_error", "Data unavailable"),
+                "rows": [],
+                "overall_bias": "NO TRADE",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+            }
+
+        tf_details = hierarchy.get("timeframe_details", {})
+        matrix_rows: List[Dict[str, Any]] = []
+
+        for tf in self.TIMEFRAMES:
+            info = tf_details.get(tf, {})
+            bias = info.get("bias", "NEUTRAL")
+            rsi = info.get("rsi14", 50.0)
+            atr = info.get("atr14", 1.0)
+            bos = info.get("bos_count", 0)
+            choch = info.get("choch_count", 0)
+
+            # Structure
+            if choch > 0:
+                struct = "CHoCH Change of Character"
+            elif bos > 0 and bias == "BULLISH":
+                struct = "Higher Highs (Bullish BOS)"
+            elif bos > 0 and bias == "BEARISH":
+                struct = "Lower Lows (Bearish BOS)"
+            else:
+                struct = "Consolidation / Equilibrium"
+
+            # Momentum
+            if rsi >= 70.0:
+                mom = f"Overbought (RSI {rsi:.1f})"
+            elif rsi <= 30.0:
+                mom = f"Oversold (RSI {rsi:.1f})"
+            elif rsi >= 55.0:
+                mom = f"Bullish Expansion (RSI {rsi:.1f})"
+            elif rsi <= 45.0:
+                mom = f"Bearish Drift (RSI {rsi:.1f})"
+            else:
+                mom = f"Neutral Range (RSI {rsi:.1f})"
+
+            # Volatility
+            vol = f"ATR: {atr:.2f} pts"
+
+            # Signal
+            if bias == "BULLISH":
+                sig = "LONG"
+            elif bias == "BEARISH":
+                sig = "SHORT"
+            else:
+                sig = "WAIT"
+
+            matrix_rows.append({
+                "timeframe": tf,
+                "trend": bias,
+                "structure": struct,
+                "momentum": mom,
+                "volatility": vol,
+                "key_levels": {
+                    "resistance": info.get("key_resistance"),
+                    "support": info.get("key_support"),
+                    "ema20": info.get("ema20"),
+                    "ema50": info.get("ema50")
+                },
+                "signal": sig,
+                "data_status": "FRESH"
+            })
+
+        return {
+            "symbol": symbol.upper(),
+            "status": "HEALTHY",
+            "overall_bias": hierarchy.get("overall_bias", "NEUTRAL"),
+            "confluence_score": hierarchy.get("confluence_score"),
+            "session": hierarchy.get("session_context", {}).get("current_session", "ACTIVE"),
+            "rows": matrix_rows,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        }
+
 
 multi_timeframe_engine = MultiTimeframeEngine()

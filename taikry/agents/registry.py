@@ -227,7 +227,26 @@ class AgentRegistry:
         }
 
     def _register_default_fleet(self):
-        """Initializes the existing 7 specialized institutional agents."""
+        """Initializes all specialized institutional agents."""
+        # 0. Market Data Quality Agent
+        from taikry.agents.data_quality_agent import data_quality_agent
+        meta0 = AgentMetadata(
+            agent_id="data_quality_agent",
+            name="Agent 1: Market Data Quality & Integrity Agent",
+            description="Audits market feeds, tick arrival latency, bid-ask spread expansion, and broker-to-reference quote alignment.",
+            specialization="Feed Freshness, Spread Expansion Audit, Broker vs Reference Divergence",
+            model_provider="python_deterministic_strict",
+            model_identifier="zyrox_data_quality_v1",
+            execution_mode="local",
+            supported_tasks=["feed_freshness", "spread_audit", "quote_divergence", "tick_latency"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=20,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta0, data_quality_agent.analyze))
+
         # 1. Technical Analyst
         from taikry.agents.technical_analyst import technical_analyst_agent
         meta1 = AgentMetadata(
@@ -446,6 +465,139 @@ class AgentRegistry:
             version="2.2.0"
         )
         self.register(AgentAdapter(meta9, fractal_mtf_agent.analyze))
+
+        # 10. Market Regime Detection Agent
+        from taikry.agents.regime_detection_agent import regime_detection_agent
+        meta10 = AgentMetadata(
+            agent_id="regime_detection_agent",
+            name="Agent 6: Market Regime Detection Agent",
+            description="Identifies trending vs ranging structure, volatility squeezes, and Hurst exponent persistence.",
+            specialization="Market Regime, Hurst Exponent, Bollinger Compression, ADX Trend Strength",
+            model_provider="python_deterministic_quant",
+            model_identifier="zyrox_regime_v1",
+            execution_mode="local",
+            supported_tasks=["regime_classification", "hurst_exponent", "volatility_squeezes"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta10, regime_detection_agent.analyze))
+
+        # 11. Quantitative Research Agent
+        from taikry.agents.quantitative_research_agent import quantitative_research_agent
+        meta11 = AgentMetadata(
+            agent_id="quantitative_research_agent",
+            name="Agent 7: Quantitative Research Agent",
+            description="Computes return distributions, Z-scores, skewness, kurtosis, and statistical mean reversion probabilities.",
+            specialization="Z-Scores, Statistical Moments, Volatility Modeling & Mean Reversion",
+            model_provider="python_deterministic_quant",
+            model_identifier="zyrox_quant_v1",
+            execution_mode="local",
+            supported_tasks=["z_score", "distribution_moments", "mean_reversion"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta11, quantitative_research_agent.analyze))
+
+        # 12. Machine Learning Forecast Agent
+        from taikry.agents.ml_forecast_agent import ml_forecast_agent
+        meta12 = AgentMetadata(
+            agent_id="ml_forecast_agent",
+            name="Agent 8: Machine Learning Forecast Agent",
+            description="Evaluates feature vectors and outputs calibrated softmax probabilities for Bullish, Bearish, and Neutral outcomes.",
+            specialization="Directional Probabilities, Softmax Calibration, Feature Importance",
+            model_provider="python_deterministic_quant",
+            model_identifier="zyrox_ml_forecast_v1",
+            execution_mode="local",
+            supported_tasks=["directional_probability", "feature_importance"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta12, ml_forecast_agent.analyze))
+
+        # 13. Concept Recommendation Engine
+        from taikry.agents.concept_recommender import concept_recommender
+        meta13 = AgentMetadata(
+            agent_id="concept_recommender",
+            name="Agent 10: Strategy Discovery & Concept Recommender",
+            description="Audits 14 institutional market concepts against the active regime and recommends top qualified setups.",
+            specialization="14 Institutional Concepts, Setup Ranking, Qualified Concept Filter",
+            model_provider="python_deterministic_quant",
+            model_identifier="zyrox_concept_engine_v1",
+            execution_mode="local",
+            supported_tasks=["concept_discovery", "setup_ranking"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta13, concept_recommender.evaluate_concepts))
+
+        # 14. Counter-Analysis Critic
+        from taikry.agents.counter_analysis_agent import counter_analysis_agent
+        meta14 = AgentMetadata(
+            agent_id="counter_analysis_agent",
+            name="Agent 12: Counter-Analysis & Devil's Advocate Critic",
+            description="Stress tests proposed setups, identifies opposing liquidity traps, and computes setup fragility scores.",
+            specialization="Adversarial Stress Testing, Fragility Scoring, Invalidation Detection",
+            model_provider="python_deterministic_quant",
+            model_identifier="zyrox_critic_v1",
+            execution_mode="local",
+            supported_tasks=["stress_testing", "fragility_scoring"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta14, counter_analysis_agent.critique))
+
+        # 15. Portfolio Analysis Agent
+        from taikry.agents.portfolio_analysis_agent import portfolio_analysis_agent
+        meta15 = AgentMetadata(
+            agent_id="portfolio_analysis_agent",
+            name="Agent 15: Portfolio & Capital Exposure Agent",
+            description="Monitors aggregate portfolio heat, capital drawdowns, and correlated position exposure caps.",
+            specialization="Portfolio Risk Management, Drawdown Protection, Capital Allocation",
+            model_provider="python_deterministic_strict",
+            model_identifier="zyrox_portfolio_v1",
+            execution_mode="local",
+            supported_tasks=["portfolio_risk", "exposure_audit"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta15, portfolio_analysis_agent.evaluate_portfolio))
+
+        # 16. Execution Simulation Agent
+        from taikry.agents.execution_simulation_agent import execution_simulation_agent
+        meta16 = AgentMetadata(
+            agent_id="execution_simulation_agent",
+            name="Agent 16: Execution Simulation Agent",
+            description="Simulates realistic broker execution friction, spread cost, commission, slippage, and net effective R:R.",
+            specialization="Slippage Modeling, Commission Calculation, Effective Fill & Net R:R",
+            model_provider="python_deterministic_strict",
+            model_identifier="zyrox_exec_sim_v1",
+            execution_mode="local",
+            supported_tasks=["slippage_simulation", "cost_modeling", "net_rr_audit"],
+            supported_instruments=["ALL"],
+            timeout_seconds=3.0,
+            concurrency_limits=10,
+            health_status="NOT_RUN",
+            version="2.2.0"
+        )
+        self.register(AgentAdapter(meta16, execution_simulation_agent.simulate_execution))
 
 
 # Global Singleton Registry Instance
