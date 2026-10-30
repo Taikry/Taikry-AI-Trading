@@ -7,6 +7,7 @@ Live market data is reported unavailable when no verified provider responds.
 import time
 import datetime
 import threading
+import math
 from typing import Dict, Any, Optional, Tuple
 import requests
 import pandas as pd
@@ -299,7 +300,7 @@ class OandaDataProvider(BaseDataProvider):
             bid = float(bids[0].get("price", 0))
             ask = float(asks[0].get("price", 0))
             timestamp = self._parse_timestamp(item.get("time"))
-            if bid <= 0 or ask < bid or timestamp is None:
+            if bid <= 0 or ask <= bid or timestamp is None:
                 return None
             age = (datetime.datetime.now(datetime.timezone.utc) - timestamp).total_seconds()
             if age < -5 or age > 60:
@@ -366,6 +367,58 @@ class OandaDataProvider(BaseDataProvider):
 class BinanceDataProvider(BaseDataProvider):
     """Binance Public REST API adapter for cryptocurrency assets."""
     BASE_URL = "https://api.binance.com/api/v3"
+
+    def __init__(self):
+        self._quote_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self._quote_lock = threading.Lock()
+
+    def get_latest_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Return a current public spot bid/ask quote for supported crypto pairs."""
+        if not circuit_breaker.can_try_binance():
+            return None
+        cfg = get_symbol_config(symbol)
+        binance_sym = cfg.get("binance_symbol")
+        if not binance_sym:
+            return None
+
+        now = time.monotonic()
+        with self._quote_lock:
+            cached = self._quote_cache.get(binance_sym)
+            if cached and now - cached[0] < 1.0:
+                return dict(cached[1])
+        try:
+            response = requests.get(
+                f"{self.BASE_URL}/ticker/bookTicker",
+                params={"symbol": binance_sym},
+                timeout=(0.5, 0.8),
+            )
+            if response.status_code != 200:
+                circuit_breaker.record_failure("binance")
+                return None
+            result = response.json()
+            bid = float(result.get("bidPrice", 0.0))
+            ask = float(result.get("askPrice", 0.0))
+            if not math.isfinite(bid) or not math.isfinite(ask) or bid <= 0 or ask <= bid:
+                circuit_breaker.record_failure("binance")
+                return None
+            quote = {
+                "symbol": str(symbol).upper(),
+                "instrument": binance_sym,
+                "bid": bid,
+                "ask": ask,
+                "price": (bid + ask) / 2.0,
+                "spread": ask - bid,
+                "timestamp": datetime.datetime.now(datetime.timezone.utc),
+                "source": "BINANCE_SPOT",
+                "provider": "Binance Spot",
+            }
+            circuit_breaker.record_success("binance")
+            with self._quote_lock:
+                self._quote_cache[binance_sym] = (now, quote)
+            return dict(quote)
+        except Exception:
+            circuit_breaker.record_failure("binance")
+            return None
 
     def fetch_ohlcv(self, symbol: str, timeframe: str = "M15", limit: int = 200) -> pd.DataFrame:
         if not circuit_breaker.can_try_binance():
@@ -758,7 +811,7 @@ class MultiProviderMarketData:
             try:
                 bid = float(mt5_tick.get("bid", 0.0))
                 ask = float(mt5_tick.get("ask", 0.0))
-                if bid > 0 and ask >= bid:
+                if bid > 0 and ask > bid:
                     return {
                         "symbol": sym,
                         "price": (bid + ask) / 2.0,
@@ -775,6 +828,10 @@ class MultiProviderMarketData:
         quote = self.oanda.get_latest_quote(sym)
         if quote:
             return quote
+        if get_symbol_config(sym).get("category") == "Crypto":
+            quote = self.binance.get_latest_quote(sym)
+            if quote:
+                return quote
         return None
 
 

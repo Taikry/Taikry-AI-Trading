@@ -188,6 +188,7 @@
 
       // Realtime Incremental Update Buffer & Performance State
       this.lastTickTime = null;
+      this._candleAbortController = null;
       this.candleCache = {};
       this.proWorkspaceWrapper = null;
       this.tvEmbedWrapper = null;
@@ -332,8 +333,8 @@
           <div class="pro-toolbar-right">
             <!-- Data Freshness & Provider Pill -->
             <div class="pro-data-freshness-pill" id="pro-data-freshness-pill" title="Provider Provenance & Freshness Status">
-              <span class="freshness-dot pulse" id="freshness-dot"></span>
-              <span id="freshness-text">LIVE · Spot</span>
+              <span class="freshness-dot gray" id="freshness-dot"></span>
+              <span id="freshness-text">CONNECTING · verified candles</span>
             </div>
 
             <!-- Engine Mode Switcher -->
@@ -369,6 +370,7 @@
             <svg class="pro-chart-svg-overlay" id="pro-chart-svg-overlay"></svg>
             <svg class="pro-chart-drawing-overlay" id="pro-chart-drawing-overlay"></svg>
           </div>
+          <div class="pro-chart-state-overlay" id="pro-chart-state-overlay" hidden aria-live="polite"></div>
           <div class="pro-chart-subpane" id="pro-chart-rsi-pane" style="display: ${this.indicatorSettings.rsi ? 'block' : 'none'};"></div>
           <div class="pro-chart-subpane" id="pro-chart-macd-pane" style="display: ${this.indicatorSettings.macd ? 'block' : 'none'};"></div>
         </div>
@@ -719,7 +721,45 @@
     // DATA FETCHING & POPULATION (WITH PERSISTENT IN-MEMORY CACHE)
     // -------------------------------------------------------------------------
 
+    setChartState(type, options = {}) {
+      const host = document.getElementById("pro-chart-state-overlay");
+      if (!host || !window.ZyroxUI) return;
+      if (!type) {
+        host.hidden = true;
+        host.replaceChildren();
+        return;
+      }
+      host.hidden = false;
+      if (type === "loading") {
+        window.ZyroxUI.mount(host, window.ZyroxUI.ChartSkeleton({ language: this.lang }));
+      } else if (type === "empty") {
+        const dot = document.getElementById("freshness-dot");
+        const label = document.getElementById("freshness-text");
+        if (dot) dot.className = "freshness-dot gray";
+        if (label) label.textContent = "UNAVAILABLE · no verified candles";
+        window.ZyroxUI.mount(host, window.ZyroxUI.EmptyState({
+          icon: "⌁",
+          title: options.title || "No chart data",
+          message: options.message || "No verified candles were returned for this symbol and timeframe."
+        }));
+      } else {
+        const dot = document.getElementById("freshness-dot");
+        const label = document.getElementById("freshness-text");
+        if (dot) dot.className = "freshness-dot red";
+        if (label) label.textContent = "UNAVAILABLE · candle refresh failed";
+        window.ZyroxUI.mount(host, window.ZyroxUI.ErrorState({
+          title: options.title || "Chart refresh failed",
+          message: options.message || "The chart service could not return verified candles.",
+          retryLabel: options.retryLabel || "Retry chart",
+          onRetry: () => this.loadCandlesAndOverlays(this.currentSymbol, this.currentTimeframe, true)
+        }));
+      }
+    }
+
     async loadCandlesAndOverlays(symbol = "XAUUSD", timeframe = "M15", forceRefresh = false) {
+      if (this._candleAbortController) this._candleAbortController.abort();
+      const controller = new AbortController();
+      this._candleAbortController = controller;
       this.currentSymbol = symbol;
       this.currentTimeframe = timeframe;
 
@@ -736,10 +776,12 @@
       const tfMap = { "1": "M1", "5": "M5", "15": "M15", "30": "M30", "60": "H1", "240": "H4", "D": "D1", "W": "W1" };
       const cleanTf = tfMap[timeframe] || timeframe;
       const cacheKey = `${symbol}_${cleanTf}`;
+      const cachedSnapshot = this.candleCache[cacheKey];
+      const hasCachedData = Boolean(cachedSnapshot && Array.isArray(cachedSnapshot.candles) && cachedSnapshot.candles.length);
 
-      // Instant synchronous render from cache if available!
-      if (!forceRefresh && this.candleCache[cacheKey]) {
-        const cached = this.candleCache[cacheKey];
+      // Show only a matching symbol/timeframe snapshot while fetching its update.
+      if (hasCachedData) {
+        const cached = cachedSnapshot;
         this.candlesData = cached.candles || [];
         this.annotationsData = cached.annotations || {};
         this.metadata = cached.metadata || {};
@@ -755,16 +797,32 @@
         if (this.chart) {
           this.chart.timeScale().fitContent();
         }
+        this.setChartState(null);
+      } else {
+        // Do not leave the previous instrument's candles under a new symbol label.
+        this.candlesData = [];
+        if (this.mainSeries) this.mainSeries.setData([]);
+        if (this.volumeSeries) this.volumeSeries.setData([]);
+        Object.values(this.lineSeriesMap || {}).forEach(series => {
+          if (series && typeof series.setData === "function") series.setData([]);
+        });
+        if (this.rsiSeries) this.rsiSeries.setData([]);
+        if (this.macdLineSeries) this.macdLineSeries.setData([]);
+        if (this.macdSignalSeries) this.macdSignalSeries.setData([]);
+        if (this.macdHistSeries) this.macdHistSeries.setData([]);
+        this.setChartState("loading");
       }
 
       try {
         // Fetch fresh verified candles in background
         const endpoint = `/api/v1/chart/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(cleanTf)}&limit=150`;
-        const res = await fetch(endpoint);
+        const res = await fetch(endpoint, { signal: controller.signal });
+        if (controller.signal.aborted) return;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
         if (!data || !data.candles || data.candles.length === 0) {
+          if (!hasCachedData) this.setChartState("empty");
           return;
         }
 
@@ -802,9 +860,19 @@
         if (this.chart && (!this.candleCache[cacheKey] || forceRefresh)) {
           this.chart.timeScale().fitContent();
         }
+        this.setChartState(null);
 
       } catch (err) {
+        if (err && err.name === "AbortError") return;
         console.error("Failed to load chart data:", err);
+        if (hasCachedData) {
+          const freshness = document.getElementById("freshness-text");
+          const dot = document.getElementById("freshness-dot");
+          if (dot) dot.className = "freshness-dot yellow";
+          if (freshness) freshness.textContent = "Refresh delayed · showing cached candles";
+        } else {
+          this.setChartState("error", { message: err.message || "The chart service could not be reached." });
+        }
       }
     }
 
@@ -1052,11 +1120,14 @@
       const status = this.metadata.freshness_status || "LIVE_FRESH";
       const provider = this.metadata.provider_display || this.metadata.provider || "verified_feed";
       const quoteType = this.metadata.quote_type ? ` · ${this.metadata.quote_type}` : "";
+      const hasExecutionQuote = this.metadata.execution_quote_available === true;
 
       switch (status) {
         case "LIVE_FRESH":
-          dot.className = "freshness-dot pulse green";
-          text.innerText = `● LIVE · ${provider}${quoteType}`;
+          dot.className = hasExecutionQuote ? "freshness-dot pulse green" : "freshness-dot yellow";
+          text.innerText = hasExecutionQuote
+            ? `● LIVE · ${this.metadata.execution_quote_provider || provider}${quoteType}`
+            : `◷ REFERENCE ONLY · ${provider}${quoteType}`;
           break;
         case "SLIGHTLY_DELAYED":
           dot.className = "freshness-dot yellow";

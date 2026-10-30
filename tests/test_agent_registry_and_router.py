@@ -4,6 +4,7 @@ Unit and integration tests for STAGE B & C:
 - Hybrid Model Router, Circuit Breakers & Provenance Tracking
 """
 import pytest
+import threading
 from fastapi.testclient import TestClient
 from taikry.api.app import app
 from taikry.agents.registry import agent_registry, AgentMetadata, AgentAdapter
@@ -71,6 +72,61 @@ def test_agent_adapter_fallback_on_failure():
     assert "Simulated network or computation crash" in res["_fallback_reason"]
     assert failing_meta.health_status == "DEGRADED"
     assert failing_meta.failed_executions == 1
+    assert failing_meta.execution_state == "FAILED"
+    assert failing_meta.last_completed_at is not None
+
+
+def test_agent_adapter_exposes_real_queued_running_and_completed_states():
+    started = threading.Event()
+    finish = threading.Event()
+    metadata = AgentMetadata(
+        agent_id="mock_activity_agent",
+        name="Mock Activity Agent",
+        description="Checks runtime status transitions",
+        specialization="Test activity",
+        model_provider="python",
+        model_identifier="activity_v1",
+        execution_mode="local",
+        supported_tasks=["runtime_state_test"],
+        execution_state="QUEUED",
+        current_task="XAUUSD H4 live scan",
+    )
+
+    def wait_for_finish():
+        started.set()
+        assert finish.wait(2)
+        return {"agent_id": metadata.agent_id}
+
+    adapter = AgentAdapter(metadata, wait_for_finish)
+    worker = threading.Thread(target=adapter.execute)
+    worker.start()
+    assert started.wait(1)
+    assert metadata.execution_state == "RUNNING"
+    assert metadata.current_task == "XAUUSD H4 live scan"
+    finish.set()
+    worker.join(timeout=2)
+    assert not worker.is_alive()
+    assert metadata.execution_state == "COMPLETED"
+    assert metadata.last_task == "XAUUSD H4 live scan"
+    assert metadata.last_started_at is not None
+    assert metadata.last_completed_at is not None
+
+
+def test_disabled_agent_runtime_state_is_skipped():
+    metadata = AgentMetadata(
+        agent_id="mock_disabled_agent",
+        name="Mock Disabled Agent",
+        description="Checks skipped activity state",
+        specialization="Test activity",
+        model_provider="python",
+        model_identifier="disabled_v1",
+        execution_mode="local",
+        enabled=False,
+    )
+    result = AgentAdapter(metadata, lambda: {"unexpected": True}).execute()
+    assert result.get("_fallback_applied") is True
+    assert metadata.execution_state == "SKIPPED"
+    assert metadata.last_completed_at is not None
 
 
 def test_risk_validator_fallback_is_always_locked():

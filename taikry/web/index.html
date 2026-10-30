@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/brand/zyrox-logo-icon.svg">
   <link rel="alternate icon" type="image/png" href="assets/brand/zyrox-logo-icon.png">
   <link rel="apple-touch-icon" href="assets/brand/zyrox-logo-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.4.0">
+  <link rel="stylesheet" href="styles.css?v=2.6.1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
@@ -20,6 +20,17 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body class="theme-zyrox-emerald mobile-view-chart">
+
+  <div id="zyrox-startup-loader" class="zyrox-fullscreen-loader" role="status" aria-live="polite" aria-busy="true">
+    <div class="zyrox-loader-brand">
+      <img src="assets/brand/zyrox-logo-icon.svg" alt="ZYROX AI" class="zyrox-loader-logo" width="44" height="44">
+      <span class="zyrox-loader-brand-name">ZYROX AI</span>
+    </div>
+    <span class="zyrox-spinner" aria-hidden="true"></span>
+    <h1 class="zyrox-loader-title">Preparing your workspace</h1>
+    <p class="zyrox-loader-copy">Connecting to live services…</p>
+    <div class="zyrox-loader-actions" hidden></div>
+  </div>
 
   <!-- ==========================================================================
        MAIN TERMINAL SHELL
@@ -76,6 +87,8 @@
           <span class="active-sym-status">● Open</span>
           <span class="active-sym-price text-green" id="top-active-price">---</span>
           <span class="active-sym-change" id="top-active-change">--</span>
+          <span class="active-sym-feed-state is-connecting" id="top-active-feed-state" aria-live="polite">CONNECTING</span>
+          <time class="active-sym-last-updated" id="top-active-last-update" aria-label="Last market update">--:--</time>
           <span class="active-sym-caret">▾</span>
         </div>
       </div>
@@ -557,6 +570,8 @@
                 </div>
               </div>
 
+              <div id="analysis-agent-activity" class="analysis-agent-activity" hidden aria-label="Live AI agent activity"></div>
+
               <!-- 🎯 THE PLAN CARD -->
               <div class="cockpit-plan-card" id="cockpit-plan-card">
                 <div class="plan-card-header">
@@ -567,18 +582,22 @@
                   Trigger analysis or wait for institutional setup qualification.
                 </div>
 
-                <!-- 3 Metrics Columns -->
+                <!-- Entry and risk levels -->
                 <div class="plan-metrics-grid">
                   <div class="plan-metric-box">
-                    <div class="plan-metric-lbl">STOP LOSS (SL)</div>
+                    <div class="plan-metric-lbl" id="plan-entry-label">ENTRY</div>
+                    <div class="plan-metric-val val-gold" id="plan-entry-val">--</div>
+                  </div>
+                  <div class="plan-metric-box">
+                    <div class="plan-metric-lbl" id="plan-sl-label">STOP LOSS (SL)</div>
                     <div class="plan-metric-val val-red" id="plan-sl-val">--</div>
                   </div>
                   <div class="plan-metric-box">
-                    <div class="plan-metric-lbl">TAKE PROFIT (TP1)</div>
+                    <div class="plan-metric-lbl" id="plan-tp-label">TAKE PROFIT (TP1)</div>
                     <div class="plan-metric-val val-green" id="plan-tp-val">--</div>
                   </div>
                   <div class="plan-metric-box">
-                    <div class="plan-metric-lbl">VALID UNTIL</div>
+                    <div class="plan-metric-lbl" id="plan-valid-label">VALID UNTIL</div>
                     <div class="plan-metric-val val-blue" id="plan-valid-val">--</div>
                   </div>
                 </div>
@@ -651,7 +670,7 @@
               <div class="bot-callout-box">
                 <p>💡 <b>Institutional AI Execution Rule:</b> No orders are filled during pre-news blackouts or if R:R is below 1:2.0.</p>
                 <div class="bot-actions-row">
-                  <button class="btn btn-gold btn-sm" id="btn-cockpit-live-debate" onclick="runCockpitLiveDebate()">⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)</button>
+                  <button class="btn btn-gold btn-sm" id="btn-cockpit-live-debate" onclick="runCockpitLiveDebate(event)">⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)</button>
                   <button class="btn btn-outline btn-sm" onclick="showPlansModal()">See Tier Specs & Quota</button>
                 </div>
               </div>
@@ -1132,7 +1151,7 @@
             <!-- Strategy Backtest Quick Trigger -->
             <div class="backtest-quick-box mt-16">
               <div class="card-title">🔬 <span id="t-backtest-title">Strategy Backtest</span></div>
-              <button class="btn btn-outline btn-full mt-8" onclick="runBacktestAction()">
+              <button class="btn btn-outline btn-full mt-8" onclick="runBacktestAction(event)">
                 ▶ Run XAUUSD Backtest
               </button>
               <div id="backtest-results-panel" class="backtest-panel">
@@ -1140,6 +1159,7 @@
                 <div class="backtest-row"><span>Profit Factor:</span> <b class="val-gold" id="bt-profit-factor">0.0</b></div>
                 <div class="backtest-row"><span>Max Drawdown:</span> <b class="val-red" id="bt-drawdown">0.0%</b></div>
                 <div class="backtest-row-last"><span>Avg R-Multiple:</span> <b id="bt-avg-r">0.0R</b></div>
+                <div id="backtest-feedback" aria-live="polite"></div>
               </div>
             </div>
           </div>
@@ -2082,10 +2102,11 @@
                 <option value="EURUSD">EURUSD</option>
                 <option value="GBPUSD">GBPUSD</option>
               </select>
-              <button class="btn btn-gold btn-sm" onclick="triggerDeepMultiAgentAnalysis()">⚡ Run Deep Analysis</button>
+              <button class="btn btn-gold btn-sm" onclick="triggerDeepMultiAgentAnalysis(event)">⚡ Run Deep Analysis</button>
             </div>
           </div>
           <div class="p-15">
+            <div id="deep-analysis-request-state" class="mb-15" aria-live="polite"></div>
             <!-- 9 Agents Status Grid -->
             <div class="agent-status-board mb-15">
               <div class="agent-chip" id="chip-agent-1">
@@ -2964,10 +2985,12 @@
 
   <!-- Lightweight Charts Standalone Engine -->
   <script src="lightweight-charts.standalone.production.js"></script>
+  <!-- Shared accessible loading, empty, error, and activity components -->
+  <script src="ui-kit.js?v=2.6.1"></script>
   <!-- Taikry Professional Interactive Chart Workspace Controller -->
-  <script src="chart.js?v=2.4.0"></script>
+  <script src="chart.js?v=2.6.1"></script>
   <div id="schema-studio-root"></div>
-  <script src="app.js?v=2.4.0"></script>
-  <script src="schema_designer.js?v=2.4.0"></script>
+  <script src="app.js?v=2.6.1"></script>
+  <script src="schema_designer.js?v=2.6.1"></script>
 </body>
 </html>

@@ -32,6 +32,67 @@ except ImportError:
 
 _ANALYSIS_CACHE: Dict[str, Any] = {}
 
+
+def _build_candidate_plan(
+    risk_report: Dict[str, Any],
+    setup_status: str,
+    consensus_direction: str,
+    directional_share: float,
+    material_conflict: bool,
+    data_quality: Dict[str, Any],
+    price_source: str,
+) -> Optional[Dict[str, Any]]:
+    """Expose measured levels for review without turning a veto into a trade signal."""
+    if str(setup_status).upper() == "APPROVE":
+        return None
+    direction = str(risk_report.get("proposed_direction") or "").upper()
+    vote_direction = "BUY" if direction in {"LONG", "BUY"} else ("SELL" if direction in {"SHORT", "SELL"} else "NONE")
+    if vote_direction == "NONE" or vote_direction != str(consensus_direction or "NONE").upper():
+        return None
+    if material_conflict or directional_share < 0.55:
+        return None
+    if data_quality.get("is_fresh") is not True or str(data_quality.get("feed_status", "")).upper() != "HEALTHY":
+        return None
+
+    try:
+        entry = float(risk_report.get("entry_price"))
+        stop = float(risk_report.get("stop_loss"))
+        target_1 = float(risk_report.get("take_profit_1"))
+        target_2_raw = risk_report.get("take_profit_2")
+        target_2 = float(target_2_raw) if target_2_raw is not None else None
+    except (TypeError, ValueError):
+        return None
+    prices = [entry, stop, target_1] + ([target_2] if target_2 is not None else [])
+    if not all(math.isfinite(value) and value > 0 for value in prices):
+        return None
+
+    if direction in {"LONG", "BUY"}:
+        geometry_ok = stop < entry < target_1 and (target_2 is None or target_2 > target_1)
+    else:
+        geometry_ok = stop > entry > target_1 and (target_2 is None or target_2 < target_1)
+    if not geometry_ok:
+        return None
+
+    rr_ratio = round(abs(target_1 - entry) / abs(entry - stop), 2)
+    reasons = risk_report.get("reasons") or []
+    if isinstance(reasons, str):
+        reasons = [reasons]
+    quote_verified = data_quality.get("bid_price") is not None and data_quality.get("ask_price") is not None
+    return {
+        "status": "ANALYSIS_ONLY",
+        "can_execute": False,
+        "direction": "LONG" if direction in {"LONG", "BUY"} else "SHORT",
+        "entry_price": entry,
+        "stop_loss": stop,
+        "take_profit_1": target_1,
+        "take_profit_2": target_2,
+        "risk_reward_ratio": f"1:{rr_ratio:.2f}",
+        "reference_price_source": str(data_quality.get("reference_source") or price_source or "unknown"),
+        "entry_basis": "VERIFIED_BID_ASK_SIDE" if quote_verified else "REFERENCE_PRICE_NO_BID_ASK",
+        "reasons": [str(reason) for reason in reasons if reason],
+        "disclaimer": "Analysis only. A rejected or waiting setup is not an approved or executable trade signal.",
+    }
+
 class AIConsensusEngine:
     """Consensus Coordinator."""
 
@@ -148,6 +209,15 @@ class AIConsensusEngine:
             agent_registry = None
         if agent_registry is None:
             raise RuntimeError("Agent registry is required for role-aware consensus execution.")
+
+        agent_registry.queue_agents(
+            [
+                "data_quality_agent", "technical_analyst", "ict_smc_analyst", "macro_analyst",
+                "orderflow_sentiment_analyst", "fractal_mtf_analyst", "regime_detection_agent",
+                "quantitative_research_agent", "ml_forecast_agent",
+            ],
+            f"{symbol} {setup_timeframe} multi-agent analysis",
+        )
 
         if agent_registry:
             dq_ad = agent_registry.get_adapter("data_quality_agent")
@@ -318,6 +388,7 @@ class AIConsensusEngine:
             ml_out = agent_reports["ml_forecast_agent"]
 
             # The concept recommender consumes the completed analyst reports.
+            agent_registry.queue_agents(["concept_recommender"], f"{symbol} consensus concept review")
             if concept_ad:
                 concept_out = concept_ad.execute(
                     symbol=symbol,
@@ -340,6 +411,7 @@ class AIConsensusEngine:
 
             # 3. Challenge with Agent 4 (Risk Validator) via Adapter
             a4_ad = agent_registry.get_adapter("risk_validator")
+            agent_registry.queue_agents(["risk_validator"], f"{symbol} independent risk validation")
             risk_quote_fields = self._risk_quote_fields(data_quality_out)
             if a4_ad:
                 risk_out = a4_ad.execute(
@@ -552,6 +624,16 @@ class AIConsensusEngine:
 
         if setup_status == "APPROVE" and market_bias == "NEUTRAL":
             market_bias = "WAIT FOR CONFIRMATION"
+
+        candidate_plan = _build_candidate_plan(
+            risk_report=risk_out,
+            setup_status=setup_status,
+            consensus_direction=consensus_direction,
+            directional_share=directional_share,
+            material_conflict=material_conflict,
+            data_quality=data_quality_out,
+            price_source=price_source,
+        )
 
         # Record Dissenting Opinions
         dissenting = []
@@ -770,6 +852,7 @@ class AIConsensusEngine:
             "stop_loss": sl,
             "take_profit_1": tp1,
             "take_profit_2": tp2,
+            "candidate_plan": candidate_plan,
             "risk_reward_ratio": rr_str,
             "invalidation_rules": agent1_out.get("invalidation_level") or agent2_out.get("invalidation_level"),
             "smart_analysis": smart_analysis,

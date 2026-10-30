@@ -13,6 +13,7 @@ Unified Registry, Standardized Adapters, and Lifecycle Governance for all AI Age
 import time
 import datetime
 import logging
+import re
 from typing import Dict, Any, List, Optional, Callable
 from pydantic import BaseModel, Field
 
@@ -41,6 +42,12 @@ class AgentMetadata(BaseModel):
     configuration: Dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
     last_successful_execution: Optional[str] = None
+    execution_state: str = "IDLE"  # IDLE, QUEUED, RUNNING, COMPLETED, FAILED, SKIPPED
+    current_task: Optional[str] = None
+    last_task: Optional[str] = None
+    last_started_at: Optional[str] = None
+    last_completed_at: Optional[str] = None
+    last_error: Optional[str] = None
     total_executions: int = 0
     successful_executions: int = 0
     failed_executions: int = 0
@@ -64,6 +71,7 @@ class AgentMetadata(BaseModel):
         else:
             self.failed_executions += 1
             self.health_status = "DEGRADED"
+            self.last_error = _safe_runtime_error(error_msg or "Unknown execution error")
             self.error_history.append({
                 "timestamp": now_str,
                 "error": error_msg or "Unknown execution error",
@@ -87,6 +95,15 @@ class AgentMetadata(BaseModel):
         m["sample_count"] = count + 1
 
 
+def _safe_runtime_error(message: str) -> str:
+    """Keep useful runtime context while redacting common credential patterns."""
+    safe = str(message or "Agent execution failed")
+    safe = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+=*", r"\1[redacted]", safe)
+    safe = re.sub(r"(?i)((?:api[_ -]?key|access[_ -]?token|token|secret|password)\s*[:=]\s*)[^\s,;]+", r"\1[redacted]", safe)
+    safe = re.sub(r"\b[A-Za-z0-9_-]{40,}\b", "[redacted]", safe)
+    return safe[:240]
+
+
 class AgentAdapter:
     """
     Standardized adapter wrapping any underlying agent implementation without altering
@@ -100,20 +117,36 @@ class AgentAdapter:
     def execute(self, *args, **kwargs) -> Dict[str, Any]:
         """Executes the agent with timeout, error handling, and telemetry tracking."""
         if not self.metadata.enabled:
+            self.metadata.execution_state = "SKIPPED"
+            self.metadata.current_task = None
+            self.metadata.last_completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
             logger.warning(f"Agent {self.metadata.agent_id} is DISABLED. Using fallback policy.")
             return self._apply_fallback("Agent is administrative disabled", *args, **kwargs)
 
         t0 = time.time()
+        now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self.metadata.execution_state = "RUNNING"
+        if not self.metadata.current_task:
+            self.metadata.current_task = ", ".join(self.metadata.supported_tasks[:2]) or self.metadata.specialization
+        self.metadata.last_task = self.metadata.current_task
+        self.metadata.last_started_at = now_str
+        self.metadata.last_error = None
         try:
             res = self.target_callable(*args, **kwargs)
             latency_ms = (time.time() - t0) * 1000
             self.metadata.record_execution(latency_ms, success=True, model_used=self.metadata.model_identifier)
+            self.metadata.execution_state = "COMPLETED"
+            self.metadata.current_task = None
+            self.metadata.last_completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
             return res
         except Exception as e:
             latency_ms = (time.time() - t0) * 1000
             err_msg = str(e)
             logger.error(f"Agent {self.metadata.agent_id} failed: {err_msg}")
             self.metadata.record_execution(latency_ms, success=False, error_msg=err_msg, model_used=self.metadata.model_identifier)
+            self.metadata.execution_state = "FAILED"
+            self.metadata.current_task = None
+            self.metadata.last_completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
             return self._apply_fallback(err_msg, *args, **kwargs)
 
     def _apply_fallback(self, reason: str, *args, **kwargs) -> Dict[str, Any]:
@@ -176,6 +209,22 @@ class AgentRegistry:
         """Retrieves agent metadata by unique ID."""
         adapter = self.get_adapter(agent_id)
         return adapter.metadata if adapter else None
+
+    def queue_agents(self, agent_ids: List[str], task: str) -> None:
+        """Record a real queue state immediately before submitting an analysis stage."""
+        for agent_id in agent_ids:
+            meta = self.get_metadata(agent_id)
+            if not meta:
+                continue
+            if not meta.enabled:
+                meta.execution_state = "SKIPPED"
+                meta.current_task = None
+                meta.last_completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                continue
+            meta.execution_state = "QUEUED"
+            meta.current_task = str(task or "Analysis")[:120]
+            meta.last_task = meta.current_task
+            meta.last_error = None
 
     def list_agents(self) -> List[Dict[str, Any]]:
         """Returns metadata and health of all registered agents."""

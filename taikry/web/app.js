@@ -17,6 +17,9 @@ let currentCockpitTradeStyle = "INTRADAY";
 let currentXauusdCatalyst = null;
 let cachedMacroEvents = [];
 let macroCountdownInterval = null;
+let isScanInProgress = false;
+let agentActivityPollTimer = null;
+let isAgentActivityPolling = false;
 
 // Watchlist Catalog (All Crypto & Forex)
 const WATCHLIST = [
@@ -124,6 +127,10 @@ const I18N = {
     sl_label: "Stop Loss (SL)",
     tp1_label: "Take Profit 1 (TP1)",
     tp2_label: "Take Profit 2 (TP2)",
+    plan_entry_label: "ENTRY",
+    plan_sl_label: "STOP LOSS (SL)",
+    plan_tp_label: "TAKE PROFIT (TP1)",
+    plan_valid_label: "VALID UNTIL",
     rr_label: "Risk-to-Reward",
     inval_label: "Invalidation Condition:",
     market_bias_label: "Consensus Bias",
@@ -174,6 +181,10 @@ const I18N = {
     sl_label: "កាត់ខាត (SL)",
     tp1_label: "ចំណេញទី ១ (TP1)",
     tp2_label: "ចំណេញទី ២ (TP2)",
+    plan_entry_label: "ចូល",
+    plan_sl_label: "កាត់ខាត (SL)",
+    plan_tp_label: "គោលដៅចំណេញ (TP1)",
+    plan_valid_label: "មានសុពលភាពដល់",
     rr_label: "អនុបាត R:R",
     inval_label: "លក្ខខណ្ឌលុបចោលសុពលភាព:",
     market_bias_label: "ទំនោរទិសដៅទីផ្សារ",
@@ -264,9 +275,9 @@ document.addEventListener("DOMContentLoaded", () => {
     loadTradingViewChart("OANDA:XAUUSD", "15");
   }
 
+  const startupTasks = [fetchHealthAndPaper(), fetchMacroEvents(), pollRealtimePrices()];
+  window.ZyroxUI?.beginStartup({ tasks: startupTasks, timeoutMs: 14000, language: isKhmer ? "kh" : "en" });
   triggerScan();
-  fetchHealthAndPaper();
-  fetchMacroEvents();
   startRealtimePriceStream();
 
   initLLMPillClickHandlers();
@@ -327,6 +338,10 @@ function toggleLanguage() {
   setTxt("t-sl-label", dict.sl_label);
   setTxt("t-tp1-label", dict.tp1_label);
   setTxt("t-tp2-label", dict.tp2_label);
+  setTxt("plan-entry-label", dict.plan_entry_label);
+  setTxt("plan-sl-label", dict.plan_sl_label);
+  setTxt("plan-tp-label", dict.plan_tp_label);
+  setTxt("plan-valid-label", dict.plan_valid_label);
   setTxt("t-rr-label", dict.rr_label);
   setTxt("t-inval-label", dict.inval_label);
   setTxt("t-market-bias-label", dict.market_bias_label);
@@ -579,11 +594,72 @@ function loadTradingViewChart(symbolTv, interval = "15") {
   `;
 }
 
+function renderAnalysisAgentActivity(requestState, agents = [], notice = "") {
+  const host = document.getElementById("analysis-agent-activity");
+  if (!host || !window.ZyroxUI) return;
+  host.hidden = false;
+  const title = isKhmer ? "ស្ថានភាពភ្នាក់ងារ AI" : "Live AI agent activity";
+  const task = isKhmer
+    ? `ស្កេន ${currentSymbol} · ស្ថានភាពត្រូវបានរាយការណ៍ពី server។`
+    : `Scanning ${currentSymbol} · state is reported by the server.`;
+  const noteKh = notice && isKhmer ? "ស្ថានភាពភ្នាក់ងារអាចជាស្ថានភាពរត់ចុងក្រោយនៅលើ server នេះ។" : notice;
+  window.ZyroxUI.mount(host, window.ZyroxUI.AIThinkingLoader({
+    title,
+    task,
+    requestState,
+    agents,
+    radarSymbol: requestState === "RUNNING" ? currentSymbol : null,
+    language: isKhmer ? "kh" : "en",
+    notice: noteKh,
+    emptyMessage: requestState === "RUNNING"
+      ? (isKhmer ? "កំពុងរង់ចាំ telemetry ពិតពី server…" : "Waiting for live agent telemetry from the server…")
+      : (isKhmer ? "មិនទាន់មាន telemetry ភ្នាក់ងារទេ។" : "No agent telemetry has been reported yet.")
+  }));
+}
+
+async function pollAgentRuntimeActivity(requestState = "RUNNING", notice = "") {
+  if (isAgentActivityPolling) return [];
+  isAgentActivityPolling = true;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/agents/registry/summary`, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const summary = await response.json();
+    const agents = Array.isArray(summary.agents) ? summary.agents : [];
+    renderAnalysisAgentActivity(requestState, agents, notice);
+    return agents;
+  } catch (error) {
+    renderAnalysisAgentActivity(requestState, [], isKhmer ? "មិនអាចទាញយក telemetry ពី server បានទេ។" : "Could not read live execution telemetry from the server.");
+    return [];
+  } finally {
+    isAgentActivityPolling = false;
+  }
+}
+
+function startAgentActivityPolling() {
+  if (agentActivityPollTimer) clearInterval(agentActivityPollTimer);
+  renderAnalysisAgentActivity("RUNNING", []);
+  pollAgentRuntimeActivity("RUNNING");
+  agentActivityPollTimer = setInterval(() => pollAgentRuntimeActivity("RUNNING"), 1500);
+}
+
+function stopAgentActivityPolling() {
+  if (agentActivityPollTimer) clearInterval(agentActivityPollTimer);
+  agentActivityPollTimer = null;
+}
+
 async function triggerScan() {
+  if (isScanInProgress) return null;
+  isScanInProgress = true;
   const biasEl = document.getElementById("disp-market-bias");
   const statusEl = document.getElementById("disp-setup-status");
-  biasEl.innerText = "ANALYZING...";
-  biasEl.className = "metric-value val-gold";
+  if (biasEl) {
+    biasEl.innerText = isKhmer ? "កំពុងវិភាគ…" : "ANALYZING...";
+    biasEl.className = "metric-value val-gold";
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 45000);
+  startAgentActivityPolling();
 
   const asset = WATCHLIST.find(w => w.symbol === currentSymbol);
   const activeLabel = document.getElementById("chart-active-symbol");
@@ -598,29 +674,46 @@ async function triggerScan() {
     const r = await fetch(`${API_BASE}/api/v1/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         symbol: currentSymbol,
         timeframe: tfParam,
         llm_provider: currentLLMProvider
       })
     });
-    const data = await r.json();
+    let data = {};
+    try { data = await r.json(); } catch {}
+    if (!r.ok) throw new Error(data.detail || data.error || `Analysis request failed (${r.status})`);
     latestAnalysisData = data;
 
-    // Update banner metrics
-    biasEl.innerText = data.market_bias;
-    if (data.market_bias.includes("BULLISH")) biasEl.className = "metric-value val-green";
-    else if (data.market_bias.includes("BEARISH")) biasEl.className = "metric-value val-red";
-    else biasEl.className = "metric-value val-neutral";
+    const runtimeAgents = await pollAgentRuntimeActivity("COMPLETED", data.performance?.cached
+      ? (isKhmer ? "លទ្ធផលនេះមកពី cache; មិនបានដំណើរការ agent ថ្មីទេ។" : "This result was served from cache; no new agent run was started.")
+      : (isKhmer ? "ការវិភាគបានបញ្ចប់។ ពេលចាប់ផ្តើម/បញ្ចប់មកពី telemetry server។" : "Analysis completed. Start and completion times come from server telemetry."));
+    renderAnalysisAgentActivity(data.performance?.cached ? "IDLE" : "COMPLETED", runtimeAgents,
+      data.performance?.cached
+        ? (isKhmer ? "លទ្ធផលនេះមកពី cache; មិនបានដំណើរការ agent ថ្មីទេ។" : "Cached result · no fresh agent execution.")
+        : "");
 
-    statusEl.innerText = data.setup_status;
-    if (data.setup_status === "APPROVE") statusEl.className = "metric-value val-green";
-    else if (data.setup_status === "REJECT") statusEl.className = "metric-value val-red";
-    else statusEl.className = "metric-value val-gold";
+    // Update banner metrics
+    if (biasEl) {
+      biasEl.innerText = data.market_bias || "NO TRADE";
+      if (String(data.market_bias || "").includes("BULLISH")) biasEl.className = "metric-value val-green";
+      else if (String(data.market_bias || "").includes("BEARISH")) biasEl.className = "metric-value val-red";
+      else biasEl.className = "metric-value val-neutral";
+    }
+
+    if (statusEl) {
+      statusEl.innerText = data.setup_status || "UNAVAILABLE";
+      if (data.setup_status === "APPROVE") statusEl.className = "metric-value val-green";
+      else if (data.setup_status === "REJECT") statusEl.className = "metric-value val-red";
+      else statusEl.className = "metric-value val-gold";
+    }
 
     const vPrice = data.verified_price || "---";
-    document.getElementById("disp-verified-price").innerText = vPrice;
-    document.getElementById("disp-risk-reward").innerText = data.risk_reward_ratio || "N/A";
+    const verifiedPriceNode = document.getElementById("disp-verified-price");
+    if (verifiedPriceNode) verifiedPriceNode.innerText = vPrice;
+    const riskRewardNode = document.getElementById("disp-risk-reward");
+    if (riskRewardNode) riskRewardNode.innerText = data.risk_reward_ratio || "N/A";
 
     const chartPrice = document.getElementById("chart-verified-price");
     if (chartPrice) chartPrice.innerText = `$${vPrice}`;
@@ -646,9 +739,22 @@ async function triggerScan() {
     updateCockpitPlanCard(data);
 
     updateReportView(data);
+    return data;
   } catch (e) {
-    biasEl.innerText = "SERVICE READY";
-    biasEl.className = "metric-value val-gold";
+    if (biasEl) {
+      biasEl.innerText = isKhmer ? "សេវាកំពុងមានបញ្ហា" : "SERVICE DEGRADED";
+      biasEl.className = "metric-value val-gold";
+    }
+    const message = e?.name === "AbortError"
+      ? (isKhmer ? "ការវិភាគអស់ពេលរង់ចាំ ៤៥ វិនាទី។" : "Analysis timed out after 45 seconds.")
+      : (e?.message || (isKhmer ? "មិនអាចភ្ជាប់សេវាវិភាគបានទេ។" : "Unable to reach the analysis service."));
+    const agents = await pollAgentRuntimeActivity("FAILED", message);
+    renderAnalysisAgentActivity("FAILED", agents, message);
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+    stopAgentActivityPolling();
+    isScanInProgress = false;
   }
 }
 
@@ -784,6 +890,17 @@ function updateExecutionCard(data) {
   const notice = document.getElementById("rejection-notice");
   const isApproved = data.setup_status === "APPROVE";
   const dir = data.proposed_direction || "NONE";
+  const candidate = data.candidate_plan;
+  const candidateDirection = String(candidate?.direction || "").toUpperCase();
+  const hasCandidatePlan = !isApproved && candidate?.status === "ANALYSIS_ONLY"
+    && ["LONG", "SHORT"].includes(candidateDirection)
+    && [candidate.entry_price, candidate.stop_loss, candidate.take_profit_1].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
+  const formatCandidateLevel = value => {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0
+      ? number.toLocaleString(undefined, { maximumFractionDigits: number > 100 ? 2 : 5 })
+      : "---";
+  };
 
   if (isApproved) {
     if (badge) {
@@ -799,20 +916,29 @@ function updateExecutionCard(data) {
     document.getElementById("exec-rr").innerText = data.risk_reward_ratio || "---";
   } else {
     if (badge) {
-      badge.innerText = data.setup_status === "REJECT" ? "LOCKED (REJECTED)" : "WAITING CONFIRMATION";
+      badge.innerText = hasCandidatePlan
+        ? `${data.setup_status || "WAIT"} · ANALYSIS ONLY · ${candidateDirection}`
+        : (data.setup_status === "REJECT" ? "LOCKED (REJECTED)" : "WAITING CONFIRMATION");
       badge.className = "exec-action-badge badge-bear";
     }
     if (notice) {
       notice.style.display = "block";
-      const reasons = data.agents?.agent_4_risk?.reasons || ["Risk rules not satisfied."];
-      notice.innerHTML = `🛡️ <b>${isKhmer ? "ប្រព័ន្ធការពារដើមទុនកំពុងដំណើរការ:" : "Capital Protection Active:"}</b> ${reasons.join(" | ")}. ${isKhmer ? "ចំណុចជួញដូរត្រូវបានចាក់សោដើម្បីការពារដើមទុន។" : "Execution levels locked to protect capital."}`;
+      const rawReasons = candidate?.reasons || data.agents?.agent_4_risk?.reasons || ["Risk rules not satisfied."];
+      const reasons = (Array.isArray(rawReasons) ? rawReasons : [rawReasons]).slice(0, 3);
+      const previewNotice = candidate?.entry_basis === "REFERENCE_PRICE_NO_BID_ASK"
+        ? (isKhmer ? "កម្រិតខាងក្រោមជាផែនការវិភាគពីតម្លៃយោងប៉ុណ្ណោះ; server មិនទាន់ទទួលបាន bid/ask ពី broker ទេ។ កុំយកទៅជួញដូរ។" : "Levels below are reference-price analysis only; the server has no broker bid/ask quote. Do not trade from this preview.")
+        : (isKhmer ? "កម្រិតខាងក្រោមជាផែនការវិភាគប៉ុណ្ណោះ មិនមែនសញ្ញាដែលបានអនុម័តទេ។ កុំយកទៅជួញដូរ។" : "Levels below are analysis only, not an approved signal. Do not trade from this preview.");
+      const lockNotice = isKhmer
+        ? "សញ្ញាត្រូវបានចាក់សោ រហូតដល់ការត្រួតពិនិត្យហានិភ័យអនុម័ត។"
+        : "Execution remains locked until all risk checks approve.";
+      notice.innerHTML = `🛡️ <b>${isKhmer ? "ការពារដើមទុន:" : "Capital Protection:"}</b> ${hasCandidatePlan ? `${previewNotice} ` : ""}${escapeHtml(lockNotice)} <span>${reasons.map(escapeHtml).join(" · ")}</span>`;
     }
 
-    document.getElementById("exec-entry").innerText = "LOCKED";
-    document.getElementById("exec-sl").innerText = "LOCKED";
-    document.getElementById("exec-tp1").innerText = "LOCKED";
-    document.getElementById("exec-tp2").innerText = "LOCKED";
-    document.getElementById("exec-rr").innerText = data.risk_reward_ratio || "N/A";
+    document.getElementById("exec-entry").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.entry_price) : "LOCKED";
+    document.getElementById("exec-sl").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.stop_loss) : "LOCKED";
+    document.getElementById("exec-tp1").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.take_profit_1) : "LOCKED";
+    document.getElementById("exec-tp2").innerText = hasCandidatePlan && candidate.take_profit_2 != null ? formatCandidateLevel(candidate.take_profit_2) : "LOCKED";
+    document.getElementById("exec-rr").innerText = hasCandidatePlan ? (candidate.risk_reward_ratio || "N/A") : (data.risk_reward_ratio || "N/A");
   }
 
   const inval = document.getElementById("exec-inval");
@@ -1403,10 +1529,18 @@ async function fetchMacroEvents(forceRefresh = false) {
   }
 }
 
-async function runBacktestAction() {
+async function runBacktestAction(event) {
   const panel = document.getElementById("backtest-results-panel");
+  const feedback = document.getElementById("backtest-feedback");
+  if (!panel) return;
   panel.style.display = "block";
-  document.getElementById("bt-win-rate").innerText = "Simulating...";
+  if (feedback) {
+    if (window.ZyroxUI) window.ZyroxUI.mount(feedback, window.ZyroxUI.SectionLoader({ label: isKhmer ? "កំពុងដំណើរការ backtest…" : "Running backtest against historical candles…" }));
+    else feedback.textContent = "Running backtest…";
+  }
+  const buttonBusyState = window.ZyroxUI?.ButtonLoader(event?.currentTarget, { label: isKhmer ? "កំពុងសាកល្បងទិន្នន័យ…" : "Running backtest…" });
+  const winRateNode = document.getElementById("bt-win-rate");
+  if (winRateNode) winRateNode.innerText = isKhmer ? "កំពុងដំណើរការ…" : "Running…";
 
   try {
     const r = await fetch(`${API_BASE}/api/v1/backtests/run`, {
@@ -1415,13 +1549,26 @@ async function runBacktestAction() {
       body: JSON.stringify({ symbol: currentSymbol, timeframe: "M15", candle_limit: 120 })
     });
     const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || "Backtest request failed.");
 
-    document.getElementById("bt-win-rate").innerText = `${data.win_rate_percent}%`;
-    document.getElementById("bt-profit-factor").innerText = data.profit_factor;
-    document.getElementById("bt-drawdown").innerText = `${data.max_drawdown_percent}%`;
-    document.getElementById("bt-avg-r").innerText = `${data.average_r_multiple}R`;
+    if (feedback) feedback.replaceChildren();
+    if (winRateNode) winRateNode.innerText = data.win_rate_percent == null ? "—" : `${data.win_rate_percent}%`;
+    const factorNode = document.getElementById("bt-profit-factor");
+    if (factorNode) factorNode.innerText = data.profit_factor ?? "—";
+    const drawdownNode = document.getElementById("bt-drawdown");
+    if (drawdownNode) drawdownNode.innerText = data.max_drawdown_percent == null ? "—" : `${data.max_drawdown_percent}%`;
+    const averageRNode = document.getElementById("bt-avg-r");
+    if (averageRNode) averageRNode.innerText = data.average_r_multiple == null ? "—" : `${data.average_r_multiple}R`;
   } catch (e) {
-    document.getElementById("bt-win-rate").innerText = "Backtest ready.";
+    if (window.ZyroxUI && feedback) window.ZyroxUI.mount(feedback, window.ZyroxUI.ErrorState({
+      title: isKhmer ? "ការសាកល្បងយុទ្ធសាស្ត្របរាជ័យ" : "Backtest could not run",
+      message: e.message,
+      retryLabel: isKhmer ? "រត់ម្តងទៀត" : "Retry backtest",
+      onRetry: runBacktestAction
+    }));
+    else if (feedback) feedback.textContent = isKhmer ? "មិនអាចដំណើរការ backtest បានទេ។" : "Backtest could not run.";
+  } finally {
+    buttonBusyState?.restore();
   }
 }
 
@@ -1652,26 +1799,21 @@ async function triggerSelfTrainingEpoch() {
   isTrainingRunning = true;
 
   const btn = document.getElementById("btn-trigger-training");
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span>⏳ ${isKhmer ? "កំពុងដំណើរការ Train ខ្លួនឯង..." : "Running Training Epoch..."}</span>`;
-  }
+  const buttonBusyState = window.ZyroxUI?.ButtonLoader(btn, { label: isKhmer ? "កំពុងហ្វឹកហាត់…" : "Running training epoch…" });
 
   try {
     const res = await fetch(`${API_BASE}/api/v1/agents/train?symbol=${currentSymbol}`, {
       method: "POST"
     });
     const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || result.message || "Training request failed.");
     await fetchSelfTrainingData();
     alert(isKhmer ? `វគ្គបណ្តុះបណ្តាលខ្លួនឯង (Epoch ${result.epoch}) បានបញ្ចប់ដោយជោគជ័យ! ទម្ងន់របស់ AI ត្រូវបានកែសម្រួល។` : `Self-training Epoch ${result.epoch} completed successfully! Ensemble voting weights updated.`);
   } catch (err) {
-    alert("Self-training epoch completed.");
+    alert(isKhmer ? `វគ្គហ្វឹកហាត់បរាជ័យ៖ ${err.message}` : `Self-training failed: ${err.message}`);
   } finally {
     isTrainingRunning = false;
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `🚀 <span id="t-train-epoch-btn">${isKhmer ? "ដំណើរការវគ្គហ្វឹកហាត់ (Train ឥឡូវ)" : "Trigger Training Epoch (Train ខ្លួនឯង)"}</span>`;
-    }
+    buttonBusyState?.restore();
   }
 }
 
@@ -1682,11 +1824,13 @@ async function triggerSelfTrainingEpoch() {
 let isAutoFixRunning = false;
 
 async function fetchAutoFixAlerts() {
+  const logBody = document.getElementById("autofix-log-body");
+  if (logBody && !logBody.children.length) showTableSkeletonRows(logBody, 7, 4);
   try {
     const res = await fetch(`${API_BASE}/api/v1/system/auto-fix/alerts?limit=10`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const incidents = await res.json();
 
-    const logBody = document.getElementById("autofix-log-body");
     if (logBody) {
       logBody.innerHTML = "";
       if (incidents.length === 0) {
@@ -1715,6 +1859,7 @@ async function fetchAutoFixAlerts() {
     }
   } catch (err) {
     console.error("Failed to fetch auto-fix alerts:", err);
+    showTableError(logBody, 7, isKhmer ? "មិនអាចផ្ទុកកំណត់ត្រាវិនិច្ឆ័យបានទេ។" : "Could not load diagnostic records.", fetchAutoFixAlerts);
   }
 }
 
@@ -1723,10 +1868,7 @@ async function triggerSystemAutoFixAction() {
   isAutoFixRunning = true;
 
   const btn = document.getElementById("btn-trigger-autofix");
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span>⏳ ${isKhmer ? "កំពុងត្រួតពិនិត្យ និងជួសជុល..." : "Diagnosing & Healing..."}</span>`;
-  }
+  const buttonBusyState = window.ZyroxUI?.ButtonLoader(btn, { label: isKhmer ? "កំពុងដំណើរការវិនិច្ឆ័យ…" : "Running system diagnostics…" });
 
   try {
     const res = await fetch(`${API_BASE}/api/v1/system/auto-fix/trigger`, {
@@ -1754,10 +1896,7 @@ async function triggerSystemAutoFixAction() {
     alert(err.message || "Diagnostic request failed.");
   } finally {
     isAutoFixRunning = false;
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `⚡ <span id="t-run-autofix-btn">${isKhmer ? "ដំណើរការត្រួតពិនិត្យ និងជួសជុលភ្លាមៗ" : "Run Diagnostic & Auto-Fix"}</span>`;
-    }
+    buttonBusyState?.restore();
   }
 }
 
@@ -1880,17 +2019,23 @@ async function runCockpitLiveDebate(isRetry = false) {
   const btn = document.getElementById("btn-cockpit-live-debate");
   const container = document.getElementById("cockpit-bot-debate-container");
   if (!container) return;
-
-  if (btn) {
-    btn.innerHTML = `<span>⏳ ${typeof isKhmer !== "undefined" && isKhmer ? "ភ្នាក់ងារកំពុងជជែក..." : "Agents Debating..."}</span>`;
-    btn.disabled = true;
-  }
-  container.innerHTML = `
-    <div class="bot-debate-placeholder">
-      <span class="debate-pulse-icon">⚡</span>
-      <span><b>Agents in Session:</b> Quantitative Technical, SMC Specialist, Macro Economist, and Risk Arbiter are cross-examining <b>${escapeHtml(currentSymbol || "XAUUSD")}</b> in real time...</span>
-    </div>
-  `;
+  const kh = typeof isKhmer !== "undefined" && isKhmer;
+  const busy = window.ZyroxUI?.ButtonLoader(btn, { label: kh ? "កំពុងស្នើសុំលទ្ធផលពិភាក្សា…" : "Requesting debate result…" });
+  if (!window.ZyroxUI && btn) btn.disabled = true;
+  const mountLoading = retrying => {
+    if (!window.ZyroxUI) {
+      container.textContent = kh ? "កំពុងរង់ចាំលទ្ធផលពី server…" : "Waiting for the server response…";
+      return;
+    }
+    window.ZyroxUI.mount(container, window.ZyroxUI.AIThinkingLoader({
+      title: kh ? "កំពុងស្នើសុំការវិភាគពិភាក្សា" : "Requesting AI debate analysis",
+      task: `${currentSymbol || "XAUUSD"} · ${retrying ? (kh ? "កំពុងសាកល្បងសំណើម្ដងទៀត…" : "Retrying the request…") : (kh ? "កំពុងរង់ចាំការឆ្លើយតបពី server…" : "Waiting for the server response…")}`,
+      requestState: "RUNNING",
+      language: kh ? "kh" : "en",
+      notice: kh ? "Server មិនផ្ញើវេនពិភាក្សាជា stream ទេ; បញ្ជីវេននឹងបង្ហាញក្រោយទទួលចម្លើយ។" : "The server does not stream debate turns; turns will appear after the response arrives."
+    }));
+  };
+  mountLoading(false);
 
   const tfMap = { "5": "M5", "15": "M15", "60": "H1", "240": "H4", "D": "D1" };
   const tf = tfMap[currentTimeframe] || "M15";
@@ -1902,21 +2047,19 @@ async function runCockpitLiveDebate(isRetry = false) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       if (attempt > 1) {
-        container.innerHTML = `
-          <div class="bot-debate-placeholder">
-            <span class="debate-pulse-icon">⏳</span>
-            <span><b>Synchronizing Fleet:</b> Reconnecting to live market nodes (Attempt ${attempt}/2)...</span>
-          </div>
-        `;
-        await new Promise(r => setTimeout(r, 1200));
+        mountLoading(true);
       }
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 16000);
-      const res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${encodeURIComponent(sym)}&timeframe=${tf}`, {
-        credentials: "include",
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      let res;
+      try {
+        res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${encodeURIComponent(sym)}&timeframe=${tf}`, {
+          credentials: "include",
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
@@ -1933,21 +2076,15 @@ async function runCockpitLiveDebate(isRetry = false) {
   if (lastErr || !data) {
     console.error("Cockpit Live Debate Error:", lastErr);
     const msg = lastErr ? (lastErr.name === "AbortError" ? "Request timed out while waiting for market feeds." : lastErr.message) : "Unable to load debate data.";
-    container.innerHTML = `
-      <div class="bot-debate-placeholder">
-        <span style="color:#ef4444; font-weight:700;">⚠️ Live debate notice: ${escapeHtml(msg)}</span>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
-          ${typeof isKhmer !== "undefined" && isKhmer ? "សូមពិនិត្យការតភ្ជាប់ ឬចុចព្យាយាមម្តងទៀត។" : "Please check your network or tap retry."}
-        </div>
-        <div style="margin-top:10px;">
-          <button class="btn btn-gold btn-sm" onclick="runCockpitLiveDebate(true)">🔄 Retry Live Debate (ព្យាយាមម្តងទៀត)</button>
-        </div>
-      </div>
-    `;
-    if (btn) {
-      btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
-      btn.disabled = false;
-    }
+    if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.ErrorState({
+      title: kh ? "មិនអាចទាញយកលទ្ធផលពិភាក្សាបានទេ" : "Debate response could not be loaded",
+      message: `${msg} · ${kh ? "សូមពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្ដងទៀត។" : "Check the connection and retry."}`,
+      retryLabel: kh ? "ព្យាយាមម្ដងទៀត" : "Retry debate",
+      onRetry: () => runCockpitLiveDebate(true)
+    }));
+    else container.textContent = msg;
+    busy?.restore();
+    if (!window.ZyroxUI && btn) btn.disabled = false;
     return;
   }
 
@@ -1956,16 +2093,14 @@ async function runCockpitLiveDebate(isRetry = false) {
   if (turns.length === 0) {
     const summaryEn = data.debate_summary_en || data.analysis_error || "No debate turns recorded.";
     const summaryKh = data.debate_summary_kh || "មិនមានវេនពិភាក្សាទេ។";
-    container.innerHTML = `
-      <div class="bot-debate-placeholder">
-        <span class="debate-pulse-icon">ℹ️</span>
-        <span><b>${escapeHtml(summaryEn)}</b><br><span style="color:var(--text-muted); font-size:12px;">🇰🇭 ${escapeHtml(summaryKh)}</span></span>
-      </div>
-    `;
-    if (btn) {
-      btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
-      btn.disabled = false;
-    }
+    if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.EmptyState({
+      icon: "ℹ️",
+      title: summaryEn,
+      message: `🇰🇭 ${summaryKh}`
+    }));
+    else container.textContent = `${summaryEn} ${summaryKh}`;
+    busy?.restore();
+    if (!window.ZyroxUI && btn) btn.disabled = false;
     return;
   }
 
@@ -2013,10 +2148,8 @@ async function runCockpitLiveDebate(isRetry = false) {
     container.appendChild(vCard);
   }
 
-  if (btn) {
-    btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
-    btn.disabled = false;
-  }
+  busy?.restore();
+  if (!window.ZyroxUI && btn) btn.disabled = false;
 }
 
 let realtimeStreamTimer = null;
@@ -2037,21 +2170,42 @@ async function pollRealtimePrices() {
     if (!res.ok) return;
     const data = await res.json();
     const prices = data.prices || {};
+    const activeQuote = prices[currentSymbol];
+    const isFreshReference = Boolean(activeQuote && activeQuote.verified === true && String(activeQuote.freshness || "").toUpperCase() === "LIVE_FRESH");
+    const isFreshActiveQuote = isFreshReference && activeQuote.execution_quote_available === true;
 
     requestAnimationFrame(() => {
       const pulseText = document.getElementById("cockpit-live-status-text");
-      if (pulseText && Object.keys(prices).length > 0) {
-        const sec = new Date().getSeconds();
-        pulseText.innerText = `LIVE · ${sec % 2 === 0 ? 'REALTIME' : 'STREAMING'}`;
-      } else if (pulseText) {
-        pulseText.innerText = "MARKET FEED UNAVAILABLE";
-      }
+      if (pulseText) pulseText.innerText = isFreshActiveQuote
+        ? `${isKhmer ? "ផ្សាយផ្ទាល់" : "LIVE"} · ${activeQuote.execution_quote_provider || activeQuote.provider || activeQuote.source || "verified feed"}`
+        : (isFreshReference
+          ? `${isKhmer ? "តម្លៃយោងប៉ុណ្ណោះ" : "REFERENCE ONLY"} · ${activeQuote.provider || activeQuote.source || "reference feed"}`
+          : (activeQuote
+            ? `${isKhmer ? "ពន្យារពេល" : "DELAYED"} · ${activeQuote.freshness || "UNVERIFIED"}`
+            : (isKhmer ? "មិនមានទិន្នន័យទីផ្សារ" : "MARKET FEED UNAVAILABLE")));
 
       if (prices[currentSymbol]) {
         const activeData = prices[currentSymbol];
+        const feedState = document.getElementById("top-active-feed-state");
+        if (feedState) {
+          const normalizedFreshness = String(activeData.freshness || "UNAVAILABLE").toUpperCase();
+          const stateLabel = activeData.verified === true && normalizedFreshness === "LIVE_FRESH" && activeData.execution_quote_available === true
+            ? "LIVE"
+            : (normalizedFreshness.includes("STALE") ? "STALE" : (activeData.verified === true && normalizedFreshness === "LIVE_FRESH" ? "REFERENCE" : (activeData.verified === true ? "DELAYED" : "UNVERIFIED")));
+          feedState.textContent = stateLabel;
+          feedState.className = `active-sym-feed-state is-${stateLabel.toLowerCase()}`;
+          feedState.title = `${activeData.execution_quote_provider || activeData.provider || activeData.source || "Market feed"} · ${activeData.execution_quote_available ? "executable bid/ask" : "reference price only"} · ${normalizedFreshness}`;
+        }
+        const updatedAt = document.getElementById("top-active-last-update");
+        if (updatedAt) {
+          const date = new Date(activeData.timestamp);
+          updatedAt.textContent = Number.isNaN(date.getTime()) ? "--:--" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          updatedAt.dateTime = Number.isNaN(date.getTime()) ? "" : date.toISOString();
+          updatedAt.title = activeData.timestamp ? `Last quote update · ${new Date(activeData.timestamp).toLocaleString()}` : "Quote time unavailable";
+        }
         const p = activeData.price;
         const prevP = lastKnownPrices[currentSymbol] || p;
-        const tickDir = p > prevP ? "tick-up" : (p < prevP ? "tick-down" : "");
+        const tickDir = isFreshActiveQuote ? (p > prevP ? "tick-up" : (p < prevP ? "tick-down" : "")) : "";
         const isCrypto = currentSymbol.includes("USDT") || currentSymbol.includes("BTC");
         const isForex = !isCrypto && !currentSymbol.includes("XAU") && !currentSymbol.includes("XAG");
         const formatted = isForex ? Number(p).toFixed(4) : (Number(p) > 100 ? `$${Number(p).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : `$${Number(p)}`);
@@ -2068,8 +2222,14 @@ async function pollRealtimePrices() {
         const topPrice = document.getElementById("top-active-price");
         if (topPrice) {
           topPrice.innerText = formatted;
+          topPrice.className = "active-sym-price";
           if (tickDir) {
-            topPrice.className = `active-sym-price ${tickDir === 'tick-up' ? 'text-green' : 'text-red'}`;
+            const tickClass = tickDir === "tick-up" ? "quote-tick-up" : "quote-tick-down";
+            topPrice.classList.add(tickClass);
+            if (topPrice._tickFlashTimer) clearTimeout(topPrice._tickFlashTimer);
+            topPrice._tickFlashTimer = window.setTimeout(() => {
+              topPrice.className = "active-sym-price";
+            }, 740);
           }
         }
 
@@ -2118,6 +2278,18 @@ async function pollRealtimePrices() {
         if (sourceEl) sourceEl.innerText = "Market feed unavailable";
         const changeEl = document.getElementById("ov-active-change");
         if (changeEl) changeEl.innerText = "24h Change: --";
+        const feedState = document.getElementById("top-active-feed-state");
+        if (feedState) {
+          feedState.textContent = "OFFLINE";
+          feedState.className = "active-sym-feed-state is-offline";
+          feedState.title = "No quote returned for the active symbol";
+        }
+        const updatedAt = document.getElementById("top-active-last-update");
+        if (updatedAt) {
+          updatedAt.textContent = "--:--";
+          updatedAt.dateTime = "";
+          updatedAt.title = "Quote time unavailable";
+        }
       }
 
       window.lastKnownMarketData = prices;
@@ -2193,7 +2365,13 @@ async function pollRealtimePrices() {
       });
     });
   } catch (err) {
-    // Graceful background tick
+    const feedState = document.getElementById("top-active-feed-state");
+    if (feedState) {
+      feedState.textContent = "OFFLINE";
+      feedState.className = "active-sym-feed-state is-offline";
+    }
+    const pulseText = document.getElementById("cockpit-live-status-text");
+    if (pulseText) pulseText.textContent = "MARKET FEED OFFLINE";
   } finally {
     isPollingRealtimePrices = false;
   }
@@ -2426,36 +2604,28 @@ function initCockpitSize() {
 
 async function runCockpitAnalyze() {
   const btn = document.getElementById("btn-cockpit-analyze");
-  if (btn) {
-    btn.innerHTML = `<span>⏳ ${isKhmer ? "កំពុងវិភាគ..." : "Analyzing..."}</span>`;
-    btn.disabled = true;
-  }
+  const buttonBusyState = window.ZyroxUI?.ButtonLoader(btn, { label: isKhmer ? "កំពុងវិភាគ…" : "Analyzing…" });
   const statText = document.getElementById("cockpit-status-text");
   if (statText) statText.innerText = "SCANNING...";
 
   try {
-    await triggerScan();
-    const toast = document.getElementById("cockpit-status-toast");
-    if (toast) {
-      toast.innerHTML = `<span class="toast-clock">⚡</span> <b>${currentSymbol} Multi-Timeframe Scan Completed · All AI Gates Evaluated</b>`;
+    const result = await triggerScan();
+    if (result) {
+      const toast = document.getElementById("cockpit-status-toast");
+      if (toast) {
+        toast.innerHTML = `<span class="toast-clock">⚡</span> <b>${escapeHtml(currentSymbol)} Multi-Timeframe Scan Completed · All AI Gates Evaluated</b>`;
+      }
     }
   } catch (err) {
     console.error("Cockpit analyze error:", err);
   } finally {
-    if (btn) {
-      const analyzeSvg = `<svg class="btn-svg-icon" viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="9" width="3.2" height="8" rx="1.6" fill="#38bdf8"/><rect x="8.4" y="4" width="3.2" height="13" rx="1.6" fill="#38bdf8"/><rect x="14.8" y="7" width="3.2" height="10" rx="1.6" fill="#38bdf8"/></svg>`;
-      btn.innerHTML = `${analyzeSvg} <span id="t-cockpit-analyze">${isKhmer ? "វិភាគ" : "Analyze"}</span>`;
-      btn.disabled = false;
-    }
+    buttonBusyState?.restore();
   }
 }
 
 async function runCockpitBestSetup() {
   const btn = document.getElementById("btn-cockpit-best");
-  if (btn) {
-    btn.innerHTML = `<span>⏳ ${isKhmer ? "ស្វែងរក..." : "Scanning..."}</span>`;
-    btn.disabled = true;
-  }
+  const buttonBusyState = window.ZyroxUI?.ButtonLoader(btn, { label: isKhmer ? "កំពុងស្វែងរក…" : "Scanning…" });
   const statBadge = document.getElementById("cockpit-status-badge");
   const statText = document.getElementById("cockpit-status-text");
   if (statText) statText.innerText = "FINDING BEST SETUP...";
@@ -2496,11 +2666,7 @@ async function runCockpitBestSetup() {
     const toast = document.getElementById("cockpit-status-toast");
     if (toast) toast.innerText = isKhmer ? `ស្កេនបរាជ័យ៖ ${err.message}` : `Universe scan failed: ${err.message}`;
   } finally {
-    if (btn) {
-      const boltSvg = `<svg class="btn-svg-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" fill="#090d16"/></svg>`;
-      btn.innerHTML = `${boltSvg} <span id="t-cockpit-best">${isKhmer ? "ការរៀបចំល្អបំផុត" : "Best setup"}</span>`;
-      btn.disabled = false;
-    }
+    buttonBusyState?.restore();
   }
 }
 
@@ -2560,11 +2726,14 @@ function renderCockpitBestSetups(data) {
     const priceLabel = Number.isFinite(price) && price > 0
       ? price.toLocaleString(undefined, { maximumFractionDigits: price > 100 ? 2 : 5 })
       : "N/A";
-    const direction = String(item.proposed_direction || "NONE").toUpperCase();
+    const candidate = item.candidate_plan;
+    const direction = String(candidate?.direction || item.proposed_direction || "NONE").toUpperCase();
     const reason = String(item.reason_summary || item.error || (isKhmer ? "មិនមានមូលហេតុបន្ថែម។" : "No additional risk note."));
     const source = String(item.price_source || "");
-    const planLabel = approved && item.entry_price != null && item.stop_loss != null && item.take_profit_1 != null
-      ? `<div class="cockpit-setup-plan">${isKhmer ? "ចូល" : "Entry"} ${escapeHtml(String(item.entry_price))} · SL ${escapeHtml(String(item.stop_loss))} · TP1 ${escapeHtml(String(item.take_profit_1))}${item.take_profit_2 != null ? ` · TP2 ${escapeHtml(String(item.take_profit_2))}` : ""}</div>`
+    const candidateReady = candidate?.status === "ANALYSIS_ONLY" && [candidate.entry_price, candidate.stop_loss, candidate.take_profit_1].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
+    const displayPlan = candidateReady ? candidate : item;
+    const planLabel = (approved || candidateReady) && displayPlan.entry_price != null && displayPlan.stop_loss != null && displayPlan.take_profit_1 != null
+      ? `<div class="cockpit-setup-plan">${candidateReady ? (isKhmer ? "មើលប៉ុណ្ណោះ" : "ANALYSIS ONLY") : (isKhmer ? "ចូល" : "Entry")} ${escapeHtml(String(displayPlan.entry_price))} · SL ${escapeHtml(String(displayPlan.stop_loss))} · TP1 ${escapeHtml(String(displayPlan.take_profit_1))}${displayPlan.take_profit_2 != null ? ` · TP2 ${escapeHtml(String(displayPlan.take_profit_2))}` : ""} · ${escapeHtml(String(displayPlan.risk_reward_ratio || item.risk_reward_ratio || "R:R N/A"))}</div>`
       : "";
     const ageSeconds = Number(item.analysis_age_seconds);
     const ageLabel = Number.isFinite(ageSeconds)
@@ -2712,6 +2881,7 @@ function updateCockpitPlanCard(data) {
   const planCard = document.getElementById("cockpit-plan-card");
   const titleBadge = document.getElementById("plan-title-badge");
   const subDesc = document.getElementById("plan-sub-desc");
+  const entryVal = document.getElementById("plan-entry-val");
   const slVal = document.getElementById("plan-sl-val");
   const tpVal = document.getElementById("plan-tp-val");
   const validVal = document.getElementById("plan-valid-val");
@@ -2725,15 +2895,20 @@ function updateCockpitPlanCard(data) {
 
   const statusApproved = data.setup_status === "APPROVE";
   const vPrice = Number(data.verified_price);
-  const entryPrice = Number(data.entry_price);
+  const candidate = data.candidate_plan;
+  const candidateDirection = String(candidate?.direction || "").toUpperCase();
+  const hasCandidatePlan = !statusApproved && candidate?.status === "ANALYSIS_ONLY"
+    && ["LONG", "SHORT"].includes(candidateDirection)
+    && [candidate.entry_price, candidate.stop_loss, candidate.take_profit_1].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
+  const entryPrice = Number(statusApproved ? data.entry_price : (hasCandidatePlan ? candidate.entry_price : data.entry_price));
   const referencePrice = Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : vPrice;
   const decimals = currentSymbol.includes("JPY") ? 3 : (currentSymbol.includes("USDT") && referencePrice > 500 ? 2 : (referencePrice > 100 ? 2 : 4));
   const rawDirection = String(data.proposed_direction || "").toUpperCase();
   const action = statusApproved && ["BUY", "SELL"].includes(rawDirection)
     ? rawDirection
     : (statusApproved && rawDirection === "LONG" ? "BUY" : (statusApproved && rawDirection === "SHORT" ? "SELL" : "WAIT"));
-  const stopLoss = Number(data.stop_loss);
-  const takeProfit = Number(data.take_profit_1);
+  const stopLoss = Number(statusApproved ? data.stop_loss : (hasCandidatePlan ? candidate.stop_loss : data.stop_loss));
+  const takeProfit = Number(statusApproved ? data.take_profit_1 : (hasCandidatePlan ? candidate.take_profit_1 : data.take_profit_1));
   const approved = statusApproved && action !== "WAIT"
     && [entryPrice, stopLoss, takeProfit].every(value => Number.isFinite(value) && value > 0)
     && (action === "BUY" ? stopLoss < entryPrice && entryPrice < takeProfit : stopLoss > entryPrice && entryPrice > takeProfit);
@@ -2748,7 +2923,9 @@ function updateCockpitPlanCard(data) {
   if (titleBadge) {
     titleBadge.innerText = approved && action !== "WAIT"
       ? `PLAN · ${action} ${Number(rangeLow).toLocaleString()}`
-      : `WAIT · ${data.setup_status || "NO APPROVED SETUP"}`;
+      : (hasCandidatePlan
+        ? `${isKhmer ? "រង់ចាំ · មើលប៉ុណ្ណោះ" : "WAIT · ANALYSIS ONLY"} · ${candidateDirection}`
+        : `WAIT · ${data.setup_status || "NO APPROVED SETUP"}`);
   }
 
   const scoreBadge = document.getElementById("plan-score-badge");
@@ -2761,7 +2938,11 @@ function updateCockpitPlanCard(data) {
 
   if (subDesc) {
     if (!approved || action === "WAIT") {
-      subDesc.innerText = "No approved trade setup is available.";
+      subDesc.innerText = hasCandidatePlan
+        ? (candidate.entry_basis === "REFERENCE_PRICE_NO_BID_ASK"
+          ? (isKhmer ? "មានកម្រិត Entry/SL/TP សម្រាប់វិភាគប៉ុណ្ណោះ; តម្លៃជា reference ហើយមិនទាន់មាន bid/ask ពី broker។" : "Entry/SL/TP are analysis only; these use a reference price because no broker bid/ask is connected.")
+          : (isKhmer ? "មានផែនការវិភាគប៉ុណ្ណោះ។ ការជួញដូរនៅតែត្រូវបានចាក់សោរហូតដល់អនុម័ត។" : "Analysis preview only. Trading stays locked until this setup is approved."))
+        : (isKhmer ? "មិនមាន setup ដែលបានអនុម័តទេ។" : "No approved trade setup is available.");
     } else if (action === "SELL") {
       subDesc.innerText = data.smart_analysis?.synthesized_cause_en || "Approved sell setup; review reported levels and risk.";
     } else {
@@ -2770,13 +2951,18 @@ function updateCockpitPlanCard(data) {
   }
 
   // Calculate SL
-  const sl = approved && Number.isFinite(stopLoss) && stopLoss > 0 ? stopLoss.toFixed(decimals) : "N/A";
+  const showPreviewLevels = hasCandidatePlan && !approved;
+  const entryDisplay = (approved || showPreviewLevels) && Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice.toFixed(decimals) : "N/A";
+  if (entryVal) entryVal.innerText = entryDisplay;
+  const sl = (approved || showPreviewLevels) && Number.isFinite(stopLoss) && stopLoss > 0 ? stopLoss.toFixed(decimals) : "N/A";
   if (slVal) slVal.innerText = sl;
   if (invalPrice) invalPrice.innerText = approved ? sl : "N/A";
 
-  const tp = approved && Number.isFinite(takeProfit) && takeProfit > 0 ? takeProfit.toFixed(decimals) : "N/A";
+  const tp = (approved || showPreviewLevels) && Number.isFinite(takeProfit) && takeProfit > 0 ? takeProfit.toFixed(decimals) : "N/A";
   if (tpVal) {
-    tpVal.innerText = approved ? `${tp} (${data.risk_reward_ratio || "R:R N/A"})` : "N/A · Awaiting approved scan";
+    tpVal.innerText = approved
+      ? `${tp} (${data.risk_reward_ratio || "R:R N/A"})`
+      : (showPreviewLevels ? `${tp} (${candidate.risk_reward_ratio || "R:R N/A"}) · ${isKhmer ? "មើលប៉ុណ្ណោះ" : "ANALYSIS ONLY"}` : (isKhmer ? "N/A · រង់ចាំការអនុម័ត" : "N/A · Awaiting approved scan"));
   }
 
   // Valid Until in GMT+7
@@ -2789,15 +2975,19 @@ function updateCockpitPlanCard(data) {
 
   // Invalidation & Why
   if (whyText) {
-    whyText.innerText = data.smart_analysis?.synthesized_cause_en || (approved ? "Approved setup; review the reported levels and risk before acting." : "No approved setup. Wait for a fresh market scan.");
+    whyText.innerText = data.smart_analysis?.synthesized_cause_en || (showPreviewLevels ? (candidate.reasons || []).join(" · ") : (approved ? "Approved setup; review the reported levels and risk before acting." : "No approved setup. Wait for a fresh market scan."));
   }
   if (whyKh) {
-    whyKh.innerText = data.smart_analysis?.synthesized_cause_kh || (approved ? "សញ្ញានេះត្រូវបានអនុម័ត។ សូមពិនិត្យតម្លៃ និងហានិភ័យមុនធ្វើសកម្មភាព។" : "មិនមានសញ្ញាដែលបានអនុម័តទេ។ សូមរង់ចាំការស្កេនទីផ្សារថ្មី។");
+    whyKh.innerText = data.smart_analysis?.synthesized_cause_kh || (showPreviewLevels ? (candidate.entry_basis === "REFERENCE_PRICE_NO_BID_ASK" ? "ផែនការនេះប្រើតម្លៃយោងប៉ុណ្ណោះ ព្រោះមិនមាន Bid/Ask ពិតពី broker។ សញ្ញាមិនទាន់អនុម័តទេ។" : "ផែនការនេះសម្រាប់វិភាគប៉ុណ្ណោះ។ ត្រូវរង់ចាំការអនុម័តមុនជួញដូរ។") : (approved ? "សញ្ញានេះត្រូវបានអនុម័ត។ សូមពិនិត្យតម្លៃ និងហានិភ័យមុនធ្វើសកម្មភាព។" : "មិនមានសញ្ញាដែលបានអនុម័តទេ។ សូមរង់ចាំការស្កេនទីផ្សារថ្មី។"));
   }
 
   // Armed alert banner
   if (armedText) {
-    armedText.innerText = approved && hasEntry ? `Approved entry reference: ${Number(rangeLow).toLocaleString()}` : "No approved entry level available.";
+    armedText.innerText = approved && hasEntry
+      ? `Approved entry reference: ${Number(rangeLow).toLocaleString()}`
+      : (showPreviewLevels
+        ? (isKhmer ? "ផែនការវិភាគប៉ុណ្ណោះ · មិនទាន់អនុម័ត · ការជួញដូរត្រូវបានចាក់សោ" : "Analysis only · not approved · execution remains locked")
+        : (isKhmer ? "មិនមាន Entry ដែលបានអនុម័តទេ។" : "No approved entry level available."));
   }
 
   // Next check candle
@@ -3077,6 +3267,8 @@ function switchNavPane(paneName) {
    1. OVERVIEW DATA LOADER
    ========================================================================== */
 async function loadOverviewData() {
+  const quickBody = document.getElementById("ov-markets-quick-body");
+  if (quickBody && !quickBody.children.length) showTableSkeletonRows(quickBody, 5, 4);
   try {
     // 1. Bridge & feed status
     const bridgeRes = await fetch(`${API_BASE}/api/v1/bridge/status`);
@@ -3246,6 +3438,8 @@ function onMarketsTableSearch(val) {
 }
 
 async function loadMarketsData() {
+  const tbody = document.getElementById("markets-full-table-body");
+  if (tbody && !tbody.children.length) showTableSkeletonRows(tbody, 7, 6);
   try {
     const res = await fetch(`${API_BASE}/api/v1/prices/realtime`);
     if (res.ok) {
@@ -3317,7 +3511,8 @@ function renderMarketsTable() {
 async function loadSignalsCenterData() {
   const container = document.getElementById("signals-center-container");
   if (!container) return;
-  container.innerHTML = `<div class="registry-telemetry-loading">Querying active signals from PostgreSQL ledger...</div>`;
+  if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.SectionLoader({ label: isKhmer ? "កំពុងអានសញ្ញាពីកំណត់ត្រា…" : "Loading active signals from the ledger…" }));
+  else container.textContent = "Loading active signals from the ledger…";
 
   try {
     const res = await fetch(`${API_BASE}/api/v1/xauusd/signals?status=ACTIVE,CANDIDATE&limit=10`);
@@ -3400,7 +3595,12 @@ async function loadSignalsCenterData() {
       `;
     }).join("");
   } catch (err) {
-    container.innerHTML = `<div class="error-banner">Failed to load signals: ${escapeHtml(err.message)}</div>`;
+    if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.ErrorState({
+      message: err.message,
+      retryLabel: isKhmer ? "ព្យាយាមម្តងទៀត" : "Retry",
+      onRetry: loadSignalsCenterData
+    }));
+    else container.textContent = `Failed to load signals: ${err.message}`;
   }
 }
 
@@ -3450,7 +3650,7 @@ function filterSignalsHistory(filter, btn) {
 async function loadSignalsHistoryData() {
   const tbody = document.getElementById("signals-history-table-body");
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted">Querying PostgreSQL historical audit trail...</td></tr>`;
+  showTableSkeletonRows(tbody, 11, 6);
 
   try {
     const url = currentHistoryFilter === "ALL" 
@@ -3502,7 +3702,7 @@ async function loadSignalsHistoryData() {
       `;
     }).join("");
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="11" class="text-center text-red" style="padding:20px;">Error loading history: ${escapeHtml(err.message)}</td></tr>`;
+    showTableError(tbody, 11, err.message, loadSignalsHistoryData);
   }
 }
 
@@ -4387,6 +4587,45 @@ function escapeHtml(text) {
   return String(text ?? "").replace(/[&<>"']/g, m => map[m]);
 }
 
+function showTableSkeletonRows(tbody, columns, rowCount = 5) {
+  if (!tbody) return;
+  const safeColumns = Math.max(1, Math.min(12, Number(columns) || 4));
+  const safeRows = Math.max(1, Math.min(10, Number(rowCount) || 4));
+  const fragment = document.createDocumentFragment();
+  for (let rowIndex = 0; rowIndex < safeRows; rowIndex += 1) {
+    const row = document.createElement("tr");
+    row.className = "zyrox-table-skeleton-row";
+    row.setAttribute("aria-hidden", "true");
+    for (let columnIndex = 0; columnIndex < safeColumns; columnIndex += 1) {
+      const cell = document.createElement("td");
+      const line = document.createElement("span");
+      line.className = `zyrox-skeleton-line${columnIndex === safeColumns - 1 ? " zyrox-skeleton-line-short" : ""}`;
+      cell.append(line);
+      row.append(cell);
+    }
+    fragment.append(row);
+  }
+  tbody.replaceChildren(fragment);
+}
+
+function showTableError(tbody, columns, message, retry) {
+  if (!tbody) return;
+  const row = document.createElement("tr");
+  const cell = document.createElement("td");
+  cell.colSpan = Math.max(1, Number(columns) || 4);
+  if (window.ZyroxUI) {
+    cell.append(window.ZyroxUI.ErrorState({
+      message,
+      retryLabel: isKhmer ? "ព្យាយាមម្តងទៀត" : "Retry",
+      onRetry: retry
+    }));
+  } else {
+    cell.textContent = message || "Could not load table data.";
+  }
+  row.append(cell);
+  tbody.replaceChildren(row);
+}
+
 function setFastTradeDir(dir) {
   const buyBtn = document.getElementById("ft-btn-buy");
   const sellBtn = document.getElementById("ft-btn-sell");
@@ -4503,8 +4742,8 @@ async function loadSignalLifecycles() {
 async function loadAgentRegistryStatus() {
   const container = document.getElementById("registry-telemetry-container");
   if (!container) return;
-
-  container.innerHTML = `<div style="font-size:12px; color:#94a3b8; text-align:center; padding:10px;">⏳ Loading live agent registry telemetry...</div>`;
+  if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.SectionLoader({ label: isKhmer ? "កំពុងផ្ទុកស្ថានភាពភ្នាក់ងារ…" : "Loading live agent registry telemetry…" }));
+  else container.textContent = "Loading live agent registry telemetry…";
 
   try {
     const [regRes, routerRes] = await Promise.all([
@@ -4512,6 +4751,7 @@ async function loadAgentRegistryStatus() {
       fetch(`${API_BASE}/api/v1/router/policy`)
     ]);
 
+    if (!regRes.ok || !routerRes.ok) throw new Error(`Agent telemetry request failed (${regRes.status}/${routerRes.status})`);
     const regData = await regRes.json();
     const routerData = await routerRes.json();
     const agents = regData.agents || [];
@@ -4525,19 +4765,29 @@ async function loadAgentRegistryStatus() {
     `;
 
     agents.forEach(ag => {
-      const avgMs = ag.telemetry?.avg_latency_ms ? `${ag.telemetry.avg_latency_ms.toFixed(1)}ms` : '0ms';
-      const execCount = ag.telemetry?.execution_count || 0;
-      const statusClass = ag.status === 'ENABLED' ? 'badge-state-green' : 'badge-state-amber';
+      const averageMs = Number(ag.latency_metrics?.avg_ms);
+      const avgMs = Number.isFinite(averageMs) ? `${averageMs.toFixed(1)}ms` : '—';
+      const execCount = Number(ag.total_executions) || 0;
+      const runState = String(ag.execution_state || "IDLE").toUpperCase();
+      const healthState = ag.enabled === false ? "DISABLED" : String(ag.health_status || "NOT_RUN").toUpperCase();
+      const runClass = `state-${runState.toLowerCase()}`;
+      const lastRuntime = ag.last_started_at || ag.last_completed_at;
+      const lastRuntimeLabel = lastRuntime ? new Date(lastRuntime).toLocaleTimeString() : "No execution recorded";
+      const runtimeError = runState === "FAILED" && ag.last_error
+        ? `<div class="zyrox-agent-error">${escapeHtml(String(ag.last_error))}</div>`
+        : "";
 
       html += `
         <div class="registry-agent-row">
           <div>
-            <div class="registry-agent-name">${escapeHtml(ag.agent_name)}</div>
-            <div style="font-size:10.5px; color:#64748b;">ID: <code>${escapeHtml(String(ag.agent_id || "N/A"))}</code> · Fallback: ${escapeHtml(String(ag.fallback_policy || "N/A"))}</div>
+            <div class="registry-agent-name">${escapeHtml(ag.name || ag.agent_name || "Agent")}</div>
+            <div style="font-size:10.5px; color:var(--zyrox-text-muted);">ID: <code>${escapeHtml(String(ag.agent_id || "N/A"))}</code> · ${escapeHtml(String(ag.specialization || ag.description || "Specialist agent"))}</div>
+            <div class="registry-agent-runtime ${runClass}"><span class="zyrox-state-badge ${runClass}">${escapeHtml(runState)}</span><span>${escapeHtml(lastRuntimeLabel)}</span></div>
+            ${runtimeError}
           </div>
           <div class="registry-agent-meta">
-            <span style="font-size:11px; color:#94a3b8; font-family:monospace;">${execCount} runs · ${avgMs}</span>
-            <span class="${statusClass}">${escapeHtml(String(ag.status || "N/A"))}</span>
+            <span style="font-size:11px; color:var(--zyrox-text-secondary); font-family:monospace;">${execCount} runs · ${escapeHtml(avgMs)}</span>
+            <span class="${healthState === "HEALTHY" ? "badge-state-green" : "badge-state-amber"}">${escapeHtml(healthState)}</span>
           </div>
         </div>
       `;
@@ -4546,7 +4796,13 @@ async function loadAgentRegistryStatus() {
     container.innerHTML = html;
   } catch (err) {
     console.error("Load agent registry error:", err);
-    container.innerHTML = `<div style="font-size:12px; color:#f87171; text-align:center; padding:10px;">Failed to load registry telemetry.</div>`;
+    if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.ErrorState({
+      title: isKhmer ? "មិនអាចផ្ទុក telemetry ភ្នាក់ងារបានទេ" : "Agent telemetry could not be loaded",
+      message: err.message,
+      retryLabel: isKhmer ? "ព្យាយាមម្តងទៀត" : "Retry",
+      onRetry: loadAgentRegistryStatus
+    }));
+    else container.textContent = "Failed to load registry telemetry.";
   }
 }
 
@@ -4557,8 +4813,8 @@ async function loadAgentRegistryStatus() {
 async function fetchXAUUSDSignalsAndStats() {
   const container = document.getElementById("xauusd-signals-panel-content");
   if (!container) return;
-
-  container.innerHTML = `<div class="registry-telemetry-loading">⏳ Fetching verified XAUUSD signals, quota, and win-rate metrics...</div>`;
+  if (window.ZyroxUI) window.ZyroxUI.mount(container, window.ZyroxUI.SectionLoader({ label: isKhmer ? "កំពុងផ្ទុកស្ថិតិសញ្ញា និងកូតា…" : "Loading verified signal, quota, and win-rate data…" }));
+  else container.textContent = "Loading verified signal, quota, and win-rate data…";
 
   try {
     const [quotaRes, statsRes, sigsRes] = await Promise.all([
@@ -5255,19 +5511,32 @@ async function loadAnyRouterBudget() {
   }
 }
 
-async function triggerDeepMultiAgentAnalysis() {
+async function triggerDeepMultiAgentAnalysis(event) {
   const symEl = document.getElementById("deep-analysis-symbol");
   const symbol = symEl ? symEl.value : "XAUUSD";
-
-  // Visual cues on agent chips
-  const agentBadges = [1, 2, 3, 4, 5, 6, 7];
-  agentBadges.forEach(num => {
+  const kh = typeof isKhmer !== "undefined" && isKhmer;
+  const busy = window.ZyroxUI?.ButtonLoader(event?.currentTarget, { label: kh ? "កំពុងស្នើសុំការវិភាគ…" : "Requesting deep analysis…" });
+  const requestState = document.getElementById("deep-analysis-request-state");
+  const agentBadges = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const updateChip = (num, text, isOk = false) => {
     const b = document.getElementById(`badge-agent-${num}`);
     if (b) {
-      b.textContent = "RUNNING...";
-      b.className = "agent-chip-badge text-gold";
+      b.textContent = text;
+      b.className = `agent-chip-badge ${isOk ? "text-green" : "text-gold"}`;
     }
-  });
+  };
+  agentBadges.forEach(num => updateChip(num, kh ? "រង់ចាំចម្លើយពី server" : "Awaiting server result"));
+  const mountRequestState = (state, notice = "") => {
+    if (!requestState || !window.ZyroxUI) return;
+    window.ZyroxUI.mount(requestState, window.ZyroxUI.AIThinkingLoader({
+      title: kh ? "ការវិភាគភ្នាក់ងារ AI" : "AI agent analysis",
+      task: `${symbol} · ${kh ? "កំពុងរង់ចាំចម្លើយពី server…" : "Waiting for the server response…"}`,
+      requestState: state,
+      language: kh ? "kh" : "en",
+      notice: notice || (kh ? "ស្ថានភាពភ្នាក់ងារមិនត្រូវបានបញ្ជូនជា stream ទេ។ លទ្ធផលនឹងបង្ហាញក្រោយ server ឆ្លើយតប។" : "Per-agent progress is not streamed; results appear when the server responds.")
+    }));
+  };
+  mountRequestState("RUNNING");
 
   const traceBox = document.getElementById("deep-analysis-trace-box");
   if (traceBox) traceBox.style.display = "block";
@@ -5279,27 +5548,27 @@ async function triggerDeepMultiAgentAnalysis() {
       body: JSON.stringify({ symbol: symbol })
     });
     const trace = await res.json();
+    if (!res.ok) throw new Error(trace.detail || trace.message || `HTTP ${res.status}`);
+    if (!trace || !trace.market_structure || !trace.multi_timeframe || !trace.macro_news || !trace.risk_guardian || !trace.critic || !trace.final_synthesis) {
+      throw new Error("The server returned an incomplete analysis trace.");
+    }
 
     // Update Agent Badges
-    const updateChip = (num, text, isOk = true) => {
-      const b = document.getElementById(`badge-agent-${num}`);
-      if (b) {
-        b.textContent = text;
-        b.className = isOk ? "agent-chip-badge text-green" : "agent-chip-badge text-gold";
-      }
-    };
-
-    updateChip(1, `${trace.execution_time_ms} ms`);
-    updateChip(2, trace.market_structure.status === "COMPLETED" ? `${trace.market_structure.trend} (${trace.market_structure.regime})` : "UNAVAILABLE", trace.market_structure.status === "COMPLETED");
-    updateChip(3, trace.multi_timeframe.status === "COMPLETED" ? `${trace.multi_timeframe.dominant_bias} (${trace.multi_timeframe.confluence_score ?? "N/A"}%)` : "UNAVAILABLE", trace.multi_timeframe.status === "COMPLETED");
+    updateChip(1, Number.isFinite(Number(trace.execution_time_ms)) ? `${trace.execution_time_ms} ms` : "RESPONSE RECEIVED", true);
+    updateChip(2, trace.market_structure.status === "COMPLETED" ? `${trace.market_structure.trend || "N/A"} (${trace.market_structure.regime || "N/A"})` : "UNAVAILABLE", trace.market_structure.status === "COMPLETED");
+    updateChip(3, trace.multi_timeframe.status === "COMPLETED" ? `${trace.multi_timeframe.dominant_bias || "N/A"} (${trace.multi_timeframe.confluence_score ?? "N/A"}%)` : "UNAVAILABLE", trace.multi_timeframe.status === "COMPLETED");
     const calendarVerified = Boolean(trace.macro_news.calendar_available);
     updateChip(4, !calendarVerified ? "CALENDAR N/A" : (trace.macro_news.is_blackout ? "BLACKOUT" : "CLEAR"), calendarVerified && !trace.macro_news.is_blackout);
     updateChip(5, trace.risk_guardian.approved ? "APPROVED" : "VETOED", trace.risk_guardian.approved);
     updateChip(6, `Score: ${trace.critic.critic_score ?? "N/A"}/100`, trace.critic.critic_score != null);
-    updateChip(7, trace.final_synthesis.action);
+    updateChip(7, trace.final_synthesis.action || "NO ACTION", Boolean(trace.final_synthesis.action));
+    updateChip(8, "NOT REPORTED BY THIS TRACE");
+    updateChip(9, "NOT REPORTED BY THIS TRACE");
+    mountRequestState("COMPLETED", kh ? "server បានត្រឡប់លទ្ធផលការវិភាគរួចហើយ។" : "The server returned the analysis trace.");
 
     // Populate Trace Inspector
-    document.getElementById("trace-symbol").textContent = trace.symbol;
+    const traceSymbol = document.getElementById("trace-symbol");
+    if (traceSymbol) traceSymbol.textContent = trace.symbol || symbol;
     const actionBadge = document.getElementById("trace-action-badge");
     if (actionBadge) {
       actionBadge.textContent = trace.final_synthesis.action;
@@ -5309,9 +5578,12 @@ async function triggerDeepMultiAgentAnalysis() {
         trace.final_synthesis.action === "WAIT" ? "badge-warning" : "badge-muted"
       }`;
     }
-    document.getElementById("trace-status-label").textContent = trace.overall_status;
-    document.getElementById("trace-request-id").textContent = trace.request_id.slice(0, 8) + "...";
-    document.getElementById("trace-latency").textContent = trace.execution_time_ms;
+    const traceStatus = document.getElementById("trace-status-label");
+    if (traceStatus) traceStatus.textContent = trace.overall_status || "RESPONSE RECEIVED";
+    const requestId = document.getElementById("trace-request-id");
+    if (requestId) requestId.textContent = String(trace.request_id || "-").slice(0, 8) + (trace.request_id ? "..." : "");
+    const latency = document.getElementById("trace-latency");
+    if (latency) latency.textContent = trace.execution_time_ms ?? "—";
 
     // Risk Geometry Grid
     const r = trace.risk_guardian;
@@ -5320,27 +5592,27 @@ async function triggerDeepMultiAgentAnalysis() {
       riskGrid.innerHTML = `
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Verified Entry</div>
-          <div class="trace-risk-item-val">${r.entry_price ?? "N/A"}</div>
+          <div class="trace-risk-item-val">${escapeHtml(String(r.entry_price ?? "N/A"))}</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Stop Loss</div>
-          <div class="trace-risk-item-val">${r.stop_loss ?? "N/A"}</div>
+          <div class="trace-risk-item-val">${escapeHtml(String(r.stop_loss ?? "N/A"))}</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Take Profit</div>
-          <div class="trace-risk-item-val">${r.take_profit ?? "N/A"}</div>
+          <div class="trace-risk-item-val">${escapeHtml(String(r.take_profit ?? "N/A"))}</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Risk:Reward Ratio</div>
-          <div class="trace-risk-item-val text-gold">${r.risk_reward_ratio == null ? "N/A" : `${r.risk_reward_ratio}:1`} (Min ${r.min_required_rr ?? "N/A"})</div>
+          <div class="trace-risk-item-val text-gold">${escapeHtml(String(r.risk_reward_ratio == null ? "N/A" : `${r.risk_reward_ratio}:1`))} (Min ${escapeHtml(String(r.min_required_rr ?? "N/A"))})</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Max Risk Cap</div>
-          <div class="trace-risk-item-val">${r.max_risk_percent ?? "N/A"}% (${r.risk_amount_usd == null ? "N/A" : `$${r.risk_amount_usd}`})</div>
+          <div class="trace-risk-item-val">${escapeHtml(String(r.max_risk_percent ?? "N/A"))}% (${escapeHtml(String(r.risk_amount_usd == null ? "N/A" : `$${r.risk_amount_usd}`))})</div>
         </div>
         <div class="trace-risk-item">
           <div class="trace-risk-item-label">Calculated Lot Size</div>
-          <div class="trace-risk-item-val">${r.recommended_lot_size == null ? "N/A" : `${r.recommended_lot_size} Lots`}</div>
+          <div class="trace-risk-item-val">${escapeHtml(String(r.recommended_lot_size == null ? "N/A" : `${r.recommended_lot_size} Lots`))}</div>
         </div>
       `;
     }
@@ -5350,8 +5622,8 @@ async function triggerDeepMultiAgentAnalysis() {
     if (criticDiv) {
       criticDiv.innerHTML = `
         <div><strong>Counter-Trend Risk:</strong> ${escapeHtml(String(trace.critic.counter_trend_risk ?? "N/A"))} | <strong>Trapped Traders Risk:</strong> ${escapeHtml(String(trace.critic.trapped_traders_risk ?? "N/A"))}</div>
-        <div><strong>Objections:</strong> ${trace.critic.objections.length > 0 ? escapeHtml(trace.critic.objections.join("; ")) : "No objections recorded."}</div>
-        <div><strong>Opposing Evidence:</strong> ${escapeHtml(trace.critic.opposing_evidence.join("; ")) || "None."}</div>
+        <div><strong>Objections:</strong> ${Array.isArray(trace.critic.objections) && trace.critic.objections.length > 0 ? escapeHtml(trace.critic.objections.join("; ")) : "No objections recorded."}</div>
+        <div><strong>Opposing Evidence:</strong> ${escapeHtml(Array.isArray(trace.critic.opposing_evidence) ? trace.critic.opposing_evidence.join("; ") : "None.") || "None."}</div>
       `;
     }
 
@@ -5360,7 +5632,16 @@ async function triggerDeepMultiAgentAnalysis() {
     document.getElementById("trace-thesis-kh").textContent = trace.final_synthesis.thesis_kh;
 
   } catch (err) {
-    alert("Deep Analysis failed: " + err.message);
+    agentBadges.forEach(num => updateChip(num, kh ? "មិនបានរាយការណ៍" : "NOT REPORTED"));
+    if (requestState && window.ZyroxUI) window.ZyroxUI.mount(requestState, window.ZyroxUI.ErrorState({
+      title: kh ? "ការវិភាគស៊ីជម្រៅបរាជ័យ" : "Deep analysis failed",
+      message: err.message,
+      retryLabel: kh ? "ព្យាយាមម្តងទៀត" : "Retry analysis",
+      onRetry: () => triggerDeepMultiAgentAnalysis()
+    }));
+    else if (requestState) requestState.textContent = err.message;
+  } finally {
+    busy?.restore();
   }
 }
 

@@ -456,6 +456,7 @@ def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", 
             "stop_loss": stop,
             "take_profit_1": target,
             "take_profit_2": analysis.get("take_profit_2"),
+            "candidate_plan": analysis.get("candidate_plan"),
             "proposed_direction": str(analysis.get("proposed_direction") or "NONE").upper(),
             "smart_analysis": smart_analysis,
             "agents": analysis.get("agents", {}),
@@ -624,6 +625,10 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
                 "provider": prov_display,
                 "verified": quote_verified,
                 "freshness": quote_freshness.get("status"),
+                "execution_quote_available": bool(verified_quote),
+                "execution_quote_provider": verified_quote.get("provider") if verified_quote else None,
+                "execution_quote_source": verified_quote.get("source") if verified_quote else None,
+                "quote_kind": "EXECUTABLE_BID_ASK" if verified_quote else "REFERENCE_PRICE",
                 "age_minutes": quote_freshness.get("age_minutes"),
                 "tv_symbol": cfg.get("tv_reference_symbol", f"OANDA:{sym}" if "USDT" not in sym else f"BINANCE:{sym}"),
                 "reference_mode": XAUUSD_PRICE_REFERENCE if sym == "XAUUSD" else "STANDARD",
@@ -661,7 +666,7 @@ def get_market_data_alignment_audit():
     - Active reference mode (SPOT vs FUTURES)
     - TradingView reference symbol mapping (OANDA:XAUUSD vs COMEX:GC1!)
     - Upstream market data provider and ticker (PAXG-USD / XAUT-USD vs GC=F)
-    - Current live verified price, quote type (SPOT_MID vs FUTURES_LAST)
+    - Current provider price with provenance and whether executable bid/ask exists
     - Source timestamp, age, and freshness status
     - Licensing compliance (no illegal TV scraping, using authorized provider)
     - Basis differential explanation between Spot Gold and Gold Futures
@@ -679,6 +684,16 @@ def get_market_data_alignment_audit():
     age_sec = max(0.0, round((now_utc - gold_dt).total_seconds(), 1)) if gold_dt else None
     
     is_open, open_desc = is_market_open("XAUUSD", check_time=now_utc)
+    gold_execution_quote = market_data_engine.get_verified_quote("XAUUSD")
+    source_upper = str(gold_src or "").upper()
+    if "EXNESS_MT5" in source_upper:
+        actual_provider = "Exness MT5 (Live)"
+    elif "OANDA_V20" in source_upper:
+        actual_provider = "OANDA v20 (Authenticated)"
+    elif "YAHOO" in source_upper:
+        actual_provider = "Yahoo Finance (Reference Fallback)"
+    else:
+        actual_provider = str(gold_src or xau_cfg.get("provider_display") or "Market feed")
     freshness = "UNAVAILABLE" if gold_dt is None or gold_price <= 0 else ("LIVE_FRESH" if age_sec <= 120.0 else ("SLIGHTLY_DELAYED" if age_sec <= 600.0 else "STALE"))
     if gold_dt is not None and not is_open:
         freshness = "WEEKEND_CLOSED"
@@ -691,12 +706,15 @@ def get_market_data_alignment_audit():
             "reference_mode": XAUUSD_PRICE_REFERENCE,
             "tv_reference_symbol": xau_cfg.get("tv_reference_symbol"),
             "quote_type": xau_cfg.get("quote_type"),
-            "provider_display": xau_cfg.get("provider_display"),
+            "provider_display": actual_provider,
             "upstream_ticker": xau_cfg.get("ticker_yahoo"),
             "verified_price": gold_price if gold_price > 0 else None,
             "source": gold_src,
             "source_timestamp_utc": gold_dt.isoformat() if gold_dt else None,
             "freshness_status": freshness,
+            "execution_quote_available": bool(gold_execution_quote),
+            "execution_quote_provider": gold_execution_quote.get("provider") if gold_execution_quote else None,
+            "execution_quote_source": gold_execution_quote.get("source") if gold_execution_quote else None,
             "age_seconds": age_sec,
             "market_open": is_open,
             "market_status_desc": open_desc,
@@ -739,6 +757,11 @@ def get_ai_agents_fleet_status():
         meta = agent_registry.get_metadata(agent_id)
         return {
             "status": meta.health_status if meta else "UNAVAILABLE",
+            "execution_state": meta.execution_state if meta else "IDLE",
+            "current_task": meta.current_task if meta else None,
+            "last_started_at": meta.last_started_at if meta else None,
+            "last_completed_at": meta.last_completed_at if meta else None,
+            "last_error": meta.last_error if meta else None,
             "model_provider": meta.model_provider if meta else None,
             "execution_mode": meta.execution_mode if meta else None,
             "last_successful_execution": meta.last_successful_execution if meta else None,

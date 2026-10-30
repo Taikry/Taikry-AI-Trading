@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/dashboard/styles.css?v=2.4.0">
+  <link rel="stylesheet" href="/dashboard/styles.css?v=2.6.1">
+  <script src="/dashboard/ui-kit.js?v=2.6.1" defer></script>
   <style>
     :root {
       --landing-hero-glow: radial-gradient(circle at 50% 20%, rgba(0, 217, 154, 0.15) 0%, rgba(6, 11, 9, 0) 70%);
@@ -983,8 +984,7 @@
       const btn = document.getElementById("signup-btn-submit");
       errBox.style.display = "none";
       okBox.style.display = "none";
-      btn.textContent = "Activating Trial...";
-      btn.disabled = true;
+      const busyState = window.ZyroxUI?.ButtonLoader(btn, { label: isKhmerLanding ? "កំពុងបើកសាកល្បង…" : "Activating trial…" });
 
       try {
         const payload = {
@@ -1010,8 +1010,7 @@
       } catch (err) {
         errBox.textContent = err.message;
         errBox.style.display = "block";
-        btn.textContent = "Activate 14-Day Trial";
-        btn.disabled = false;
+        busyState?.restore();
       }
     }
 
@@ -1022,8 +1021,7 @@
       const btn = document.getElementById("signin-btn-submit");
       errBox.style.display = "none";
       okBox.style.display = "none";
-      btn.textContent = "Signing In...";
-      btn.disabled = true;
+      const busyState = window.ZyroxUI?.ButtonLoader(btn, { label: isKhmerLanding ? "កំពុងចូលគណនី…" : "Signing in…" });
 
       try {
         const payload = {
@@ -1045,8 +1043,7 @@
       } catch (err) {
         errBox.textContent = err.message;
         errBox.style.display = "block";
-        btn.textContent = "Sign In to Dashboard";
-        btn.disabled = false;
+        busyState?.restore();
       }
     }
 
@@ -1054,6 +1051,7 @@
       e.preventDefault();
       const errBox = document.getElementById("forgot-alert-error");
       const okBox = document.getElementById("forgot-alert-success");
+      const busyState = window.ZyroxUI?.ButtonLoader(e.submitter, { label: isKhmerLanding ? "កំពុងផ្ញើ…" : "Sending…" });
       errBox.style.display = "none";
       okBox.style.display = "none";
 
@@ -1070,6 +1068,8 @@
       } catch (err) {
         errBox.textContent = err.message;
         errBox.style.display = "block";
+      } finally {
+        busyState?.restore();
       }
     }
 
