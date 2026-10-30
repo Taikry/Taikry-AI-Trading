@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050a08">
+  <title>ZYROX AI — Plans & Billing</title>
+  <style>
+    :root { color-scheme: dark; --bg:#050a08; --panel:#0b1511; --panel2:#101d17; --line:#20372c; --text:#eafff5; --muted:#87a99a; --green:#00d99a; --green2:#8cffc9; --red:#ff7272; --amber:#ffc96b; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(ellipse at 50% -20%,#123426 0,transparent 54%),var(--bg); color:var(--text); font:15px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    a { color:var(--green2); text-decoration:none; } a:hover { color:#fff; }
+    button { font:inherit; }
+    .shell { max-width:1180px; margin:auto; padding:24px 24px 72px; }
+    .bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0 28px; border-bottom:1px solid var(--line); }
+    .brand { display:flex; align-items:center; gap:12px; color:var(--text); font-weight:800; letter-spacing:.04em; }
+    .brand-mark { display:grid; place-items:center; width:38px; height:38px; border:1px solid #267354; border-radius:12px; color:var(--green); background:#0b2118; box-shadow:0 0 22px #00d99a22; }
+    .brand small { display:block; color:var(--muted); font-size:10px; letter-spacing:.16em; }
+    .bar-actions { display:flex; align-items:center; gap:10px; }
+    .button { border:1px solid #315343; background:#102219; color:var(--text); padding:10px 15px; border-radius:10px; cursor:pointer; transition:.18s ease; }
+    .button:hover { border-color:var(--green); transform:translateY(-1px); }
+    .button.primary { border-color:#00b87c; color:#04120c; font-weight:800; background:linear-gradient(135deg,#2dffb5,#00c987); }
+    .button:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+    .hero { padding:46px 0 28px; max-width:760px; }
+    .eyebrow { color:var(--green); text-transform:uppercase; letter-spacing:.17em; font-size:11px; font-weight:800; }
+    h1 { font-size:clamp(34px,5vw,58px); line-height:1.04; letter-spacing:-.04em; margin:12px 0 16px; }
+    h2 { margin:0 0 7px; font-size:22px; letter-spacing:-.025em; }
+    h3 { margin:0; font-size:18px; }
+    .lead { color:#a8c2b7; font-size:17px; max-width:690px; margin:0; }
+    .notice { display:flex; align-items:flex-start; gap:12px; border:1px solid #59472a; background:#241d10; color:#f7dca5; padding:14px 16px; border-radius:12px; margin:22px 0; }
+    .notice strong { display:block; color:#ffe2a7; }
+    .notice[hidden] { display:none; }
+    .section { margin-top:34px; }
+    .section-head { display:flex; justify-content:space-between; align-items:end; gap:16px; margin-bottom:16px; }
+    .section-head p { margin:0; color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:15px; }
+    .card { border:1px solid var(--line); border-radius:16px; background:linear-gradient(155deg,#101d17,#09110d); padding:22px; box-shadow:0 18px 40px #0003; }
+    .plan-card { position:relative; overflow:hidden; }
+    .plan-card.featured { border-color:#168b60; box-shadow:0 0 0 1px #00d99a24,0 20px 45px #0004; }
+    .plan-card.featured:before { content:""; position:absolute; top:-90px; right:-65px; width:190px; height:190px; background:#00d99a17; filter:blur(28px); border-radius:50%; pointer-events:none; }
+    .plan-title-row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .badge { border:1px solid #267354; color:var(--green2); padding:4px 8px; border-radius:999px; font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
+    .price { font-size:39px; font-weight:800; letter-spacing:-.045em; margin:18px 0 2px; }
+    .price span { color:var(--muted); font-size:14px; font-weight:500; letter-spacing:0; }
+    .plan-desc { min-height:42px; color:var(--muted); margin:4px 0 18px; }
+    .features { list-style:none; padding:0; margin:0 0 22px; display:grid; gap:9px; color:#cee2d8; }
+    .features li:before { content:"✓"; color:var(--green); font-weight:900; margin-right:9px; }
+    .plan-card .button { width:100%; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:13px; }
+    table { border-collapse:collapse; width:100%; min-width:620px; background:#09110d; }
+    th,td { text-align:left; padding:12px 14px; border-bottom:1px solid #17271f; }
+    th { color:var(--green2); background:#0d1812; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    td { color:#c8ded3; }
+    td:first-child { color:var(--muted); }
+    .account-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:15px; }
+    .kv { display:grid; grid-template-columns:1fr auto; gap:9px 14px; padding-top:16px; }
+    .kv span:nth-child(odd) { color:var(--muted); }
+    .kv span:nth-child(even) { text-align:right; font-weight:650; }
+    .empty { color:var(--muted); border:1px dashed #315343; border-radius:12px; padding:18px; text-align:center; }
+    .status { display:inline-flex; align-items:center; gap:7px; border-radius:999px; padding:4px 9px; font-size:11px; font-weight:800; letter-spacing:.04em; background:#14241b; color:#c5ddcf; }
+    .status.PAID { background:#0f3929; color:#8cffc9; } .status.FAILED,.status.REVIEW { background:#3a1c1e; color:#ffaaaa; } .status.PENDING { background:#392d16; color:#ffdf9b; }
+    .small { color:var(--muted); font-size:12px; }
+    .right { text-align:right; }
+    .admin-card { border-color:#376048; }
+    .admin-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:14px; }
+    .metric { padding:13px; border:1px solid var(--line); background:#09120d; border-radius:11px; }
+    .metric span { display:block; color:var(--muted); font-size:11px; }
+    .metric strong { display:block; margin-top:4px; font-size:22px; }
+    #toast { position:fixed; right:20px; bottom:20px; max-width:min(440px,calc(100vw - 40px)); border:1px solid #315343; background:#101c15; color:var(--text); border-radius:12px; padding:13px 16px; box-shadow:0 12px 32px #0008; display:none; z-index:20; }
+    #toast.error { border-color:#8a3b3b; color:#ffd0d0; }
+    footer { border-top:1px solid var(--line); margin-top:48px; padding-top:20px; color:var(--muted); font-size:12px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    @media(max-width:760px) { .shell{padding:16px 14px 48px}.bar{align-items:flex-start}.brand small{display:none}.account-grid{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.hero{padding-top:34px}.bar-actions .button{padding:8px 10px;font-size:12px} }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="bar">
+      <a class="brand" href="/">
+        <span class="brand-mark">Z</span>
+        <span>ZYROX AI<small>FINTECH INTELLIGENCE</small></span>
+      </a>
+      <div class="bar-actions">
+        <a class="button" href="/dashboard/" data-i18n="terminal">Terminal</a>
+        <button class="button" id="lang-toggle" type="button">ភាសាខ្មែរ</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow" data-i18n="eyebrow">Plans & billing</div>
+      <h1 data-i18n="hero_title">Choose your trading edge.</h1>
+      <p class="lead" data-i18n="hero_lead">Compare ZYROX AI plans, review your subscription, and manage invoices in one secure place.</p>
+    </section>
+
+    <div class="notice" id="provider-notice">
+      <span>◇</span>
+      <div><strong data-i18n="provider_title">ABA PayWay sandbox setup is pending</strong><span data-i18n="provider_body">Checkout will open only after provider signing and merchant settings are verified. No invoice or subscription is created by this notice.</span></div>
+    </div>
+    <div class="notice" id="expiration-notice" hidden>
+      <span>◷</span><div><strong data-i18n="expiration_title">Your access period is ending soon</strong><span id="expiration-copy"></span></div>
+    </div>
+    <div class="notice" id="payment-state" hidden><span>◉</span><div><strong id="payment-state-title"></strong><span id="payment-state-copy"></span></div></div>
+
+    <section class="section" id="pricing">
+      <div class="section-head"><div><h2 data-i18n="plans_title">Subscription plans</h2><p data-i18n="plans_subtitle">One-time checkout. No automatic recurring card charges.</p></div><span class="small" id="plan-load-state"></span></div>
+      <div class="grid" id="plan-grid"><div class="empty" data-i18n="loading">Loading plans…</div></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><h2 data-i18n="compare_title">Plan comparison</h2><p data-i18n="compare_subtitle">Feature limits are enforced by ZYROX AI on the server.</p></div></div>
+      <div class="table-wrap"><table id="comparison-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="section" id="my-subscription">
+      <div class="section-head"><div><h2 data-i18n="account_title">My subscription</h2><p data-i18n="account_subtitle">Your access state comes from the server-side entitlement record.</p></div><a href="/?auth=signin" id="signin-link" hidden data-i18n="signin">Sign in</a></div>
+      <div class="account-grid">
+        <article class="card"><h3 data-i18n="current_access">Current access</h3><div id="subscription-summary" class="empty" style="margin-top:15px" data-i18n="signin_prompt">Sign in to view your subscription and invoices.</div><div id="subscription-controls" style="margin-top:14px" hidden><button class="button" id="cancel-subscription" data-i18n="cancel">Cancel at period end</button><p class="small" data-i18n="cancel_note">Access remains available until the current paid period expires. No payment provider cancellation is reported.</p></div></article>
+        <article class="card"><div class="section-head"><div><h3 data-i18n="invoice_history">Invoice history</h3></div></div><div id="invoice-list" class="empty" data-i18n="signin_prompt">Sign in to view your subscription and invoices.</div></article>
+      </div>
+    </section>
+
+    <section class="section" id="admin-payments" hidden>
+      <article class="card admin-card"><div class="section-head"><div><h2 data-i18n="admin_title">Payment administration</h2><p data-i18n="admin_subtitle">Visible to authorized administrators only.</p></div></div><div id="admin-metrics" class="admin-metrics"></div><h3 style="margin-top:24px" data-i18n="transactions">Recent payment transactions</h3><div id="admin-transactions" style="margin-top:12px"></div></article>
+    </section>
+
+    <footer><span>ZYROX AI · <span data-i18n="footer_note">Payments are verified server-side. A browser redirect alone never activates access.</span></span><a href="/dashboard/" data-i18n="back">Back to dashboard</a></footer>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script>
+    const copy = {
+      en: { terminal:"Terminal", eyebrow:"Plans & billing", hero_title:"Choose your trading edge.", hero_lead:"Compare ZYROX AI plans, review your subscription, and manage invoices in one secure place.", provider_title:"ABA PayWay sandbox setup is pending", provider_body:"Checkout will open only after provider signing and merchant settings are verified. No invoice or subscription is created by this notice.", expiration_title:"Your access period is ending soon", plans_title:"Subscription plans", plans_subtitle:"One-time checkout. No automatic recurring card charges.", loading:"Loading plans…", compare_title:"Plan comparison", compare_subtitle:"Feature limits are enforced by ZYROX AI on the server.", account_title:"My subscription", account_subtitle:"Your access state comes from the server-side entitlement record.", current_access:"Current access", signin:"Sign in", signin_prompt:"Sign in to view your subscription and invoices.", invoice_history:"Invoice history", cancel:"Cancel at period end", cancel_note:"Access remains available until the current paid period expires. No payment provider cancellation is reported.", admin_title:"Payment administration", admin_subtitle:"Visible to authorized administrators only.", transactions:"Recent payment transactions", footer_note:"Payments are verified server-side. A browser redirect alone never activates access.", back:"Back to dashboard", month:"month", year:"year", checkout:"Continue to secure checkout", unavailable:"Checkout is not ready", ai_scans:"Daily AI scans", deep_analysis:"Deep analyses / day", watchlists:"Watchlists", backtesting:"Backtesting", telegram:"Telegram alerts", debate:"Agent debate", yes:"Included", no:"Not included", no_plans:"No paid plans are currently available.", plan_error:"Plans could not be loaded.", subscription_error:"Subscription status could not be loaded.", access_status:"Status", expires:"Access ends", auto_renew:"Automatic renewal", off:"Off", trial:"Trial", none:"None", verify:"Check status", cancel_done:"Cancellation scheduled through period end.", cancel_error:"Cancellation could not be scheduled.", pending:"Payment pending verification", paid:"Payment verified", failed:"Payment failed", review:"Payment needs review", revenue:"Verified revenue", pending_invoices:"Pending invoices", successful:"Successful payments", failed_payments:"Failed payments", active_subs:"Active subscriptions", expiring:"Expiring in 7 days", not_supported:"Refund API not enabled", reference:"Reference", amount:"Amount", status:"Status", date:"Date", invoice:"Invoice", empty_invoices:"No invoices yet.", signin_required:"Please sign in to continue.", checkout_error:"Secure checkout is not ready. No invoice was created.", copied:"Reference copied" },
+      kh: { terminal:"ផ្ទាំងជួញដូរ", eyebrow:"គម្រោង និងការទូទាត់", hero_title:"ជ្រើសរើសអត្ថប្រយោជន៍សម្រាប់ការជួញដូរ។", hero_lead:"ប្រៀបធៀបគម្រោង ZYROX AI ពិនិត្យស្ថានភាពជាវ និងគ្រប់គ្រងវិក្កយបត្រនៅកន្លែងតែមួយ។", provider_title:"ការរៀបចំ ABA PayWay sandbox កំពុងរង់ចាំ", provider_body:"ការទូទាត់នឹងបើកបន្ទាប់ពីផ្ទៀងផ្ទាត់ការចុះហត្ថលេខា និងការកំណត់ merchant រួច។ សារនេះមិនបង្កើតវិក្កយបត្រ ឬសមាជិកភាពទេ។", expiration_title:"សិទ្ធិប្រើប្រាស់របស់អ្នកជិតផុតកំណត់", plans_title:"គម្រោងជាវ", plans_subtitle:"ទូទាត់ម្តង។ មិនមានការដកប្រាក់កាតដោយស្វ័យប្រវត្តិទេ។", loading:"កំពុងផ្ទុកគម្រោង…", compare_title:"ប្រៀបធៀបគម្រោង", compare_subtitle:"កម្រិតមុខងារត្រូវបានត្រួតពិនិត្យដោយ server របស់ ZYROX AI។", account_title:"សមាជិកភាពរបស់ខ្ញុំ", account_subtitle:"ស្ថានភាពសិទ្ធិប្រើប្រាស់មកពីកំណត់ត្រាសមាជិកភាពនៅ server។", current_access:"សិទ្ធិបច្ចុប្បន្ន", signin:"ចូលគណនី", signin_prompt:"ចូលគណនីដើម្បីមើលសមាជិកភាព និងវិក្កយបត្រ។", invoice_history:"ប្រវត្តិវិក្កយបត្រ", cancel:"បញ្ឈប់នៅចុងរយៈពេល", cancel_note:"សិទ្ធិប្រើប្រាស់នៅតែមានរហូតដល់ផុតរយៈពេលដែលបានបង់។ មិនមានការអះអាងថាបានបញ្ឈប់ការទូទាត់នៅ provider ទេ។", admin_title:"ការគ្រប់គ្រងការទូទាត់", admin_subtitle:"បង្ហាញតែអ្នកគ្រប់គ្រងដែលមានសិទ្ធិ។", transactions:"ប្រតិបត្តិការទូទាត់ថ្មីៗ", footer_note:"ការទូទាត់ត្រូវបានផ្ទៀងផ្ទាត់នៅ server។ ការបញ្ជូនត្រឡប់តាម browser មិនបើកសិទ្ធិដោយខ្លួនឯងទេ។", back:"ត្រឡប់ទៅផ្ទាំង", month:"ខែ", year:"ឆ្នាំ", checkout:"បន្តទៅការទូទាត់សុវត្ថិភាព", unavailable:"ការទូទាត់មិនទាន់រួចរាល់", ai_scans:"ការវិភាគ AI ប្រចាំថ្ងៃ", deep_analysis:"ការវិភាគស៊ីជម្រៅ / ថ្ងៃ", watchlists:"បញ្ជីតាមដាន", backtesting:"សាកល្បងយុទ្ធសាស្ត្រ", telegram:"ការជូនដំណឹង Telegram", debate:"ការពិភាក្សារបស់ agent", yes:"មាន", no:"មិនមាន", no_plans:"មិនមានគម្រោងបង់ប្រាក់នៅពេលនេះទេ។", plan_error:"មិនអាចផ្ទុកគម្រោងបានទេ។", subscription_error:"មិនអាចផ្ទុកស្ថានភាពសមាជិកភាពបានទេ។", access_status:"ស្ថានភាព", expires:"សិទ្ធិផុតកំណត់", auto_renew:"បន្តដោយស្វ័យប្រវត្តិ", off:"បិទ", trial:"សាកល្បង", none:"គ្មាន", verify:"ពិនិត្យស្ថានភាព", cancel_done:"បានកំណត់ឱ្យបញ្ឈប់នៅចុងរយៈពេល។", cancel_error:"មិនអាចកំណត់ការបញ្ឈប់បានទេ។", pending:"កំពុងផ្ទៀងផ្ទាត់ការទូទាត់", paid:"បានផ្ទៀងផ្ទាត់ការទូទាត់", failed:"ការទូទាត់បរាជ័យ", review:"ការទូទាត់ត្រូវការពិនិត្យ", revenue:"ចំណូលដែលបានផ្ទៀងផ្ទាត់", pending_invoices:"វិក្កយបត្ររង់ចាំ", successful:"ការទូទាត់ជោគជ័យ", failed_payments:"ការទូទាត់បរាជ័យ", active_subs:"សមាជិកភាពសកម្ម", expiring:"ផុតកំណត់ក្នុង ៧ ថ្ងៃ", not_supported:"មិនទាន់បើក API សងប្រាក់ទេ", reference:"លេខយោង", amount:"ចំនួនទឹកប្រាក់", status:"ស្ថានភាព", date:"កាលបរិច្ឆេទ", invoice:"វិក្កយបត្រ", empty_invoices:"មិនទាន់មានវិក្កយបត្រទេ។", signin_required:"សូមចូលគណនីដើម្បីបន្ត។", checkout_error:"ការទូទាត់សុវត្ថិភាពមិនទាន់រួចរាល់ទេ។ មិនបានបង្កើតវិក្កយបត្រទេ.", copied:"បានចម្លងលេខយោង" }
+    };
+    let language = localStorage.getItem("zyrox-billing-lang") || "en";
+    let currentPlans = [];
+    let checkoutAvailable = false;
+    const t = key => (copy[language] && copy[language][key]) || copy.en[key] || key;
+    function toast(message, error=false) { const node=document.getElementById("toast"); node.textContent=message; node.className=error?"error":""; node.style.display="block"; clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>node.style.display="none",4200); }
+    function setLanguage(next) { language=next; localStorage.setItem("zyrox-billing-lang",language); document.documentElement.lang=language==="kh"?"km":"en"; document.querySelectorAll("[data-i18n]").forEach(n=>{const value=copy[language][n.dataset.i18n]; if(value)n.textContent=value;}); document.getElementById("lang-toggle").textContent=language==="en"?"ភាសាខ្មែរ":"English"; if(currentPlans.length){renderPlans(currentPlans);renderComparison(currentPlans);} }
+    document.getElementById("lang-toggle").addEventListener("click",()=>setLanguage(language==="en"?"kh":"en"));
+    function node(tag, cls, text) { const el=document.createElement(tag); if(cls)el.className=cls; if(text!==undefined)el.textContent=text; return el; }
+    function intervalLabel(plan){ return plan.billing_interval==="yearly"?t("year"):t("month"); }
+    function renderPlans(plans) {
+      const grid=document.getElementById("plan-grid"); grid.replaceChildren();
+      if(!plans.length){grid.append(node("div","empty",t("no_plans")));return;}
+      plans.forEach((plan,index)=>{
+        const card=node("article",`card plan-card ${index===0?"featured":""}`);
+        const title=node("div","plan-title-row"); title.append(node("h3","",language==="kh"?plan.name_kh:plan.name_en)); if(index===0)title.append(node("span","badge","ZYROX PRO"));
+        const price=node("div","price",`${plan.amount} ${plan.currency}`); price.append(node("span","",` / ${intervalLabel(plan)}`));
+        const desc=node("p","plan-desc",plan.description||"");
+        const features=node("ul","features"); const f=plan.features||{};
+        [["ai_scans",f.max_ai_scans_per_day],["deep_analysis",f.max_deep_analysis_per_day],["watchlists",f.max_watchlists],["backtesting",f.backtesting_enabled?t("yes"):t("no")],["telegram",f.telegram_alerts_enabled?t("yes"):t("no")],["debate",f.agent_debate_enabled?t("yes"):t("no")]].forEach(([label,value])=>features.append(node("li","",`${t(label)}: ${value}`)));
+        const btn=node("button","button primary",checkoutAvailable?t("checkout"):t("unavailable")); btn.type="button"; btn.disabled=!checkoutAvailable; btn.addEventListener("click",()=>startCheckout(plan.id));
+        card.append(title,price,desc,features,btn); grid.append(card);
+      });
+    }
+    function renderComparison(plans){
+      const head=document.querySelector("#comparison-table thead"), body=document.querySelector("#comparison-table tbody"); head.replaceChildren();body.replaceChildren();
+      const tr=node("tr");tr.append(node("th","","Feature"));plans.forEach(p=>tr.append(node("th","",language==="kh"?p.name_kh:p.name_en)));head.append(tr);
+      const rows=[["ai_scans","Daily AI scans",p=>p.features.max_ai_scans_per_day],["deep_analysis","Deep analyses / day",p=>p.features.max_deep_analysis_per_day],["watchlists","Watchlists",p=>p.features.max_watchlists],["backtesting","Backtesting",p=>p.features.backtesting_enabled?t("yes"):t("no")],["telegram","Telegram alerts",p=>p.features.telegram_alerts_enabled?t("yes"):t("no")],["debate","Agent debate",p=>p.features.agent_debate_enabled?t("yes"):t("no")]];
+      rows.forEach(([,label,value])=>{const row=node("tr");row.append(node("td","",t(label)));plans.forEach(p=>row.append(node("td","",String(value(p)))));body.append(row);});
+    }
+    function renderSubscription(data){
+      const sub=data.subscription||{}; const box=document.getElementById("subscription-summary"); box.className="";box.replaceChildren();
+      const title=node("div","plan-title-row");title.append(node("strong","",sub.plan_name_en||sub.plan_id||t("none")));title.append(node("span",`status ${sub.status||""}`,sub.status||"unsubscribed"));box.append(title);
+      const kv=node("div","kv"); [[t("access_status"),sub.status||"unsubscribed"],[t("expires"),sub.expires_at?new Date(sub.expires_at).toLocaleString():t("none")],[t("auto_renew"),sub.auto_renew?t("yes"):t("off")],["Days remaining",String(sub.days_remaining||0)]].forEach(([a,b])=>{kv.append(node("span","",a),node("span","",b));});box.append(kv);
+      const cancelBtn=document.getElementById("subscription-controls");cancelBtn.hidden=sub.status!=="active_paid";
+      if(sub.days_remaining>0&&sub.days_remaining<=7){const notice=document.getElementById("expiration-notice");notice.hidden=false;document.getElementById("expiration-copy").textContent=` ${sub.days_remaining} day(s) remain. Checkout is one-time; renew manually before access ends.`;}
+      renderInvoices(data.invoices||[]);
+    }
+    function renderInvoices(invoices){
+      const host=document.getElementById("invoice-list");host.replaceChildren();
+      if(!invoices.length){host.className="empty";host.textContent=t("empty_invoices");return;}
+      host.className="table-wrap";const table=node("table"),thead=node("thead"),head=node("tr");["invoice","reference","amount","status","date",""].forEach(k=>head.append(node("th","",t(k))));thead.append(head);const tbody=node("tbody");
+      invoices.forEach(inv=>{const tr=node("tr");tr.append(node("td","",inv.invoice_number),node("td","",inv.checkout_reference),node("td","",`${inv.amount} ${inv.currency}`));const status=node("td");status.append(node("span",`status ${inv.status}`,inv.status));tr.append(status,node("td","",inv.created_at?new Date(inv.created_at).toLocaleDateString():""));const action=node("td","right");if(inv.status==="PENDING"){const btn=node("button","button",t("verify"));btn.addEventListener("click",()=>verifyInvoice(inv.id));action.append(btn);}tr.append(action);tbody.append(tr);});table.append(thead,tbody);host.append(table);
+    }
+    async function loadPlans(){try{const [r,statusResponse]=await Promise.all([fetch("/api/v1/payments/plans"),fetch("/api/v1/payments/status")]);if(!r.ok)throw new Error();const data=await r.json();const paymentStatus=statusResponse.ok?await statusResponse.json():{};checkoutAvailable=paymentStatus.checkout_available===true;document.getElementById("provider-notice").hidden=checkoutAvailable;currentPlans=data.plans||[];renderPlans(currentPlans);renderComparison(currentPlans);}catch{checkoutAvailable=false;document.getElementById("provider-notice").hidden=false;document.getElementById("plan-grid").replaceChildren(node("div","empty",t("plan_error")));}}
+    async function loadAccount(){
+      const auth=await fetch("/api/v1/auth/me",{credentials:"include"});
+      if(!auth.ok){document.getElementById("signin-link").hidden=false;return;}
+      try{const r=await fetch("/api/v1/subscriptions/me",{credentials:"include"});if(!r.ok)throw new Error();const data=await r.json();renderSubscription(data);}
+      catch{document.getElementById("subscription-summary").textContent=t("subscription_error");}
+      const admin=await fetch("/api/v1/admin/payments/summary",{credentials:"include"});if(admin.ok){document.getElementById("admin-payments").hidden=false;const summary=await admin.json();renderAdmin(summary);}
+    }
+    function renderAdmin(data){const host=document.getElementById("admin-metrics");host.replaceChildren();[["revenue",`${data.verified_revenue} ${data.currency}`],["pending_invoices",data.pending_invoices],["successful",data.successful_payments],["failed_payments",data.failed_payments],["active_subs",data.active_subscriptions],["expiring",data.expiring_within_7_days]].forEach(([k,v])=>{const m=node("div","metric");m.append(node("span","",t(k)),node("strong","",String(v)));host.append(m);});host.append(node("div","small",t("not_supported")));fetch("/api/v1/admin/payments/transactions?limit=20",{credentials:"include"}).then(r=>r.ok?r.json():null).then(result=>{const target=document.getElementById("admin-transactions");target.replaceChildren();if(!result||!result.transactions.length){target.append(node("div","empty",t("empty_invoices")));return;}const table=node("table"),wrap=node("div","table-wrap"),thead=node("thead"),head=node("tr");["invoice","reference","amount","status","date"].forEach(k=>head.append(node("th","",t(k))));thead.append(head);const tbody=node("tbody");result.transactions.forEach(x=>{const tr=node("tr");tr.append(node("td","",`TX-${x.id}`),node("td","",x.provider_transaction_id||"—"),node("td","",`${x.amount} ${x.currency}`));const state=x.verification_status==="VERIFIED"?x.status:"REVIEW",cell=node("td");cell.append(node("span",`status ${state}`,state));tr.append(cell,node("td","",x.created_at?new Date(x.created_at).toLocaleDateString():""));tbody.append(tr);});table.append(thead,tbody);wrap.append(table);target.append(wrap);}).catch(()=>{});}
+    async function startCheckout(planId){
+      const response=await fetch("/api/v1/payments/checkout",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan_id:planId})});
+      if(!response.ok){let detail="";try{detail=(await response.json()).detail||"";}catch{}toast(detail||t("checkout_error"),true);return;}
+      const data=await response.json();sessionStorage.setItem("zyroxPendingInvoiceId",String(data.invoice.id));
+      const form=document.createElement("form");form.method="POST";form.enctype="multipart/form-data";form.action=data.checkout.url;form.style.display="none";
+      Object.entries(data.checkout.fields||{}).forEach(([name,value])=>{const input=document.createElement("input");input.type="hidden";input.name=name;input.value=String(value??"");form.append(input);});document.body.append(form);form.submit();
+    }
+    async function verifyInvoice(invoiceId){
+      const r=await fetch(`/api/v1/payments/verify/${encodeURIComponent(invoiceId)}`,{method:"POST",credentials:"include"});let data={};try{data=await r.json();}catch{}
+      if(!r.ok){toast(data.detail||t("checkout_error"),true);showPaymentState("pending",data.detail||t("pending"));return;}
+      const state=data.status||data.invoice?.status||"PENDING";const message=state==="PAID"?t("paid"):state==="FAILED"?t("failed"):state==="REVIEW"?t("review"):t("pending");showPaymentState(state,message);sessionStorage.removeItem("zyroxPendingInvoiceId");await loadAccount();
+    }
+    function showPaymentState(state,message){const box=document.getElementById("payment-state");box.hidden=false;document.getElementById("payment-state-title").textContent=state==="PAID"?t("paid"):state==="FAILED"?t("failed"):state==="REVIEW"?t("review"):t("pending");document.getElementById("payment-state-copy").textContent=message;}
+    document.getElementById("cancel-subscription").addEventListener("click",async()=>{const r=await fetch("/api/v1/subscriptions/cancel",{method:"POST",credentials:"include"});let data={};try{data=await r.json();}catch{}if(!r.ok){toast(data.detail||t("cancel_error"),true);return;}toast(language==="kh"?t("cancel_done"):data.message||t("cancel_done"));await loadAccount();});
+    async function start(){setLanguage(language);await Promise.all([loadPlans(),loadAccount()]);const pending=sessionStorage.getItem("zyroxPendingInvoiceId");if(pending)verifyInvoice(pending);}
+    start();
+  </script>
+</body>
+</html>

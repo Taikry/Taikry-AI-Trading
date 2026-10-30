@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/dashboard/styles.css">
+  <link rel="stylesheet" href="/dashboard/styles.css?v=2.4.0">
   <style>
     :root {
       --landing-hero-glow: radial-gradient(circle at 50% 20%, rgba(0, 217, 154, 0.15) 0%, rgba(6, 11, 9, 0) 70%);
@@ -518,6 +518,7 @@
       <a href="#agents" class="landing-nav-link" data-i18n="nav_agents">7-Agent System</a>
       <a href="#markets" class="landing-nav-link" data-i18n="nav_markets">Markets</a>
       <a href="#pricing" class="landing-nav-link" data-i18n="nav_pricing">Pricing</a>
+      <a href="/dashboard/billing.html" class="landing-nav-link" data-i18n="nav_billing">Plans &amp; Billing</a>
       <a href="#faq" class="landing-nav-link" data-i18n="nav_faq">FAQ</a>
       <button onclick="toggleLandingLanguage()" class="btn btn-outline btn-xs" id="lang-toggle-btn" style="padding: 4px 10px;">ភាសាខ្មែរ</button>
       <button onclick="openAuthModal('signin')" class="landing-nav-link" style="background: none; border: none; cursor: pointer;" data-i18n="nav_signin">Sign In</button>
@@ -659,7 +660,7 @@
       <div class="section-header">
         <div class="section-eyebrow" data-i18n="price_eyebrow">Transparent Membership</div>
         <h2 class="section-heading" data-i18n="price_heading">Simple, Transparent Pricing</h2>
-        <p class="section-subtext" data-i18n="price_subtext">The free trial is available. Paid plans and online checkout are not available yet; displayed paid prices are planned only.</p>
+        <p class="section-subtext" data-i18n="price_subtext">The free trial is available now. Paid plan prices are listed; online checkout is paused while ABA PayWay merchant signing is verified.</p>
       </div>
       <div class="pricing-grid">
         <!-- FREE TRIAL -->
@@ -682,7 +683,7 @@
           <div class="pricing-badge">MOST POPULAR</div>
           <h3 class="pricing-title">Pro Trader</h3>
           <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0;">For active retail and proprietary traders.</p>
-          <div class="pricing-price">Planned $29 <span class="pricing-interval">/ month</span></div>
+          <div class="pricing-price">$29 <span class="pricing-interval">/ month</span></div>
           <ul class="pricing-features">
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 50 Daily AI Scans</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 20 Deep 7-Agent Analyses / Day</li>
@@ -691,14 +692,14 @@
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Agent Adversarial Debate View</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Priority Telegram Delivery</li>
           </ul>
-          <button class="btn-hero-primary" style="width: 100%; justify-content: center;" disabled>Paid plan coming soon</button>
+          <a href="/dashboard/billing.html" class="btn-hero-primary" style="width: 100%; justify-content: center;" data-i18n="billing_cta">View plans &amp; billing</a>
         </div>
 
         <!-- PREMIUM -->
         <div class="pricing-card">
           <h3 class="pricing-title">Institutional Elite</h3>
           <p style="color: var(--zyrox-muted, #87A99A); font-size: 13px; margin: 0;">For funds, prop desks, and volume traders.</p>
-          <div class="pricing-price">Planned $79 <span class="pricing-interval">/ month</span></div>
+          <div class="pricing-price">$79 <span class="pricing-interval">/ month</span></div>
           <ul class="pricing-features">
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 200 Daily AI Scans</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 100 Deep Analyses / Day</li>
@@ -707,7 +708,7 @@
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Custom Prompt Models</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Account support through configured contact</li>
           </ul>
-          <button class="btn-hero-secondary" style="width: 100%; justify-content: center;" disabled>Paid plan coming soon</button>
+          <a href="/dashboard/billing.html" class="btn-hero-secondary" style="width: 100%; justify-content: center;" data-i18n="billing_cta">View plans &amp; billing</a>
         </div>
       </div>
     </div>
@@ -1074,9 +1075,17 @@
 
     async function handleAuthLinkTokens() {
       const url = new URL(window.location.href);
+      const requestedAuthView = url.searchParams.get("auth");
       const verificationToken = url.searchParams.get("verify_email");
       const resetToken = url.searchParams.get("reset_password");
-      if (!verificationToken && !resetToken) return;
+      if (!verificationToken && !resetToken) {
+        if (requestedAuthView === "signin") {
+          url.searchParams.delete("auth");
+          window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+          openAuthModal("signin");
+        }
+        return;
+      }
 
       url.searchParams.delete("verify_email");
       url.searchParams.delete("reset_password");
@@ -1121,6 +1130,7 @@
       nav_agents: "ប្រព័ន្ធ AI ទាំង ៧",
       nav_markets: "ទីផ្សារជួញដូរ",
       nav_pricing: "តម្លៃសមាជិក",
+      nav_billing: "គម្រោង និងការទូទាត់",
       nav_faq: "សំណួរញឹកញាប់",
       nav_signin: "ចូលប្រើប្រាស់",
       nav_trial_cta: "សាកល្បងឥតគិតថ្លៃ ១៤ ថ្ងៃ",
@@ -1146,7 +1156,8 @@
       market_subtext: "គាំទ្រការតម្រឹមតម្លៃពិតប្រាកដតាមរយៈ Yahoo Finance, Binance, និង Exness MT5។",
       price_eyebrow: "កញ្ចប់សមាជិកភាព",
       price_heading: "តម្លៃសាមញ្ញ និងច្បាស់លាស់",
-      price_subtext: "អាចចាប់ផ្តើមសាកល្បងឥតគិតថ្លៃ។ កញ្ចប់បង់ប្រាក់ និងការទូទាត់អនឡាញមិនទាន់ដំណើរការទេ។ តម្លៃដែលបង្ហាញជាតម្លៃគ្រោងទុកប៉ុណ្ណោះ។",
+      price_subtext: "អាចប្រើការសាកល្បងឥតគិតថ្លៃឥឡូវនេះ។ តម្លៃកញ្ចប់បង់ប្រាក់ត្រូវបានបង្ហាញហើយ ប៉ុន្តែការទូទាត់អនឡាញកំពុងផ្អាក ខណៈពេលផ្ទៀងផ្ទាត់ការចុះហត្ថលេខា ABA PayWay។",
+      billing_cta: "មើលគម្រោង និងការទូទាត់",
       faq_eyebrow: "មានចម្ងល់ដែរឬទេ?",
       faq_heading: "សំណួរដែលសួរញឹកញាប់"
     };

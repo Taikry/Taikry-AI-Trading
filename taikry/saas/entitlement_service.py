@@ -8,6 +8,7 @@ Controls:
 """
 
 import datetime
+from decimal import Decimal
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -68,7 +69,9 @@ def init_default_plans(db: Session):
     for p_data in DEFAULT_PLANS:
         existing = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == p_data["id"]).first()
         if not existing:
-            plan = SubscriptionPlan(**p_data)
+            plan_values = dict(p_data)
+            plan_values["amount"] = Decimal(str(p_data.get("price_usd", 0))).quantize(Decimal("0.01"))
+            plan = SubscriptionPlan(**plan_values)
             db.add(plan)
     db.commit()
 
@@ -82,7 +85,7 @@ def get_all_plans(db: Session) -> list:
             "id": p.id,
             "name_en": p.name_en,
             "name_kh": p.name_kh,
-            "price_usd": p.price_usd,
+            "price_usd": float(p.amount or 0),
             "billing_interval": p.billing_interval,
             "max_ai_scans_per_day": p.max_ai_scans_per_day,
             "max_deep_analysis_per_day": p.max_deep_analysis_per_day,
@@ -134,7 +137,7 @@ def get_user_entitlement(db: Session, user_id: int) -> Dict[str, Any]:
             "id": plan.id,
             "name_en": plan.name_en,
             "name_kh": plan.name_kh,
-            "price_usd": plan.price_usd,
+            "price_usd": float(plan.amount or 0),
             "billing_interval": plan.billing_interval
         },
         "quotas": {

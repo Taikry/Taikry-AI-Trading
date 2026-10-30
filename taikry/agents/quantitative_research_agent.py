@@ -88,3 +88,4 @@ class QuantitativeResearchAgent:
         }
 
 quantitative_research_agent = QuantitativeResearchAgent()
+

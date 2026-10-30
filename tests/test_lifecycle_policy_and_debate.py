@@ -43,3 +43,4 @@ def test_debate_engine_resilience():
     assert len(res["turns"]) >= 4
     assert "verdict" in res
     assert res["verdict"]["decision"] in ("APPROVE", "REJECT", "WAIT", "HOLD", "STANDBY")
+

@@ -157,3 +157,4 @@ class MarketDataQualityAgent:
 
 
 data_quality_agent = MarketDataQualityAgent()
+

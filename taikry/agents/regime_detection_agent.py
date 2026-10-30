@@ -132,3 +132,4 @@ class MarketRegimeDetectionAgent:
         }
 
 regime_detection_agent = MarketRegimeDetectionAgent()
+

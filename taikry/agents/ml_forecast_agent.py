@@ -109,3 +109,4 @@ class MachineLearningForecastAgent:
         }
 
 ml_forecast_agent = MachineLearningForecastAgent()
+

@@ -44,7 +44,7 @@ class BillingAdapter:
                 "configured": False,
                 "plan_id": plan_id,
                 "plan_name": plan.name_en,
-                "price_usd": plan.price_usd,
+                "price_usd": float(plan.amount or 0),
                 "billing_interval": plan.billing_interval,
                 "status": "COMING_SOON",
                 "support_contact": "support@zyrox.ai"

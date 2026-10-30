@@ -34,6 +34,26 @@ services:
         sync: false
       - key: SAAS_ADMIN_PASSWORD
         sync: false
+      - key: PAYMENT_PROVIDER
+        value: aba_payway
+      - key: ABA_PAYWAY_ENV
+        value: sandbox
+      - key: ABA_PAYWAY_MERCHANT_ID
+        sync: false
+      - key: ABA_PAYWAY_API_KEY
+        sync: false
+      - key: ABA_PAYWAY_RSA_PRIVATE_KEY
+        sync: false
+      - key: ABA_PAYWAY_API_BASE_URL
+        value: https://checkout-sandbox.payway.com.kh
+      - key: ABA_PAYWAY_CHECKOUT_URL
+        value: https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase
+      - key: ABA_PAYWAY_CALLBACK_URL
+        sync: false
+      - key: ABA_PAYWAY_RETURN_URL
+        sync: false
+      - key: PAYMENT_DEFAULT_CURRENCY
+        value: USD
 
 databases:
   - name: taikry-market-database

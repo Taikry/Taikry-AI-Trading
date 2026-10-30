@@ -103,20 +103,35 @@ def get_user_trial_status(db: Session, user_id: int) -> Dict[str, Any]:
     if trial_starts and trial_starts.tzinfo is None:
         trial_starts = trial_starts.replace(tzinfo=datetime.timezone.utc)
 
-    # Check expiration
+    # Check trial expiry and paid-period expiry on every entitlement read. ABA
+    # checkout is one-time only, so an expired paid period never renews itself.
     if sub.status == "trial_active" and trial_expires:
         if now_utc >= trial_expires:
             sub.status = "trial_expired"
             db.commit()
+    paid_period_expires = sub.current_period_expires_at
+    if paid_period_expires and paid_period_expires.tzinfo is None:
+        paid_period_expires = paid_period_expires.replace(tzinfo=datetime.timezone.utc)
+    has_paid_period = sub.current_period_starts_at is not None and sub.plan_id != "free_trial"
+    if sub.status == "active_paid" and paid_period_expires and now_utc >= paid_period_expires:
+        sub.status = "canceled" if sub.cancel_at_period_end else "past_due"
+        db.commit()
 
     is_active = sub.status in ("trial_active", "active_paid")
     days_rem = 0
     hours_rem = 0
     progress_pct = 100.0
 
-    if trial_expires and trial_starts:
-        total_seconds = max(1, (trial_expires - trial_starts).total_seconds())
-        remaining_seconds = (trial_expires - now_utc).total_seconds()
+    if has_paid_period:
+        period_starts = normalize_paid_date(sub.current_period_starts_at)
+        period_expires = normalize_paid_date(sub.current_period_expires_at)
+    else:
+        period_starts = trial_starts
+        period_expires = trial_expires
+
+    if period_expires and period_starts:
+        total_seconds = max(1, (period_expires - period_starts).total_seconds())
+        remaining_seconds = (period_expires - now_utc).total_seconds()
         if remaining_seconds > 0:
             days_rem = int(remaining_seconds // 86400)
             hours_rem = int((remaining_seconds % 86400) // 3600)
@@ -134,8 +149,17 @@ def get_user_trial_status(db: Session, user_id: int) -> Dict[str, Any]:
         "is_active": is_active,
         "trial_starts_at_utc": trial_starts.isoformat() if trial_starts else None,
         "trial_expires_at_utc": trial_expires.isoformat() if trial_expires else None,
+        "current_period_starts_at_utc": period_starts.isoformat() if has_paid_period and period_starts else None,
+        "current_period_expires_at_utc": period_expires.isoformat() if has_paid_period and period_expires else None,
         "days_remaining": days_rem,
         "hours_remaining": hours_rem,
         "progress_percent": progress_pct,
         "cancel_at_period_end": sub.cancel_at_period_end
     }
+
+
+def normalize_paid_date(value: Optional[datetime.datetime]) -> Optional[datetime.datetime]:
+    """Normalize legacy timezone-naive database values to UTC for comparisons."""
+    if value and value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc) if value else None

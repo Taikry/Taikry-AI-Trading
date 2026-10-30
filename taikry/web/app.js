@@ -1841,13 +1841,13 @@ async function fetchCockpitHistory() {
   }
 }
 
-async function runCockpitLiveDebate() {
+async function runCockpitLiveDebate(isRetry = false) {
   const btn = document.getElementById("btn-cockpit-live-debate");
   const container = document.getElementById("cockpit-bot-debate-container");
   if (!container) return;
 
   if (btn) {
-    btn.innerHTML = `<span>⏳ ${isKhmer ? "ភ្នាក់ងារកំពុងជជែក..." : "Agents Debating..."}</span>`;
+    btn.innerHTML = `<span>⏳ ${typeof isKhmer !== "undefined" && isKhmer ? "ភ្នាក់ងារកំពុងជជែក..." : "Agents Debating..."}</span>`;
     btn.disabled = true;
   }
   container.innerHTML = `
@@ -1857,57 +1857,130 @@ async function runCockpitLiveDebate() {
     </div>
   `;
 
-  try {
-    const tfMap = { "5": "M5", "15": "M15", "60": "H1", "240": "H4", "D": "D1" };
-    const tf = tfMap[currentTimeframe] || "M15";
-    const sym = currentSymbol || "XAUUSD";
-    const res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${encodeURIComponent(sym)}&timeframe=${tf}`, {
-      credentials: "include"
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(`API HTTP ${res.status}${errText ? ': ' + errText.slice(0, 100) : ''}`);
-    }
-    const data = await res.json();
+  const tfMap = { "5": "M5", "15": "M15", "60": "H1", "240": "H4", "D": "D1" };
+  const tf = tfMap[currentTimeframe] || "M15";
+  const sym = currentSymbol || "XAUUSD";
 
-    container.innerHTML = "";
-    const turns = data.turns || [];
-    if (turns.length === 0) {
-      const summaryEn = data.debate_summary_en || data.analysis_error || "No debate turns recorded.";
-      const summaryKh = data.debate_summary_kh || "មិនមានវេនពិភាក្សាទេ។";
-      container.innerHTML = `
-        <div class="bot-debate-placeholder">
-          <span class="debate-pulse-icon">ℹ️</span>
-          <span><b>${escapeHtml(summaryEn)}</b><br><span style="color:var(--text-muted); font-size:12px;">🇰🇭 ${escapeHtml(summaryKh)}</span></span>
-        </div>
-      `;
-      return;
-    }
-    turns.forEach(t => {
-      const card = document.createElement("div");
-      card.className = "cockpit-debate-turn-card";
-      card.style.borderLeftColor = t.badge_color || "var(--theme-accent)";
-      card.innerHTML = `
-        <div class="cockpit-debate-turn-head">
-          <div class="cockpit-debate-turn-agent">
-            <span>${t.agent_avatar || "🤖"}</span>
-            <span style="color:${t.badge_color || 'var(--theme-accent)'}">${escapeHtml(t.agent_name || "Agent")}</span>
+  let lastErr = null;
+  let data = null;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      if (attempt > 1) {
+        container.innerHTML = `
+          <div class="bot-debate-placeholder">
+            <span class="debate-pulse-icon">⏳</span>
+            <span><b>Synchronizing Fleet:</b> Reconnecting to live market nodes (Attempt ${attempt}/2)...</span>
           </div>
-          <span class="cockpit-debate-turn-stance">${escapeHtml(t.stance || "NEUTRAL")}</span>
+        `;
+        await new Promise(r => setTimeout(r, 1200));
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 16000);
+      const res = await fetch(`${API_BASE}/api/v1/agents/debate?symbol=${encodeURIComponent(sym)}&timeframe=${tf}`, {
+        credentials: "include",
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`Server returned HTTP ${res.status}${errText ? ': ' + errText.slice(0, 80) : ''}`);
+      }
+      data = await res.json();
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  if (lastErr || !data) {
+    console.error("Cockpit Live Debate Error:", lastErr);
+    const msg = lastErr ? (lastErr.name === "AbortError" ? "Request timed out while waiting for market feeds." : lastErr.message) : "Unable to load debate data.";
+    container.innerHTML = `
+      <div class="bot-debate-placeholder">
+        <span style="color:#ef4444; font-weight:700;">⚠️ Live debate notice: ${escapeHtml(msg)}</span>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
+          ${typeof isKhmer !== "undefined" && isKhmer ? "សូមពិនិត្យការតភ្ជាប់ ឬចុចព្យាយាមម្តងទៀត។" : "Please check your network or tap retry."}
         </div>
-        <div class="cockpit-debate-turn-msg-en">${escapeHtml(t.message_en || "")}</div>
-        <div class="cockpit-debate-turn-msg-kh">🇰🇭 ${escapeHtml(t.message_kh || "")}</div>
-      `;
-      container.appendChild(card);
-    });
-  } catch (err) {
-    console.error("Cockpit Live Debate Error:", err);
-    container.innerHTML = `<div class="bot-debate-placeholder"><span style="color:#ef4444">⚠️ Live debate notice: ${escapeHtml(err.message || 'Please retry in a moment.')}</span><div style="margin-top:10px;"><button class="btn btn-gold btn-sm" onclick="runCockpitLiveDebate()">🔄 Retry Live Debate (ព្យាយាមម្តងទៀត)</button></div></div>`;
-  } finally {
+        <div style="margin-top:10px;">
+          <button class="btn btn-gold btn-sm" onclick="runCockpitLiveDebate(true)">🔄 Retry Live Debate (ព្យាយាមម្តងទៀត)</button>
+        </div>
+      </div>
+    `;
     if (btn) {
       btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
       btn.disabled = false;
     }
+    return;
+  }
+
+  container.innerHTML = "";
+  const turns = data.turns || [];
+  if (turns.length === 0) {
+    const summaryEn = data.debate_summary_en || data.analysis_error || "No debate turns recorded.";
+    const summaryKh = data.debate_summary_kh || "មិនមានវេនពិភាក្សាទេ។";
+    container.innerHTML = `
+      <div class="bot-debate-placeholder">
+        <span class="debate-pulse-icon">ℹ️</span>
+        <span><b>${escapeHtml(summaryEn)}</b><br><span style="color:var(--text-muted); font-size:12px;">🇰🇭 ${escapeHtml(summaryKh)}</span></span>
+      </div>
+    `;
+    if (btn) {
+      btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
+      btn.disabled = false;
+    }
+    return;
+  }
+
+  turns.forEach(t => {
+    const card = document.createElement("div");
+    card.className = "cockpit-debate-turn-card";
+    card.style.borderLeftColor = t.badge_color || "var(--theme-accent)";
+    card.innerHTML = `
+      <div class="cockpit-debate-turn-head">
+        <div class="cockpit-debate-turn-agent">
+          <span>${t.agent_avatar || "🤖"}</span>
+          <span style="color:${t.badge_color || 'var(--theme-accent)'}">${escapeHtml(t.agent_name || "Agent")}</span>
+        </div>
+        <span class="cockpit-debate-turn-stance">${escapeHtml(t.stance || "NEUTRAL")}</span>
+      </div>
+      <div class="cockpit-debate-turn-msg-en">${escapeHtml(t.message_en || "")}</div>
+      <div class="cockpit-debate-turn-msg-kh">🇰🇭 ${escapeHtml(t.message_kh || "")}</div>
+    `;
+    container.appendChild(card);
+  });
+
+  // Render consensus verdict banner at the bottom
+  if (data.verdict || data.consensus_decision) {
+    const decision = data.consensus_decision || (data.verdict && data.verdict.decision) || data.status;
+    const isApproved = decision === "APPROVE" || data.status === "CONSENSUS_REACHED";
+    const isRejected = decision === "REJECT" || data.status === "RISK_VETOED";
+    const statusColor = isApproved ? "#10b981" : (isRejected ? "#ef4444" : "#f59e0b");
+    const verdictIcon = isApproved ? "✅" : (isRejected ? "🛡️" : "⏳");
+    const vCard = document.createElement("div");
+    vCard.className = "cockpit-debate-turn-card";
+    vCard.style.borderLeft = `3px solid ${statusColor}`;
+    vCard.style.background = isRejected ? "rgba(239, 68, 68, 0.08)" : (isApproved ? "rgba(16, 185, 129, 0.08)" : "rgba(245, 158, 11, 0.08)");
+    vCard.style.marginTop = "6px";
+    vCard.innerHTML = `
+      <div class="cockpit-debate-turn-head">
+        <div class="cockpit-debate-turn-agent">
+          <span>${verdictIcon}</span>
+          <span style="color:${statusColor}">Consensus Ruling: ${escapeHtml(decision)}</span>
+        </div>
+        <span class="cockpit-debate-turn-stance" style="color:${statusColor}">${escapeHtml(data.outcome_status || decision)}</span>
+      </div>
+      <div class="cockpit-debate-turn-msg-en" style="font-weight:600; color:#f1f5f9;">${escapeHtml(data.debate_summary_en || "")}</div>
+      <div class="cockpit-debate-turn-msg-kh">🇰🇭 ${escapeHtml(data.debate_summary_kh || "")}</div>
+    `;
+    container.appendChild(vCard);
+  }
+
+  if (btn) {
+    btn.innerHTML = `⚡ Run Live Agent Debate (ពិភាក្សាគ្នាភ្លាមៗ)`;
+    btn.disabled = false;
   }
 }
 

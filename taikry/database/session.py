@@ -58,6 +58,12 @@ def init_db():
     except Exception as exc:
         logger.exception("Agent-learning schema migration failed")
         raise RuntimeError("Agent-learning schema migration failed") from exc
+    try:
+        from taikry.database.migrate_payment_models import run_payment_migration
+        run_payment_migration()
+    except Exception as exc:
+        logger.exception("Payment schema migration failed")
+        raise RuntimeError("Payment schema migration failed") from exc
 
 # Auto-initialize database schema
 init_db()

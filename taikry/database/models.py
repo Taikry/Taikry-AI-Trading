@@ -5,7 +5,8 @@ SQLAlchemy 2.0 compliant
 import datetime
 from enum import Enum
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, Text, DateTime, JSON, ForeignKey
+    Column, Integer, String, Float, Boolean, Text, DateTime, JSON, ForeignKey,
+    Numeric, UniqueConstraint, Index, text
 )
 from sqlalchemy.orm import declarative_base, relationship
 from taikry.config import INITIAL_PAPER_BALANCE
@@ -496,8 +497,13 @@ class SubscriptionPlan(Base):
     id = Column(String(30), primary_key=True)  # "free_trial", "pro", "premium"
     name_en = Column(String(50), nullable=False)
     name_kh = Column(String(50), nullable=False)
-    price_usd = Column(Float, default=0.0)
+    price_usd = Column(Float, default=0.0)  # Legacy API field; amount is canonical for checkout.
+    amount = Column(Numeric(12, 2), nullable=False, default=0)
     billing_interval = Column(String(20), default="monthly")  # "trial", "monthly", "yearly", "lifetime"
+    description = Column(Text, nullable=True)
+    currency = Column(String(3), nullable=False, default="USD")
+    interval_count = Column(Integer, nullable=False, default=1)
+    trial_days = Column(Integer, nullable=False, default=0)
     max_ai_scans_per_day = Column(Integer, default=10)
     max_deep_analysis_per_day = Column(Integer, default=3)
     max_watchlists = Column(Integer, default=5)
@@ -506,6 +512,89 @@ class SubscriptionPlan(Base):
     agent_debate_enabled = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
+
+    @property
+    def slug(self):
+        """The existing string primary key already serves as the stable plan slug."""
+        return self.id
+
+    @property
+    def name(self):
+        """Compatibility view for payment-facing code; keeps localized labels intact."""
+        return self.name_en
+
+# The SaaS entitlement plan is also the payment plan catalog. Keep one source of
+# truth for features and fixed-precision checkout prices while exposing a
+# domain-specific import name.
+PaymentPlan = SubscriptionPlan
+
+
+class PaymentInvoice(Base):
+    """One customer-initiated payment attempt for a SaaS plan."""
+    __tablename__ = "payment_invoices"
+    __table_args__ = (
+        Index(
+            "uq_payment_pending_user_plan",
+            "user_id",
+            "plan_id",
+            unique=True,
+            sqlite_where=text("status = 'PENDING'"),
+            postgresql_where=text("status = 'PENDING'"),
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    plan_id = Column(String(30), ForeignKey("subscription_plans.id"), index=True, nullable=False)
+    invoice_number = Column(String(64), unique=True, index=True, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default="USD")
+    provider = Column(String(32), nullable=False, default="aba_payway")
+    provider_transaction_id = Column(String(64), nullable=True, index=True)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    checkout_reference = Column(String(64), unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    paid_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utc_now, nullable=False, index=True)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
+
+
+class PaymentTransaction(Base):
+    """Provider transaction and verification audit record; no card data is stored."""
+    __tablename__ = "payment_transactions"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_transaction_id", name="uq_payment_provider_transaction"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("payment_invoices.id"), index=True, nullable=False)
+    provider = Column(String(32), nullable=False, default="aba_payway")
+    provider_transaction_id = Column(String(64), nullable=True, index=True)
+    provider_reference = Column(String(128), nullable=True, index=True)
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(3), nullable=False)
+    status = Column(String(24), nullable=False, index=True)
+    verification_status = Column(String(24), nullable=False, index=True)
+    raw_response_redacted = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=_utc_now, nullable=False, index=True)
+
+
+class PaymentWebhookEvent(Base):
+    """Deduplication and processing ledger for provider callbacks."""
+    __tablename__ = "payment_webhook_events"
+    __table_args__ = (
+        UniqueConstraint("provider", "event_reference", name="uq_payment_webhook_provider_event"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String(32), nullable=False, default="aba_payway")
+    event_reference = Column(String(128), nullable=False)
+    event_type = Column(String(64), nullable=True)
+    processing_status = Column(String(24), nullable=False, default="RECEIVED", index=True)
+    received_at = Column(DateTime, default=_utc_now, nullable=False, index=True)
+    processed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
 
 
 class UserSubscription(Base):
@@ -524,6 +613,8 @@ class UserSubscription(Base):
     current_period_starts_at = Column(DateTime, nullable=True)
     current_period_expires_at = Column(DateTime, nullable=True)
     cancel_at_period_end = Column(Boolean, default=False)
+    auto_renew = Column(Boolean, nullable=False, default=False)
+    invoice_id = Column(Integer, ForeignKey("payment_invoices.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=_utc_now)
     updated_at = Column(DateTime, default=_utc_now)
 
