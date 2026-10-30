@@ -11,7 +11,9 @@ import datetime
 import json
 import logging
 import re
+import threading
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Dict, Any, Optional, List, Tuple
 
 import requests
@@ -1245,7 +1247,8 @@ def call_multimodal_vision(
     symbol: str = "XAUUSD",
     timeframe: str = "15m",
     market_context: Optional[Dict[str, Any]] = None,
-    timeout: int = 15
+    timeout: int = 15,
+    provider: str = "auto",
 ) -> Optional[Dict[str, Any]]:
     """
     Multimodal Vision analyzer for chart screenshots and photos uploaded from phone or PC.
@@ -1282,10 +1285,16 @@ Perform institutional visual chart analysis:
 Respond ONLY with valid JSON matching the schema.
 """
 
+    vision_provider = (provider or "auto").lower()
+    vision_deadline = time.monotonic() + CHAT_LLM_TIMEOUT_SECONDS
+
     # 1. Try Google Gemini Multimodal Vision first
-    if GEMINI_API_KEY:
+    if vision_provider in {"auto", "gemini"} and GEMINI_API_KEY:
         gemini_models = ["gemini-3-flash-preview", "gemini-flash-latest", "gemini-pro-latest"]
         for g_model in gemini_models:
+            remaining = vision_deadline - time.monotonic()
+            if remaining <= 0.25:
+                break
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={GEMINI_API_KEY}"
             payload = {
                 "contents": [{
@@ -1307,7 +1316,7 @@ Respond ONLY with valid JSON matching the schema.
             }
             try:
                 t0 = time.time()
-                resp = requests.post(url, json=payload, timeout=timeout)
+                resp = requests.post(url, json=payload, timeout=min(timeout, remaining))
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])
@@ -1330,9 +1339,12 @@ Respond ONLY with valid JSON matching the schema.
                 logger.warning(f"Gemini vision ({g_model}) exception: {e}")
 
     # 2. Try OpenRouter multimodal vision fallback
-    if OPENROUTER_API_KEY:
+    if vision_provider in {"auto", "openrouter"} and OPENROUTER_API_KEY:
         or_models = ["google/gemma-3-27b-it", "google/gemini-2.5-flash-image", "qwen/qwen2.5-vl-72b-instruct"]
         for or_m in or_models:
+            remaining = vision_deadline - time.monotonic()
+            if remaining <= 0.25:
+                break
             url = "https://openrouter.ai/api/v1/chat/completions"
             headers = {
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -1351,7 +1363,7 @@ Respond ONLY with valid JSON matching the schema.
             }
             try:
                 t0 = time.time()
-                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                resp = requests.post(url, headers=headers, json=payload, timeout=min(timeout, remaining))
                 if resp.status_code == 200:
                     raw_text = resp.json()["choices"][0]["message"]["content"]
                     parsed = _extract_json_from_response(raw_text)
@@ -1371,12 +1383,105 @@ Respond ONLY with valid JSON matching the schema.
     return None
 
 
+CHAT_CONSENSUS_CACHE_MAX_AGE_SECONDS = 10.0
+CHAT_LLM_TIMEOUT_SECONDS = 18.0
+_CHAT_RESEARCH_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="chat-research")
+_CHAT_RESEARCH_LOCK = threading.Lock()
+_CHAT_RESEARCH_FUTURES: Dict[str, Future] = {}
+
+
+def _normalize_chat_timeframe(timeframe: Optional[str]) -> str:
+    """Normalize the dashboard's numeric timeframe values for server analysis."""
+    raw = str(timeframe or "15m").strip().upper().replace(" ", "")
+    aliases = {
+        "1": "M1", "1M": "M1", "M1": "M1",
+        "5": "M5", "5M": "M5", "M5": "M5",
+        "15": "M15", "15M": "M15", "M15": "M15",
+        "30": "M30", "30M": "M30", "M30": "M30",
+        "60": "H1", "1H": "H1", "H1": "H1",
+        "240": "H4", "4H": "H4", "H4": "H4",
+        "D": "D1", "1D": "D1", "D1": "D1",
+        "W": "W1", "1W": "W1", "W1": "W1",
+    }
+    return aliases.get(raw, "M15")
+
+
+def _get_chat_consensus(symbol: str, timeframe: str, query: str) -> Tuple[Dict[str, Any], bool, str]:
+    """Use a recent quant scan, or run a fresh one when its snapshot is older than 10s."""
+    from taikry.agents.consensus_engine import _ANALYSIS_CACHE, ai_consensus_engine
+
+    normalized_tf = _normalize_chat_timeframe(timeframe)
+    wants_swing = normalized_tf in {"H1", "H4", "D1", "W1"} or bool(
+        re.search(r"\bswing\b|\blong[- ]term\b", str(query or ""), re.IGNORECASE)
+    )
+    trade_style = "SWING" if wants_swing else "INTRADAY"
+    cache_key = f"{symbol.upper()}:quant" + (":SWING" if wants_swing else "")
+    cached = _ANALYSIS_CACHE.get(cache_key)
+    cache_age = None
+    if isinstance(cached, (tuple, list)) and len(cached) > 1:
+        try:
+            cache_age = max(0.0, time.time() - float(cached[0]))
+        except (TypeError, ValueError):
+            cache_age = None
+
+    use_cache = cache_age is not None and cache_age <= CHAT_CONSENSUS_CACHE_MAX_AGE_SECONDS
+    if use_cache:
+        result = dict(cached[1]) if isinstance(cached[1], dict) else {}
+    else:
+        result = ai_consensus_engine.analyze_symbol(
+            symbol=symbol,
+            preferred_llm="quant",
+            force_refresh=True,
+            trade_style=trade_style,
+        )
+        if not isinstance(result, dict):
+            result = {}
+    return result, use_cache, trade_style
+
+
+def _get_chat_research(symbol: str, timeframe: str) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Serve fresh research immediately and refresh a cold/stale report in the background."""
+    from taikry.agents.deep_research_engine import deep_research_engine
+
+    now = time.time()
+    cached = deep_research_engine._research_cache.get(symbol)
+    if isinstance(cached, (tuple, list)) and len(cached) > 1:
+        try:
+            if now - float(cached[0]) < deep_research_engine._cache_ttl_seconds:
+                data = cached[1]
+                sections = data.get("sections") if isinstance(data, dict) else None
+                return (sections if isinstance(sections, dict) else None), "CACHED_FRESH"
+        except (TypeError, ValueError):
+            pass
+
+    with _CHAT_RESEARCH_LOCK:
+        future = _CHAT_RESEARCH_FUTURES.get(symbol)
+        if future is None or future.done():
+            future = _CHAT_RESEARCH_EXECUTOR.submit(
+                deep_research_engine.run_deep_research,
+                symbol,
+                timeframe=timeframe,
+            )
+            _CHAT_RESEARCH_FUTURES[symbol] = future
+
+    if future.done():
+        try:
+            result = future.result()
+            sections = result.get("sections") if isinstance(result, dict) else None
+            return (sections if isinstance(sections, dict) else None), "REFRESHED"
+        except Exception as exc:
+            logger.warning("Ask Chat background research refresh failed for %s: %s", symbol, exc)
+            return None, "UNAVAILABLE"
+    return None, "REFRESHING"
+
+
 def chat_with_real_ai(
     query: str,
     symbol: str = "XAUUSD",
     timeframe: str = "15m",
     provider: str = "auto",
-    image_base64: Optional[str] = None
+    image_base64: Optional[str] = None,
+    history: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     """
     Main entry point for Real AI Chat in Web UI (no simulated mock data).
@@ -1390,22 +1495,47 @@ def chat_with_real_ai(
     sym = (symbol or "XAUUSD").upper().replace("/", "").replace("-", "")
     tf = timeframe or "15m"
     prov = (provider or "auto").lower()
+    if prov not in {"auto", "freellmapi", "gemini", "groq", "openrouter"}:
+        prov = "auto"
+    safe_history = []
+    for message in (history or [])[-8:]:
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role", "")).lower()
+        content = str(message.get("content", "")).strip()[:2000]
+        if role in {"user", "assistant"} and content:
+            safe_history.append(f"{role.upper()}: {content}")
+    history_context = (
+        "Recent conversation (context only; older prices and signals are not current):\n"
+        + "\n".join(safe_history)
+        + "\n\n"
+        if safe_history else ""
+    )
 
-    # Get live verified market data for context
+    # Capture the newest verified quote and its actual provider timestamp.
     price_val = None
-    price_src = "N/A"
+    price_src = "UNAVAILABLE"
+    price_timestamp_utc = None
+    quote_freshness = {"fresh": False, "status": "UNKNOWN_TIMESTAMP", "age_minutes": None}
     try:
-        from taikry.data.providers import market_data_engine, REFERENCE_BASE_PRICES
-        p, src, _ = market_data_engine.get_verified_price(sym)
+        from taikry.data.providers import market_data_engine
+        from taikry.data.validator import check_data_freshness
+        p, src, quote_ts = market_data_engine.get_verified_price(sym)
         if p and p > 0:
-            price_val = round(p, 2)
+            price_val = round(float(p), 6)
             price_src = src
+        if quote_ts is not None:
+            price_timestamp_utc = quote_ts.isoformat() if hasattr(quote_ts, "isoformat") else str(quote_ts)
+            quote_freshness = check_data_freshness(sym, quote_ts, "M5")
     except Exception:
-        pass
+        logger.warning("Ask Chat could not verify a current quote for %s", sym, exc_info=True)
 
     market_ctx = {
         "price": price_val,
         "price_source": price_src,
+        "price_timestamp_utc": price_timestamp_utc,
+        "price_freshness": quote_freshness.get("status", "UNKNOWN_TIMESTAMP"),
+        "price_age_minutes": quote_freshness.get("age_minutes"),
         "symbol": sym,
         "timeframe": tf
     }
@@ -1419,8 +1549,9 @@ def chat_with_real_ai(
             image_base64=image_base64,
             prompt=query,
             symbol=sym,
-            timeframe=tf,
-            market_context=market_ctx
+            timeframe=_normalize_chat_timeframe(tf),
+            market_context=market_ctx,
+            provider=prov if prov in {"auto", "gemini", "openrouter"} else "auto",
         )
         if vision_res:
             latency = int((time.time() - t_start) * 1000)
@@ -1433,6 +1564,8 @@ def chat_with_real_ai(
                 "latency_ms": meta.get("latency_ms", latency),
                 "symbol": sym,
                 "timeframe": tf,
+                "market_context": market_ctx,
+                "ai_status": "SUCCESS",
                 "smart_analysis": vision_res.get("smart_analysis", {}),
                 "trade_execution": {
                     "setup_status": "NO_APPROVED_SETUP",
@@ -1445,66 +1578,106 @@ def chat_with_real_ai(
                     "confidence": None
                 }
             }
+        return {
+            "status": "DEGRADED",
+            "ai_status": "UNAVAILABLE",
+            "ai_warning": "Chart vision provider did not return an analysis. The uploaded image was not analyzed.",
+            "has_photo": True,
+            "provider": "unavailable",
+            "model": "unavailable",
+            "latency_ms": int((time.time() - t_start) * 1000),
+            "symbol": sym,
+            "timeframe": tf,
+            "market_context": market_ctx,
+            "smart_analysis": {},
+            "trade_execution": {
+                "setup_status": "NO_APPROVED_SETUP",
+                "action": "HOLD",
+                "entry_price": None,
+                "stop_loss": None,
+                "take_profit_1": None,
+                "take_profit_2": None,
+                "risk_reward_ratio": "N/A",
+                "confidence": None,
+            },
+        }
 
-    # CASE B: Real LLM Text Analysis (Groq 120B / Gemini / OpenRouter)
-    # Fast market context retrieval (instantaneous cache lookup)
+    # CASE B: refresh the deterministic consensus when the last snapshot is >10s old.
     live_bias = "NEUTRAL"
     live_dir = "HOLD"
     live_entry = live_sl = live_tp1 = live_tp2 = None
     live_rr = "N/A"
     live_conf = None
     approved_setup = None
-
+    consensus_data = {}
+    scan_cached = False
+    trade_style = "INTRADAY"
+    scan_error = None
     try:
-        from taikry.agents.consensus_engine import _ANALYSIS_CACHE
-        for k, v in list(_ANALYSIS_CACHE.items()):
-            if k.startswith(f"{sym}:") and isinstance(v, (tuple, list)) and len(v) > 1:
-                cached = v[1]
-                if not isinstance(cached, dict) or cached.get("setup_status") != "APPROVE":
-                    continue
-                if not cached.get("timestamp_utc"):
-                    continue
-                direction = str(cached.get("proposed_direction") or "").upper()
-                score = cached.get("confidence_score", cached.get("ai_score"))
-                try:
-                    entry = float(cached.get("entry_price"))
-                    stop = float(cached.get("stop_loss"))
-                    target_1 = float(cached.get("take_profit_1"))
-                    score = float(score)
-                except (TypeError, ValueError):
-                    continue
-                from taikry.data.validator import check_data_freshness
-                freshness = check_data_freshness(sym, cached.get("timestamp_utc"), "M15")
-                source = str(cached.get("price_source", "")).upper()
-                direction_valid = (
-                    direction in ("LONG", "BUY") and stop < entry < target_1
-                ) or (
-                    direction in ("SHORT", "SELL") and stop > entry > target_1
-                )
-                if not direction_valid or not freshness.get("fresh") or "DEMO_SYNTHETIC" in source or not 80 <= score <= 95:
-                    continue
-                live_bias = cached.get("market_bias", "NEUTRAL")
-                live_dir = "BUY" if direction in ("LONG", "BUY") else "SELL"
-                live_entry, live_sl, live_tp1 = entry, stop, target_1
-                try:
-                    candidate_tp2 = float(cached.get("take_profit_2"))
-                    live_tp2 = candidate_tp2 if (candidate_tp2 > target_1 if live_dir == "BUY" else candidate_tp2 < target_1) else None
-                except (TypeError, ValueError):
-                    live_tp2 = None
-                live_rr = cached.get("risk_reward_ratio") or "N/A"
-                live_conf = score
-                approved_setup = cached
-                break
-    except Exception:
-        pass
+        consensus_data, scan_cached, trade_style = _get_chat_consensus(sym, tf, query)
+    except Exception as e:
+        scan_error = type(e).__name__
+        logger.warning("Ask Chat live consensus refresh failed for %s: %s", sym, e, exc_info=True)
+
+    scan_timestamp = consensus_data.get("timestamp_utc")
+    scan_age_seconds = None
+    if scan_timestamp:
+        try:
+            parsed_scan_time = datetime.datetime.fromisoformat(str(scan_timestamp).replace("Z", "+00:00"))
+            if parsed_scan_time.tzinfo is None:
+                parsed_scan_time = parsed_scan_time.replace(tzinfo=datetime.timezone.utc)
+            scan_age_seconds = max(0.0, (datetime.datetime.now(datetime.timezone.utc) - parsed_scan_time).total_seconds())
+        except (TypeError, ValueError):
+            scan_age_seconds = None
+    scan_data_quality = consensus_data.get("data_quality", {})
+    candle_freshness = scan_data_quality.get("freshness", {}) if isinstance(scan_data_quality, dict) else {}
+    consensus_is_fresh = (
+        scan_age_seconds is not None
+        and scan_age_seconds <= CHAT_CONSENSUS_CACHE_MAX_AGE_SECONDS + 5
+        and candle_freshness.get("fresh") is True
+    )
+
+    # Never reuse an old BUY/SELL plan in chat when the live scan or provider quote is stale.
+    current_quote_is_live = quote_freshness.get("status") == "LIVE_FRESH" and price_val is not None
+    if (
+        consensus_is_fresh
+        and current_quote_is_live
+        and str(consensus_data.get("setup_status", "")).upper() == "APPROVE"
+    ):
+        direction = str(consensus_data.get("proposed_direction") or "").upper()
+        score = consensus_data.get("confidence_score", consensus_data.get("ai_score"))
+        try:
+            entry = float(consensus_data.get("entry_price"))
+            stop = float(consensus_data.get("stop_loss"))
+            target_1 = float(consensus_data.get("take_profit_1"))
+            score = float(score)
+        except (TypeError, ValueError):
+            entry = stop = target_1 = score = None
+        direction_valid = (
+            direction in ("LONG", "BUY") and entry is not None and stop < entry < target_1
+        ) or (
+            direction in ("SHORT", "SELL") and entry is not None and stop > entry > target_1
+        )
+        source = str(consensus_data.get("price_source", "")).upper()
+        if direction_valid and not any(marker in source for marker in ("DEMO", "SYNTHETIC", "UNAVAILABLE")) and score is not None and 80 <= score <= 95:
+            live_bias = consensus_data.get("market_bias", "NEUTRAL")
+            live_dir = "BUY" if direction in ("LONG", "BUY") else "SELL"
+            live_entry, live_sl, live_tp1 = entry, stop, target_1
+            try:
+                candidate_tp2 = float(consensus_data.get("take_profit_2"))
+                live_tp2 = candidate_tp2 if (candidate_tp2 > target_1 if live_dir == "BUY" else candidate_tp2 < target_1) else None
+            except (TypeError, ValueError):
+                live_tp2 = None
+            live_rr = consensus_data.get("risk_reward_ratio") or "N/A"
+            live_conf = score
+            approved_setup = consensus_data
 
     deep_research_data = None
+    deep_research_status = "UNAVAILABLE"
     try:
-        from taikry.agents.deep_research_engine import deep_research_engine
-        dr_res = deep_research_engine.run_deep_research(sym, timeframe=tf)
-        deep_research_data = dr_res.get("sections")
+        deep_research_data, deep_research_status = _get_chat_research(sym, _normalize_chat_timeframe(tf))
     except Exception as e:
-        logger.debug(f"Deep research engine notice: {e}")
+        logger.debug("Ask Chat research snapshot notice: %s", e)
 
     macro_note = ""
     cal_note = ""
@@ -1514,12 +1687,14 @@ def chat_with_real_ai(
         cal_note = f"Upcoming Catalyst: {cal.get('event_name')} ({cal.get('currency')}) at {cal.get('event_time_utc')} | Forecast: {cal.get('forecast')} | Previous: {cal.get('previous')} | Blackout: {cal.get('blackout_status')}"
         macro_note = f"DXY Index: {macro.get('dxy_index')} ({macro.get('dxy_trend')}) | Monetary Regime: {macro.get('monetary_policy_regime')}"
 
-    llm_prompt = f"""Trader Query: {query}
+    llm_prompt = f"""{history_context}Trader Query: {query}
 Asset: {sym}
-Execution Timeframe: {tf}
+Requested Chart Timeframe: {tf} (normalized: {_normalize_chat_timeframe(tf)})
+Consensus Trade Style: {trade_style} ({consensus_data.get('setup_timeframe', 'unavailable')} setup timeframe)
 Live Market Context:
-- Current Verified Price: {price_val} ({price_src})
+- Current Verified Price: {price_val} ({price_src}) | timestamp={price_timestamp_utc} | freshness={quote_freshness.get('status')} | age_minutes={quote_freshness.get('age_minutes')}
 - Multi-Agent Direction Bias: {live_dir} ({live_bias})
+- Consensus scan timestamp: {scan_timestamp or 'unavailable'} | cached={scan_cached} | fresh={consensus_is_fresh} | refresh_error={scan_error or 'none'}
 - Macro & Calendar Context: {cal_note} | {macro_note}
 - Approved consensus setup: {"Entry=" + str(live_entry) + ", SL=" + str(live_sl) + ", TP1=" + str(live_tp1) + ", TP2=" + str(live_tp2) + ", R:R=" + str(live_rr) if approved_setup else "None; no approved fresh setup is available"}
 
@@ -1533,9 +1708,16 @@ Respond strictly in JSON matching the schema.
     llm_res = None
     used_provider = "groq"
     used_model = "openai/gpt-oss-120b"
+    llm_deadline = time.monotonic() + CHAT_LLM_TIMEOUT_SECONDS
+
+    def _llm_timeout() -> float:
+        return max(0.25, min(8.0, llm_deadline - time.monotonic()))
+
+    def _llm_time_left() -> bool:
+        return llm_deadline - time.monotonic() > 0.25
 
     # FreeLLMAPI execution if requested or available
-    if not llm_res and (prov in ["freellmapi", "auto"]):
+    if not llm_res and FREELLMAPI_ENABLED and prov in ["freellmapi", "auto"] and _llm_time_left():
         from taikry.ai.freellmapi_client import freellmapi_client
         if prov == "freellmapi" or (not GROQ_API_KEY and not GEMINI_API_KEY and not OPENROUTER_API_KEY):
             try:
@@ -1544,7 +1726,8 @@ Respond strictly in JSON matching the schema.
                         {"role": "system", "content": LLM_SYSTEM_PROMPT},
                         {"role": "user", "content": llm_prompt}
                     ],
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
+                    timeout=_llm_timeout(),
                 )
                 if fl_res.get("success"):
                     raw = fl_res.get("content", "")
@@ -1560,6 +1743,8 @@ Respond strictly in JSON matching the schema.
     if not llm_res and prov in ["groq", "auto"]:
         if GROQ_API_KEY:
             for g_mod in ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]:
+                if not _llm_time_left():
+                    break
                 try:
                     t0 = time.time()
                     resp = requests.post(
@@ -1574,7 +1759,7 @@ Respond strictly in JSON matching the schema.
                             "response_format": {"type": "json_object"},
                             "temperature": 0.2
                         },
-                        timeout=8
+                        timeout=_llm_timeout()
                     )
                     if resp.status_code == 200:
                         raw = resp.json()["choices"][0]["message"]["content"]
@@ -1590,6 +1775,8 @@ Respond strictly in JSON matching the schema.
     # Fallback to Gemini if Groq didn't succeed or if provider is gemini
     if not llm_res and (prov in ["gemini", "auto"]) and GEMINI_API_KEY:
         for m in ["gemini-3-flash-preview", "gemini-flash-latest", "gemini-pro-latest"]:
+            if not _llm_time_left():
+                break
             try:
                 t0 = time.time()
                 resp = requests.post(
@@ -1599,7 +1786,7 @@ Respond strictly in JSON matching the schema.
                         "contents": [{"role": "user", "parts": [{"text": LLM_SYSTEM_PROMPT + "\n\n" + llm_prompt}]}],
                         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}
                     },
-                    timeout=8
+                    timeout=_llm_timeout()
                 )
                 if resp.status_code == 200:
                     raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
@@ -1612,8 +1799,8 @@ Respond strictly in JSON matching the schema.
             except Exception as e:
                 logger.warning(f"Gemini chat ({m}) failed: {e}")
 
-    # Fallback to OpenRouter (Llama 3.3 70B)
-    if not llm_res and OPENROUTER_API_KEY:
+    # OpenRouter is used only when selected or in Auto mode.
+    if not llm_res and prov in ["openrouter", "auto"] and OPENROUTER_API_KEY and _llm_time_left():
         try:
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -1627,7 +1814,7 @@ Respond strictly in JSON matching the schema.
                     "response_format": {"type": "json_object"},
                     "temperature": 0.2
                 },
-                timeout=8
+                timeout=_llm_timeout()
             )
             if resp.status_code == 200:
                 raw = resp.json()["choices"][0]["message"]["content"]
@@ -1669,32 +1856,56 @@ Respond strictly in JSON matching the schema.
 
         return {
             "status": "SUCCESS",
+            "ai_status": "SUCCESS",
             "has_photo": bool(image_base64),
             "provider": used_provider,
             "model": used_model,
             "latency_ms": total_lat,
             "symbol": sym,
             "timeframe": tf,
+            "market_context": market_ctx,
+            "consensus_context": {
+                "status": "LIVE_FRESH" if consensus_is_fresh else "STALE_OR_UNVERIFIED",
+                "timestamp_utc": scan_timestamp,
+                "cached": scan_cached,
+                "scan_age_seconds": round(scan_age_seconds, 1) if scan_age_seconds is not None else None,
+                "trade_style": trade_style,
+                "setup_timeframe": consensus_data.get("setup_timeframe"),
+                "refresh_error": scan_error,
+            },
             "smart_analysis": smart_analysis,
             "trade_execution": trade_execution,
-            "deep_research": deep_research_data
+            "deep_research": deep_research_data,
+            "deep_research_status": deep_research_status,
         }
 
-    # Safe response when no configured language model returns a result.
+    # Never label a deterministic fallback as a successful LLM answer.
     if approved_setup:
-        fallback_en = f"A fresh approved {live_dir} setup is available for {sym} at the validated levels shown in trade_execution. Review the source and risk before acting."
-        fallback_kh = f"មានសញ្ញា {live_dir} ដែលបានអនុម័តថ្មីសម្រាប់ {sym}។ សូមពិនិត្យតម្លៃ និងហានិភ័យក្នុង trade_execution មុនធ្វើសកម្មភាព។"
+        fallback_en = f"The latest verified multi-agent scan has an approved {live_dir} setup for {sym}. The exact levels are shown below. Cloud AI did not respond, so this is the deterministic scan summary only."
+        fallback_kh = f"ការស្កេន Multi-Agent ថ្មីដែលបានផ្ទៀងផ្ទាត់បង្ហាញ Setup {live_dir} សម្រាប់ {sym}។ តម្លៃពិតប្រាកដបង្ហាញខាងក្រោម។ AI Cloud មិនបានឆ្លើយតប ដូច្នេះនេះជាសេចក្ដីសង្ខេបពីការស្កេនដោយផ្ទាល់ប៉ុណ្ណោះ។"
     else:
-        fallback_en = f"No fresh approved trade setup is available for {sym}. Wait for a new scan with valid market data."
-        fallback_kh = f"មិនមានសញ្ញាជួញដូរដែលបានអនុម័តថ្មីសម្រាប់ {sym} ទេ។ សូមរង់ចាំការស្កេនថ្មីដែលមានទិន្នន័យត្រឹមត្រូវ។"
+        fallback_en = f"No fresh approved trade setup is available for {sym}; the system is holding until verified evidence aligns. Cloud AI did not respond, so this is the deterministic scan summary only."
+        fallback_kh = f"មិនមាន Setup ជួញដូរថ្មីដែលបានអនុម័តសម្រាប់ {sym} ទេ។ ប្រព័ន្ធកំពុងរង់ចាំភស្តុតាងដែលបានផ្ទៀងផ្ទាត់ឲ្យស្របគ្នា។ AI Cloud មិនបានឆ្លើយតប ដូច្នេះនេះជាសេចក្ដីសង្ខេបពីការស្កេនដោយផ្ទាល់ប៉ុណ្ណោះ។"
     return {
-        "status": "SUCCESS",
+        "status": "DEGRADED",
+        "ai_status": "UNAVAILABLE",
+        "ai_warning": "The selected cloud AI provider is unavailable or did not respond before the timeout. Showing the verified deterministic scan only.",
         "has_photo": bool(image_base64),
         "provider": "institutional_consensus",
         "model": "quant_engine",
         "latency_ms": total_lat,
         "symbol": sym,
         "timeframe": tf,
+        "market_context": market_ctx,
+        "consensus_context": {
+            "status": "LIVE_FRESH" if consensus_is_fresh else "STALE_OR_UNVERIFIED",
+            "timestamp_utc": scan_timestamp,
+            "cached": scan_cached,
+            "scan_age_seconds": round(scan_age_seconds, 1) if scan_age_seconds is not None else None,
+            "trade_style": trade_style,
+            "setup_timeframe": consensus_data.get("setup_timeframe"),
+            "refresh_error": scan_error,
+        },
         "smart_analysis": {
             "synthesis_summary_en": fallback_en,
             "synthesis_summary_kh": fallback_kh
@@ -1709,6 +1920,7 @@ Respond strictly in JSON matching the schema.
             "risk_reward_ratio": live_rr,
             "confidence": live_conf
         },
-        "deep_research": deep_research_data
+        "deep_research": deep_research_data,
+        "deep_research_status": deep_research_status,
     }
 

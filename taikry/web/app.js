@@ -18,6 +18,8 @@ let currentXauusdCatalyst = null;
 let cachedMacroEvents = [];
 let macroCountdownInterval = null;
 let isScanInProgress = false;
+let isChatRequestInProgress = false;
+let chatConversationHistory = [];
 let agentActivityPollTimer = null;
 let isAgentActivityPolling = false;
 
@@ -4384,13 +4386,20 @@ function sendQuickPrompt(promptText) {
 async function submitChatMessage() {
   const input = document.getElementById("ai-chat-input");
   const stream = document.getElementById("ai-chat-stream");
-  if (!input || !stream) return;
+  if (!input || !stream || isChatRequestInProgress) return;
 
   const query = input.value.trim();
   const photoToSend = currentChatPhotoBase64;
   const photoName = currentChatPhotoName;
 
   if (!query && !photoToSend) return;
+
+  isChatRequestInProgress = true;
+  const sendButton = document.getElementById("btn-chat-send");
+  if (sendButton) {
+    sendButton.disabled = true;
+    sendButton.setAttribute("aria-busy", "true");
+  }
 
   input.value = "";
   clearPhotoAttachment();
@@ -4426,8 +4435,8 @@ async function submitChatMessage() {
   const typingMsg = document.createElement("div");
   typingMsg.className = "chat-msg chat-msg-ai";
   const typingStatus = photoToSend ?
-    `Analyzing chart photo with Real Multimodal Vision (Gemini 3 / SMC Engine)...` :
-    `Synthesizing institutional multi-agent consensus for ${currentSymbol}...`;
+    `Checking live market context and analyzing the uploaded chart...` :
+    `Refreshing live quote and multi-agent consensus for ${currentSymbol}...`;
 
   typingMsg.innerHTML = `
     <div class="chat-avatar">🤖</div>
@@ -4440,19 +4449,24 @@ async function submitChatMessage() {
   stream.appendChild(typingMsg);
   stream.scrollTop = stream.scrollHeight;
 
+  let requestTimeoutId = null;
   try {
     const payload = {
       query: query || (photoToSend ? "Analyze this chart thoroughly with institutional SMC rules, calculate Entry, SL, TP, and វិភាគមើលជាភាសាខ្មែរ." : `Analyze ${currentSymbol} market structure`),
       symbol: currentSymbol,
       timeframe: currentTimeframe || "15m",
       provider: provider,
-      image_base64: photoToSend
+      image_base64: photoToSend,
+      history: chatConversationHistory.slice(-8)
     };
 
+    const controller = new AbortController();
+    requestTimeoutId = window.setTimeout(() => controller.abort(), 60000);
     const resp = await fetch("/api/v1/ai/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
+      signal: controller.signal,
       body: JSON.stringify(payload)
     });
 
@@ -4464,6 +4478,17 @@ async function submitChatMessage() {
     const data = await resp.json();
     const trade = data.trade_execution || {};
     const analysis = data.smart_analysis || {};
+
+    const assistantHistoryText = [
+      analysis.synthesis_summary_en,
+      analysis.synthesis_summary_kh,
+      `Trade: ${(trade.action || "HOLD").toUpperCase()} · Entry ${trade.entry_price ?? "N/A"} · SL ${trade.stop_loss ?? "N/A"} · TP1 ${trade.take_profit_1 ?? "N/A"}`
+    ].filter(Boolean).join("\n").slice(0, 2000);
+    chatConversationHistory.push(
+      { role: "user", content: payload.query.slice(0, 2000) },
+      { role: "assistant", content: assistantHistoryText }
+    );
+    chatConversationHistory = chatConversationHistory.slice(-8);
 
     const action = (trade.action || "HOLD").toUpperCase();
     const entry = trade.entry_price !== null && trade.entry_price !== undefined ? trade.entry_price : "---";
@@ -4486,6 +4511,25 @@ async function submitChatMessage() {
 
     const khmerSummary = analysis.synthesis_summary_kh || "";
     const enSummary = analysis.synthesis_summary_en || "";
+    const marketContext = data.market_context || {};
+    const consensusContext = data.consensus_context || {};
+    const quoteStatus = marketContext.price_freshness || "UNKNOWN";
+    const quoteTimeValue = marketContext.price_timestamp_utc ? new Date(marketContext.price_timestamp_utc) : null;
+    const quoteTime = quoteTimeValue && Number.isFinite(quoteTimeValue.getTime())
+      ? quoteTimeValue.toLocaleString(isKhmer ? "km-KH" : "en-GB", { timeZone: "Asia/Phnom_Penh", hour12: false })
+      : (isKhmer ? "មិនមានម៉ោង" : "time unavailable");
+    const liveContextHtml = `
+      <div style="margin:8px 0;padding:7px 9px;border-radius:6px;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.16);font-size:10px;color:#cbd5e1;">
+        🕒 ${isKhmer ? "តម្លៃ" : "Quote"}: <b>${escapeHtml(quoteStatus)}</b> · ${escapeHtml(marketContext.price_source || "source unavailable")} · ${escapeHtml(quoteTime)} (ICT)
+        <br>🔎 ${isKhmer ? "ការស្កេន" : "Scan"}: <b>${escapeHtml(consensusContext.status || "UNVERIFIED")}</b> · ${escapeHtml(consensusContext.trade_style || "INTRADAY")} · ${consensusContext.cached ? (isKhmer ? "cache ថ្មី" : "recent cache") : (isKhmer ? "ស្កេនថ្មី" : "fresh scan")}
+        ${data.deep_research_status === "REFRESHING" ? `<br>📰 ${isKhmer ? "ព័ត៌មានស៊ីជម្រៅកំពុងធ្វើបច្ចុប្បន្នភាពនៅខាងក្រោយ" : "Deep news research is refreshing in the background"}` : ""}
+      </div>`;
+    const aiWarningHtml = data.ai_status === "SUCCESS" ? "" : `
+      <div style="margin:8px 0;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);color:#fbbf24;font-size:11px;">
+        ⚠️ ${escapeHtml(isKhmer
+          ? "AI Cloud មិនបានឆ្លើយតបទេ។ ខាងក្រោមនេះជាទិន្នន័យស្កេនដែលបានផ្ទៀងផ្ទាត់ប៉ុណ្ណោះ មិនមែនចម្លើយ AI ពេញលេញទេ។"
+          : (data.ai_warning || "Cloud AI did not respond. This is the verified deterministic scan only, not a full AI answer."))}
+      </div>`;
 
     const copyText = `⚡ TAIKRY AI ANALYSIS OUTPUT — PAPER ONLY
 Asset: ${currentSymbol} (${currentTimeframe || "15m"})
@@ -4510,6 +4554,9 @@ Model: ${providerTag}
           </div>
           <span class="chat-provider-pill">${escapeHtml(providerTag)}</span>
         </div>
+
+        ${liveContextHtml}
+        ${aiWarningHtml}
 
         <div class="chat-setup-grid">
           <div class="chat-setup-item">
@@ -4621,12 +4668,22 @@ Model: ${providerTag}
     stream.scrollTop = stream.scrollHeight;
   } catch (err) {
     console.error("AI Chat Error:", err);
+    const errorText = err.name === "AbortError"
+      ? (isKhmer ? "សំណើចំណាយពេលលើស ៦០ វិនាទី។ សូមសាកល្បងម្តងទៀត។" : "Request timed out after 60 seconds. Please retry.")
+      : (err.message || "Service temporarily unavailable");
     typingMsg.querySelector(".chat-text").innerHTML = `
       <div style="color:var(--accent-red); font-size:11.5px;">
-        ⚠️ AI Chat notice: ${escapeHtml(err.message || 'Service temporarily unavailable')}. Please retry or choose another provider.
+        ⚠️ AI Chat notice: ${escapeHtml(errorText)}. Please retry or choose another provider.
       </div>
     `;
     stream.scrollTop = stream.scrollHeight;
+  } finally {
+    if (requestTimeoutId !== null) window.clearTimeout(requestTimeoutId);
+    isChatRequestInProgress = false;
+    if (sendButton) {
+      sendButton.disabled = false;
+      sendButton.removeAttribute("aria-busy");
+    }
   }
 }
 

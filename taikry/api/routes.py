@@ -9,7 +9,7 @@ import datetime
 import hmac
 import math
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Literal, Optional
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Depends, Header, Query, Cookie, Request
@@ -53,12 +53,17 @@ class AnalyzeRequest(BaseModel):
     force_fresh: Optional[bool] = Field(default=False, description="Bypass cache")
     llm_provider: Optional[str] = Field(default="quant", description="LLM provider: quant, auto, claude, openai, gemini, manus")
 
+class ChatHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"] = Field(description="Conversation role: user or assistant")
+    content: str = Field(default="", max_length=2000, description="Recent chat message text")
+
 class ChatAIRequest(BaseModel):
     query: str = Field(default="", max_length=12000, description="Trader question, prompt, or chart note")
     symbol: Optional[str] = Field(default="XAUUSD", description="Market symbol, e.g. XAUUSD, BTCUSDT")
     timeframe: Optional[str] = Field(default="15m", description="Execution timeframe")
     provider: Optional[str] = Field(default="auto", description="LLM provider: auto, gemini, groq, openrouter, deepseek, claude, openai")
     image_base64: Optional[str] = Field(default=None, max_length=14000000, description="Base64 encoded chart photo or screenshot from phone or PC")
+    history: List[ChatHistoryMessage] = Field(default_factory=list, max_length=8, description="Up to eight recent chat turns for follow-up questions")
 
 class EventAssessRequest(BaseModel):
     event_title: str
@@ -279,7 +284,8 @@ def chat_ai_endpoint(
         symbol=req.symbol or "XAUUSD",
         timeframe=req.timeframe or "15m",
         provider=req.provider or "auto",
-        image_base64=req.image_base64
+        image_base64=req.image_base64,
+        history=[item.model_dump() for item in req.history[-8:]],
     )
     return res
 

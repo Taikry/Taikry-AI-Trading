@@ -201,7 +201,8 @@ class FreeLLMAPIClient:
         model: Optional[str] = None,
         temperature: float = 0.2,
         max_tokens: int = 2048,
-        response_format: Optional[Dict[str, str]] = None
+        response_format: Optional[Dict[str, str]] = None,
+        timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Executes chat completion via FreeLLMAPI OpenAI-compatible endpoint:
@@ -225,7 +226,8 @@ class FreeLLMAPIClient:
             payload["response_format"] = response_format
 
         t0 = time.time()
-        resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+        request_timeout = min(self.timeout, float(timeout)) if timeout is not None else self.timeout
+        resp = requests.post(url, headers=headers, json=payload, timeout=request_timeout)
         latency = int((time.time() - t0) * 1000)
 
         if resp.status_code == 200:
