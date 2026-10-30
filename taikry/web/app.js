@@ -12,6 +12,7 @@ let currentTimeframe = "15";
 let currentLLMProvider = "auto";
 let isKhmer = false;
 let latestAnalysisData = null;
+let latestBestSetups = [];
 let currentXauusdCatalyst = null;
 let cachedMacroEvents = [];
 let macroCountdownInterval = null;
@@ -466,7 +467,7 @@ function switchWatchlistTab(tab, btn) {
   renderWatchlist();
 }
 
-function selectSymbol(sym, tvSymbol) {
+function selectSymbol(sym, tvSymbol, runAnalysis = true) {
   currentSymbol = sym;
   renderWatchlist();
 
@@ -485,7 +486,7 @@ function selectSymbol(sym, tvSymbol) {
     loadTradingViewChart(tvSymbol, currentTimeframe);
   }
 
-  triggerScan();
+  if (runAnalysis) triggerScan();
 
   // If on mobile screen, automatically return to chart view to inspect the asset
   if (window.innerWidth <= 900) {
@@ -2427,23 +2428,34 @@ async function runCockpitBestSetup() {
 
   try {
     const res = await fetch(`${API_BASE}/api/v1/best-setup?category=${currentChipFilter}`, { credentials: "include" });
+    if (!res.ok) throw new Error(`Best-setup scan failed (${res.status})`);
     const data = await res.json();
+    renderCockpitBestSetups(data);
     if (data.best_setup) {
       const best = data.best_setup;
-      selectSymbol(best.symbol, best.symbol.includes("USDT") ? `BINANCE:${best.symbol}` : `OANDA:${best.symbol}`);
-      updateCockpitPlanCard(best);
-      renderCockpitChips();
+      selectCockpitBestSetup(best.symbol);
 
       const toast = document.getElementById("cockpit-status-toast");
       if (toast) {
-        toast.innerHTML = `<span class="toast-clock">🏆</span> <b>Best Institutional Setup Detected: ${best.symbol} (${best.market_bias || best.setup_status}) — R:R ${best.risk_reward_ratio || 'N/A'}</b>`;
+        const approved = best.setup_status === "APPROVE";
+        const message = isKhmer
+          ? (approved
+            ? `បានរកឃើញ setup ដែលបានអនុម័តល្អបំផុត៖ ${best.symbol} · ពិន្ទុ ${best.ai_score}`
+            : `មិនមាន setup បានអនុម័តទេ។ បង្ហាញជម្រើសពិន្ទុខ្ពស់បំផុត៖ ${best.symbol} · ${best.setup_status}`)
+          : (approved
+            ? `Best qualified setup: ${best.symbol} · score ${best.ai_score}`
+            : `No setup is approved. Showing the highest-ranked option: ${best.symbol} · ${best.setup_status}`);
+        toast.innerHTML = `<span class="toast-clock">${approved ? "🏆" : "🛡️"}</span> <b>${escapeHtml(message)}</b>`;
       }
     } else {
-      await triggerScan();
+      const toast = document.getElementById("cockpit-status-toast");
+      if (toast) toast.innerText = isKhmer ? "មិនទាន់មានលទ្ធផលស្កេនដែលអាចប្រើបានទេ។" : "No scan results are currently available.";
     }
   } catch (err) {
     console.error("Best setup error:", err);
-    await triggerScan();
+    renderCockpitBestSetups({ setups: [], message: err.message });
+    const toast = document.getElementById("cockpit-status-toast");
+    if (toast) toast.innerText = isKhmer ? `ស្កេនបរាជ័យ៖ ${err.message}` : `Universe scan failed: ${err.message}`;
   } finally {
     if (btn) {
       const boltSvg = `<svg class="btn-svg-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" fill="#090d16"/></svg>`;
@@ -2451,6 +2463,87 @@ async function runCockpitBestSetup() {
       btn.disabled = false;
     }
   }
+}
+
+function selectCockpitBestSetup(symbol) {
+  const candidate = latestBestSetups.find(item => item.symbol === symbol);
+  if (!candidate) return;
+  const asset = WATCHLIST.find(item => item.symbol === symbol);
+  selectSymbol(symbol, asset?.tv || `OANDA:${symbol}`, false);
+  latestAnalysisData = candidate;
+  updateCockpitPlanCard(candidate);
+  renderCockpitChips();
+}
+
+function renderCockpitBestSetups(data) {
+  const panel = document.getElementById("cockpit-best-setups-panel");
+  if (!panel) return;
+
+  const setups = Array.isArray(data?.setups) ? data.setups : [];
+  latestBestSetups = setups;
+  panel.hidden = false;
+
+  if (setups.length === 0) {
+    const message = escapeHtml(String(data?.message || (isKhmer ? "មិនទាន់មានលទ្ធផលស្កេនទេ។" : "No market analyses are available yet.")));
+    panel.innerHTML = `<div class="cockpit-setups-empty">${message}</div>`;
+    return;
+  }
+
+  const qualified = Number(data.qualified_count ?? 0);
+  const scanned = Number(data.scanned_count ?? setups.length);
+  const total = Number(data.candidate_count ?? setups.length);
+  const title = isKhmer ? "ជម្រើសស្កេនទីផ្សារទាំងអស់" : "All Market Scan Options";
+  const summary = isKhmer
+    ? `បានវិភាគ ${scanned}/${total} · អនុម័ត ${qualified}`
+    : `Analyzed ${scanned}/${total} · Approved ${qualified}`;
+  const cards = setups.map((item, index) => {
+    const symbol = String(item.symbol || "");
+    if (!/^[A-Z0-9._-]{1,20}$/.test(symbol)) return "";
+    const status = String(item.setup_status || "UNAVAILABLE").toUpperCase();
+    const approved = status === "APPROVE";
+    const statusLabel = isKhmer
+      ? ({ APPROVE: "អនុម័ត", REJECT: "បដិសេធ", VETO: "ទប់ស្កាត់", UNAVAILABLE: "គ្មានទិន្នន័យ" }[status] || "តាមដាន")
+      : status;
+    const score = Number(item.ai_score ?? item.confidence_score);
+    const scoreLabel = Number.isFinite(score) ? `${Math.round(score)}/100` : "—";
+    const price = Number(item.verified_price);
+    const priceLabel = Number.isFinite(price) && price > 0
+      ? price.toLocaleString(undefined, { maximumFractionDigits: price > 100 ? 2 : 5 })
+      : "N/A";
+    const direction = String(item.proposed_direction || "NONE").toUpperCase();
+    const reason = String(item.reason_summary || item.error || (isKhmer ? "មិនមានមូលហេតុបន្ថែម។" : "No additional risk note."));
+    const source = String(item.price_source || "");
+    const ageSeconds = Number(item.analysis_age_seconds);
+    const ageLabel = Number.isFinite(ageSeconds)
+      ? (ageSeconds < 60 ? (isKhmer ? "ទើបស្កេន" : "just scanned") : `${Math.floor(ageSeconds / 60)}m ${isKhmer ? "មុន" : "ago"}`)
+      : (isKhmer ? "មិនស្គាល់អាយុទិន្នន័យ" : "age unknown");
+    const statusClass = approved ? "approved" : (status === "UNAVAILABLE" ? "unavailable" : "blocked");
+    return `
+      <article class="cockpit-setup-option ${statusClass}">
+        <div class="cockpit-setup-option-head">
+          <div class="cockpit-setup-symbol">${getAssetRealLogoHTML(symbol)} <b>${escapeHtml(symbol)}</b> <span>#${index + 1}</span></div>
+          <span class="cockpit-setup-status">${escapeHtml(statusLabel)}</span>
+        </div>
+        <div class="cockpit-setup-option-meta">
+          <span>${isKhmer ? "ទិសដៅ" : "Bias"}: ${escapeHtml(String(item.market_bias || "N/A"))}</span>
+          <span>${isKhmer ? "ផែនការ" : "Side"}: ${escapeHtml(direction)}</span>
+          <span>${isKhmer ? "ពិន្ទុ" : "Score"}: ${escapeHtml(scoreLabel)}</span>
+          <span>${isKhmer ? "តម្លៃ" : "Price"}: ${escapeHtml(priceLabel)}</span>
+        </div>
+        <p class="cockpit-setup-reason">${escapeHtml(reason)}</p>
+        <div class="cockpit-setup-option-foot">
+          <small>${escapeHtml(source)} · ${escapeHtml(ageLabel)}</small>
+          <button type="button" class="cockpit-setup-view-btn" onclick="selectCockpitBestSetup('${symbol}')">${isKhmer ? "មើលផែនការ" : "View plan"}</button>
+        </div>
+      </article>`;
+  }).join("");
+
+  panel.innerHTML = `
+    <div class="cockpit-setups-heading">
+      <div><b>${title}</b><small>${summary}</small></div>
+      <button type="button" class="cockpit-setups-hide" onclick="document.getElementById('cockpit-best-setups-panel').hidden = true">${isKhmer ? "លាក់" : "Hide"}</button>
+    </div>
+    <div class="cockpit-setups-grid">${cards}</div>`;
 }
 
 function updateCockpitPlanCard(data) {

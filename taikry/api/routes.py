@@ -325,46 +325,95 @@ def get_verified_model_catalog(force_refresh: bool = False):
 @router.get("/api/v1/best-setup")
 def get_best_market_setup(category: str = "ALL"):
     """
-    Returns the highest-scoring setup among fresh cached analyses, or triggers an active scan
-    so the live cockpit is always populated with verified real-market data.
+    Returns a ranked analysis for every symbol in the selected market universe.
+    Fresh monitor results are reused; missing or old results are refreshed locally.
     """
-    candidates = ["XAUUSD", "BTCUSDT", "ETHUSDT", "SOLUSDT", "EURUSD", "GBPUSD"]
-    if category.upper() == "CRYPTO":
-        candidates = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]
-    elif category.upper() == "FOREX":
-        candidates = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+    from taikry.config import WATCHLIST, MONITORING_INTERVAL_MINUTES
+    from taikry.agents.consensus_engine import _ANALYSIS_CACHE
 
-    from taikry.agents.consensus_engine import _ANALYSIS_CACHE, ai_consensus_engine
+    category_key = str(category or "ALL").strip().upper()
+    if category_key not in {"ALL", "CRYPTO", "FOREX"}:
+        raise HTTPException(status_code=400, detail="category must be ALL, CRYPTO, or FOREX")
 
-    best = None
-    highest_score = -1.0
-    results = []
+    if category_key == "CRYPTO":
+        universe = [item for item in WATCHLIST if str(item.get("category", "")).upper() == "CRYPTO"]
+    elif category_key == "FOREX":
+        # The cockpit's Forex filter includes the two precious-metal instruments.
+        universe = [item for item in WATCHLIST if str(item.get("category", "")).upper() in {"FOREX", "COMMODITIES"}]
+    else:
+        universe = list(WATCHLIST)
 
-    # 1. Harvest any already analyzed symbols from cache
-    for k, v in list(_ANALYSIS_CACHE.items()):
-        sym = k.split(":")[0]
-        if sym in candidates and isinstance(v, (tuple, list)) and len(v) > 1 and isinstance(v[1], dict):
-            results.append((sym, v[1]))
+    symbols = [str(item.get("symbol", "")).strip().upper() for item in universe]
+    symbols = [symbol for symbol in symbols if symbol]
+    now_epoch = datetime.datetime.now(datetime.timezone.utc).timestamp()
+    cache_ttl_seconds = max(120, (int(MONITORING_INTERVAL_MINUTES) + 1) * 60)
+    setups = []
 
-    # 2. If cache has no candidates yet, run active analysis on the primary candidate
-    if not results and candidates:
+    for symbol in symbols:
+        analysis = None
+        analysis_age = None
+        cache_matches = []
+        for cache_key, cache_value in list(_ANALYSIS_CACHE.items()):
+            if cache_key.split(":", 1)[0].upper() != symbol:
+                continue
+            if not isinstance(cache_value, (tuple, list)) or len(cache_value) < 2 or not isinstance(cache_value[1], dict):
+                continue
+            try:
+                cached_at = float(cache_value[0])
+            except (TypeError, ValueError):
+                continue
+            age_seconds = max(0.0, now_epoch - cached_at)
+            if age_seconds <= cache_ttl_seconds:
+                cache_matches.append((cached_at, cache_value[1], age_seconds))
+
+        if cache_matches:
+            _, analysis, analysis_age = max(cache_matches, key=lambda row: row[0])
+            analysis_source = "CACHE"
+        else:
+            try:
+                # Use the same deterministic agent stack as the scheduled market monitor.
+                analysis = ai_consensus_engine.analyze_symbol(
+                    symbol,
+                    preferred_llm="quant",
+                    force_refresh=True,
+                )
+                analysis_age = 0.0
+                analysis_source = "LIVE_SCAN"
+            except Exception as exc:
+                logger.exception("Best-setup universe scan failed for %s", symbol)
+                analysis = {
+                    "symbol": symbol,
+                    "setup_status": "UNAVAILABLE",
+                    "market_bias": "N/A",
+                    "proposed_direction": "NONE",
+                    "error": str(exc)[:240],
+                }
+                analysis_age = None
+                analysis_source = "UNAVAILABLE"
+
+        if not isinstance(analysis, dict):
+            analysis = {
+                "symbol": symbol,
+                "setup_status": "UNAVAILABLE",
+                "market_bias": "N/A",
+                "proposed_direction": "NONE",
+                "error": "No analysis result was returned.",
+            }
+            analysis_source = "UNAVAILABLE"
+
         try:
-            active_res = ai_consensus_engine.analyze_symbol(candidates[0], preferred_llm="auto", force_refresh=False)
-            if active_res:
-                results.append((candidates[0], active_res))
-        except Exception:
-            pass
-
-    for sym, analysis in results:
-        if not analysis:
-            continue
-        try:
-            score = float(analysis.get("ai_score", analysis.get("confidence_score") or 65.0))
-            price = float(analysis.get("verified_price") or 0.0)
+            score = float(analysis.get("ai_score", analysis.get("confidence_score") or 0.0))
+            if not math.isfinite(score):
+                score = 0.0
         except (TypeError, ValueError):
-            continue
+            score = 0.0
+        try:
+            price = float(analysis.get("verified_price") or 0.0)
+            if not math.isfinite(price):
+                price = 0.0
+        except (TypeError, ValueError):
+            price = 0.0
 
-        is_approved = analysis.get("setup_status") == "APPROVE"
         entry = analysis.get("entry_price")
         stop = analysis.get("stop_loss")
         target = analysis.get("take_profit_1")
@@ -373,17 +422,24 @@ def get_best_market_setup(category: str = "ALL"):
             try:
                 e_f, s_f, t_f = float(entry), float(stop), float(target)
                 if abs(e_f - s_f) > 0:
-                    rr_ratio = abs(t_f - e_f) / abs(e_f - s_f)
-                    rr_str = f"1:{rr_ratio:.2f}"
-            except Exception:
+                    rr_str = f"1:{abs(t_f - e_f) / abs(e_f - s_f):.2f}"
+            except (TypeError, ValueError):
                 pass
 
-        cand_data = {
-            "symbol": sym,
-            "ai_score": int(score),
-            "confidence_score": int(score),
-            "market_bias": analysis.get("market_bias", "NEUTRAL"),
-            "setup_status": analysis.get("setup_status", "MONITORING"),
+        smart_analysis = analysis.get("smart_analysis") or {}
+        risk_causes = smart_analysis.get("risk_causes") or []
+        if isinstance(risk_causes, str):
+            risk_causes = [risk_causes]
+        reason_summary = next((str(reason) for reason in risk_causes if reason), "")
+        if not reason_summary:
+            reason_summary = str(analysis.get("error") or smart_analysis.get("synthesis_summary_en") or "")
+
+        setups.append({
+            "symbol": symbol,
+            "ai_score": round(score),
+            "confidence_score": round(score),
+            "market_bias": analysis.get("market_bias", "N/A"),
+            "setup_status": analysis.get("setup_status", "UNAVAILABLE"),
             "verified_price": price,
             "price_source": analysis.get("price_source"),
             "risk_reward_ratio": rr_str,
@@ -392,35 +448,38 @@ def get_best_market_setup(category: str = "ALL"):
             "take_profit_1": target,
             "take_profit_2": analysis.get("take_profit_2"),
             "proposed_direction": str(analysis.get("proposed_direction") or "NONE").upper(),
-            "smart_analysis": analysis.get("smart_analysis", {}),
+            "smart_analysis": smart_analysis,
             "agents": analysis.get("agents", {}),
             "ict_smc_summary": analysis.get("ict_smc_summary", {}),
+            "data_quality": analysis.get("data_quality", {}),
+            "timestamp_utc": analysis.get("timestamp_utc"),
+            "analysis_age_seconds": round(analysis_age, 1) if analysis_age is not None else None,
+            "analysis_source": analysis_source,
+            "reason_summary": reason_summary,
+            "error": analysis.get("error"),
             "report_english": analysis.get("report_english", ""),
-            "report_khmer": analysis.get("report_khmer", "")
-        }
+            "report_khmer": analysis.get("report_khmer", ""),
+        })
 
-        # Prioritize APPROVE setups
-        if is_approved and score > highest_score:
-            highest_score = score
-            best = cand_data
-        elif best is None or (best.get("setup_status") != "APPROVE" and score > highest_score):
-            highest_score = score
-            best = cand_data
-
-    if not best:
-        return {
-            "status": "NO_SETUP",
-            "best_setup": None,
-            "message": "No setup currently available.",
-            "scanned_universe": candidates,
-            "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        }
+    setups.sort(key=lambda item: (
+        item.get("setup_status") == "APPROVE",
+        item.get("setup_status") != "UNAVAILABLE",
+        float(item.get("ai_score") or 0),
+    ), reverse=True)
+    best = next((item for item in setups if item.get("setup_status") == "APPROVE"), None)
+    if best is None:
+        best = next((item for item in setups if item.get("setup_status") != "UNAVAILABLE"), None)
 
     return {
-        "status": "SUCCESS",
+        "status": "SUCCESS" if setups else "NO_SETUP",
         "best_setup": best,
-        "scanned_universe": candidates,
-        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        "setups": setups,
+        "scanned_universe": symbols,
+        "candidate_count": len(symbols),
+        "scanned_count": sum(1 for item in setups if item.get("analysis_source") != "UNAVAILABLE"),
+        "qualified_count": sum(1 for item in setups if item.get("setup_status") == "APPROVE"),
+        "unavailable_count": sum(1 for item in setups if item.get("setup_status") == "UNAVAILABLE"),
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
 
 # 2b. SSE Real-Time Streaming Endpoint (High Performance, Low Latency Push)

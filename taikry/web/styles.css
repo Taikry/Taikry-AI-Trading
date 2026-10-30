@@ -2608,6 +2608,145 @@ body.theme-solar-gold {
   color: #34d399;
 }
 
+.cockpit-best-setups-panel {
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  background: rgba(7, 12, 19, 0.78);
+}
+
+.cockpit-setups-heading,
+.cockpit-setup-option-head,
+.cockpit-setup-option-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cockpit-setups-heading {
+  margin-bottom: 10px;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.cockpit-setups-heading small {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.cockpit-setups-hide,
+.cockpit-setup-view-btn {
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  border-radius: 7px;
+  padding: 5px 8px;
+  color: #bae6fd;
+  background: rgba(14, 165, 233, 0.1);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cockpit-setups-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.cockpit-setup-option {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.cockpit-setup-option.approved {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: rgba(16, 185, 129, 0.07);
+}
+
+.cockpit-setup-option.blocked {
+  border-color: rgba(244, 63, 94, 0.25);
+}
+
+.cockpit-setup-option.unavailable {
+  opacity: 0.72;
+}
+
+.cockpit-setup-symbol {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+.cockpit-setup-symbol span:last-child {
+  color: #64748b;
+  font-size: 9px;
+}
+
+.cockpit-setup-status {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: #fecdd3;
+  background: rgba(244, 63, 94, 0.13);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.cockpit-setup-option.approved .cockpit-setup-status {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.cockpit-setup-option-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  margin-top: 9px;
+  color: #cbd5e1;
+  font-size: 9px;
+}
+
+.cockpit-setup-reason {
+  display: -webkit-box;
+  min-height: 28px;
+  margin: 8px 0;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 9.5px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cockpit-setup-option-foot small {
+  min-width: 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpit-setups-empty {
+  padding: 12px;
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: center;
+}
+
 .armed-icon {
   font-size: 14px;
 }
