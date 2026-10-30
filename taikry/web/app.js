@@ -4356,7 +4356,7 @@ function applySetupToFastTrade(action, entry, sl, tp1) {
 
   const toast = document.getElementById("cockpit-status-toast");
   if (toast) {
-    toast.innerHTML = `<span class="toast-clock">⚡</span> <b>Trade setup applied to Fast Trade (${escapeHtml(String(action))} @ ${escapeHtml(String(entry))}) ✓</b>`;
+    toast.innerHTML = `<span class="toast-clock">${chatIcon("apply")}</span> <b>Trade setup applied to Fast Trade (${escapeHtml(String(action))} @ ${escapeHtml(String(entry))})</b>`;
   }
 }
 
@@ -4370,7 +4370,7 @@ function copySetupToClipboard(text, btnElement) {
     }
     const toast = document.getElementById("cockpit-status-toast");
     if (toast) {
-      toast.innerHTML = `<span class="toast-clock">📋</span> <b>Setup copied to clipboard ✓</b>`;
+      toast.innerHTML = `<span class="toast-clock">${chatIcon("copy")}</span> <b>Setup copied to clipboard</b>`;
     }
   }).catch(() => {
     alert("Trade Setup:\n" + text);
@@ -4381,6 +4381,70 @@ function sendQuickPrompt(promptText) {
   const input = document.getElementById("ai-chat-input");
   if (input) input.value = promptText;
   submitChatMessage();
+}
+
+function chatIcon(name, className = "chat-ui-icon") {
+  const shapes = {
+    user: '<circle cx="10" cy="6.5" r="3"/><path d="M3.5 17c.4-3.2 2.8-5 6.5-5s6.1 1.8 6.5 5"/>',
+    clock: '<circle cx="10" cy="10" r="7"/><path d="M10 5.5V10l3 2"/>',
+    scan: '<path d="M3 15.5h14M5 13V8m5 5V4m5 9V6"/><path d="m3.5 6 3-2 3 1.5 5-3"/>',
+    news: '<path d="M4 3.5h12v13H4zM7 7h6M7 10h6M7 13h3"/><path d="M2 6v11h12"/>',
+    alert: '<path d="m10 2.5 8 14H2z"/><path d="M10 7v4m0 3h.01"/>',
+    research: '<path d="M4 3.5h12v13H4zM7 7h6M7 10h6M7 13h3"/><path d="M2 6v11h12"/>',
+    calendar: '<rect x="3" y="4.5" width="14" height="12" rx="1.5"/><path d="M6.5 2.5v4M13.5 2.5v4M3 8h14M6.5 11h2m3 0h2m-7 3h2"/>',
+    shield: '<path d="m10 2 6 2v5c0 4-2.5 6.8-6 9-3.5-2.2-6-5-6-9V4z"/><path d="m7.2 9.8 1.8 1.8 3.8-4"/>',
+    copy: '<rect x="6" y="6" width="10" height="11" rx="1.5"/><path d="M13 6V4.5A1.5 1.5 0 0 0 11.5 3h-7A1.5 1.5 0 0 0 3 4.5v8A1.5 1.5 0 0 0 4.5 14H6"/>',
+    send: '<path d="m2.5 9 15-6-6 15-2.5-6.5z"/><path d="m9 11.5 4-4"/>',
+    apply: '<path d="M3 10.5 8 15l9-10"/>',
+    photo: '<path d="M3 6.5h3l1.5-2h5l1.5 2h3v9H3z"/><circle cx="10" cy="11" r="3"/>',
+    target: '<circle cx="10" cy="10" r="6.5"/><circle cx="10" cy="10" r="2.5"/><path d="M10 1.5v3M18.5 10h-3M10 18.5v-3M1.5 10h3"/>',
+    globe: '<circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3a11 11 0 0 1 0 14M10 3a11 11 0 0 0 0 14"/>',
+    pulse: '<path d="M2.5 10h3l2-5 3.5 10 2-5h4.5"/>',
+  };
+  const shape = shapes[name] || shapes.pulse;
+  return `<svg class="${className}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shape}</svg>`;
+}
+
+function stripChatEmoji(value) {
+  return String(value ?? "")
+    .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D\u20E3]/gu, "");
+}
+
+function stripChatEmojiFromMarkup(value) {
+  return String(value ?? "").replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\uFE0F\u200D\u20E3]/gu, "");
+}
+
+function startChatThinkingAnimation(typingMsg, hasPhoto) {
+  const phases = hasPhoto
+    ? [
+      { en: "Preparing image and live quote…", kh: "កំពុងរៀបចំរូបភាព និងតម្លៃថ្មី…" },
+      { en: "Reading chart structure…", kh: "កំពុងអានរចនាសម្ព័ន្ធក្រាហ្វិក…" },
+      { en: "Checking risk and response…", kh: "កំពុងផ្ទៀងផ្ទាត់ហានិភ័យ និងចម្លើយ…" },
+    ]
+    : [
+      { en: "Verifying live quote…", kh: "កំពុងផ្ទៀងផ្ទាត់តម្លៃទីផ្សារថ្មី…" },
+      { en: "Refreshing multi-agent scan…", kh: "កំពុងធ្វើស្កេន Multi-Agent ថ្មី…" },
+      { en: "Validating setup and risk…", kh: "កំពុងផ្ទៀងផ្ទាត់ Setup និងហានិភ័យ…" },
+    ];
+  const startedAt = Date.now();
+  const phaseText = typingMsg.querySelector("[data-chat-phase]");
+  const timerText = typingMsg.querySelector("[data-chat-timer]");
+  const stepNodes = [...typingMsg.querySelectorAll("[data-chat-step]")];
+
+  const update = () => {
+    const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+    const phaseIndex = Math.min(phases.length - 1, Math.floor(elapsed / 5));
+    if (phaseText) phaseText.textContent = isKhmer ? phases[phaseIndex].kh : phases[phaseIndex].en;
+    if (timerText) timerText.textContent = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+    stepNodes.forEach((node, index) => {
+      node.classList.toggle("is-active", index === phaseIndex);
+      node.classList.toggle("is-complete", index < phaseIndex);
+    });
+  };
+
+  update();
+  const timerId = window.setInterval(update, 1000);
+  return () => window.clearInterval(timerId);
 }
 
 async function submitChatMessage() {
@@ -4396,9 +4460,13 @@ async function submitChatMessage() {
 
   isChatRequestInProgress = true;
   const sendButton = document.getElementById("btn-chat-send");
+  const sendButtonMarkup = sendButton?.innerHTML;
+  const sendButtonLabel = sendButton?.getAttribute("aria-label");
   if (sendButton) {
     sendButton.disabled = true;
     sendButton.setAttribute("aria-busy", "true");
+    sendButton.setAttribute("aria-label", isKhmer ? "កំពុងផ្ញើសារ" : "Sending message");
+    sendButton.innerHTML = '<span class="chat-send-spinner" aria-hidden="true"></span>';
   }
 
   input.value = "";
@@ -4419,7 +4487,7 @@ async function submitChatMessage() {
     `;
   }
   userMsg.innerHTML = `
-    <div class="chat-avatar">👤</div>
+    <div class="chat-avatar chat-avatar-user">${chatIcon("user", "chat-user-icon")}</div>
     <div class="chat-bubble">
       <div class="chat-author">TRADER</div>
       ${userAttachmentHtml}
@@ -4434,20 +4502,32 @@ async function submitChatMessage() {
   const provider = document.getElementById("ai-chat-provider-select")?.value || "auto";
   const typingMsg = document.createElement("div");
   typingMsg.className = "chat-msg chat-msg-ai";
-  const typingStatus = photoToSend ?
-    `Checking live market context and analyzing the uploaded chart...` :
-    `Refreshing live quote and multi-agent consensus for ${currentSymbol}...`;
 
   typingMsg.innerHTML = `
-    <div class="chat-avatar">🤖</div>
-    <div class="chat-bubble">
-      <div class="chat-author">TAIKRY AI</div>
-      <div class="chat-text"><span class="pulse-dot-sm"></span> <i>${typingStatus}</i></div>
+    <div class="chat-avatar chat-avatar-ai"><img src="assets/brand/zyrox-logo-icon.svg" alt="" aria-hidden="true"></div>
+    <div class="chat-bubble chat-bubble-thinking">
+      <div class="chat-author">ZYROX AI <span class="chat-author-divider">/</span> LIVE ANALYSIS</div>
+      <div class="chat-text">
+        <div class="chat-thinking-card" role="status" aria-live="polite" aria-busy="true">
+          <div class="chat-thinking-top">
+            <span class="chat-thinking-radar">${chatIcon("pulse", "chat-thinking-pulse")}</span>
+            <div class="chat-thinking-copy"><b data-chat-phase></b><span>${escapeHtml(currentSymbol)} · ${escapeHtml(currentTimeframe || "15m")} · ${photoToSend ? "VISION" : "LIVE SCAN"}</span></div>
+            <time class="chat-thinking-timer" data-chat-timer>00:00</time>
+          </div>
+          <div class="chat-thinking-progress"><span></span></div>
+          <div class="chat-thinking-steps">
+            <span data-chat-step="0">${chatIcon("pulse")}<b>${isKhmer ? "តម្លៃថ្មី" : "LIVE QUOTE"}</b></span>
+            <span data-chat-step="1">${chatIcon("scan")}<b>${isKhmer ? "ស្កេន AI" : "AI SCAN"}</b></span>
+            <span data-chat-step="2">${chatIcon("shield")}<b>${isKhmer ? "ផ្ទៀងផ្ទាត់" : "RISK CHECK"}</b></span>
+          </div>
+        </div>
+      </div>
       <div class="chat-time">${timeStr}</div>
     </div>
   `;
   stream.appendChild(typingMsg);
   stream.scrollTop = stream.scrollHeight;
+  const stopChatThinking = startChatThinkingAnimation(typingMsg, Boolean(photoToSend));
 
   let requestTimeoutId = null;
   try {
@@ -4480,8 +4560,8 @@ async function submitChatMessage() {
     const analysis = data.smart_analysis || {};
 
     const assistantHistoryText = [
-      analysis.synthesis_summary_en,
-      analysis.synthesis_summary_kh,
+      stripChatEmoji(analysis.synthesis_summary_en),
+      stripChatEmoji(analysis.synthesis_summary_kh),
       `Trade: ${(trade.action || "HOLD").toUpperCase()} · Entry ${trade.entry_price ?? "N/A"} · SL ${trade.stop_loss ?? "N/A"} · TP1 ${trade.take_profit_1 ?? "N/A"}`
     ].filter(Boolean).join("\n").slice(0, 2000);
     chatConversationHistory.push(
@@ -4502,15 +4582,15 @@ async function submitChatMessage() {
       : "N/A";
 
     const actionBadgeClass = action === "BUY" ? "chat-action-buy" : (action === "SELL" ? "chat-action-sell" : "chat-action-hold");
-    const actionIcon = action === "BUY" ? "🟢 BUY" : (action === "SELL" ? "🔴 SELL" : "🟡 HOLD");
+    const actionIcon = escapeHtml(action);
     const providerTag = [
       data.provider ? data.provider.toUpperCase() : "Provider not reported",
       data.model || "Model not reported",
       data.latency_ms ? `${data.latency_ms}ms` : null
     ].filter(Boolean).join(" · ");
 
-    const khmerSummary = analysis.synthesis_summary_kh || "";
-    const enSummary = analysis.synthesis_summary_en || "";
+    const khmerSummary = stripChatEmoji(analysis.synthesis_summary_kh || "");
+    const enSummary = stripChatEmoji(analysis.synthesis_summary_en || "");
     const marketContext = data.market_context || {};
     const consensusContext = data.consensus_context || {};
     const quoteStatus = marketContext.price_freshness || "UNKNOWN";
@@ -4519,19 +4599,19 @@ async function submitChatMessage() {
       ? quoteTimeValue.toLocaleString(isKhmer ? "km-KH" : "en-GB", { timeZone: "Asia/Phnom_Penh", hour12: false })
       : (isKhmer ? "មិនមានម៉ោង" : "time unavailable");
     const liveContextHtml = `
-      <div style="margin:8px 0;padding:7px 9px;border-radius:6px;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.16);font-size:10px;color:#cbd5e1;">
-        🕒 ${isKhmer ? "តម្លៃ" : "Quote"}: <b>${escapeHtml(quoteStatus)}</b> · ${escapeHtml(marketContext.price_source || "source unavailable")} · ${escapeHtml(quoteTime)} (ICT)
-        <br>🔎 ${isKhmer ? "ការស្កេន" : "Scan"}: <b>${escapeHtml(consensusContext.status || "UNVERIFIED")}</b> · ${escapeHtml(consensusContext.trade_style || "INTRADAY")} · ${consensusContext.cached ? (isKhmer ? "cache ថ្មី" : "recent cache") : (isKhmer ? "ស្កេនថ្មី" : "fresh scan")}
-        ${data.deep_research_status === "REFRESHING" ? `<br>📰 ${isKhmer ? "ព័ត៌មានស៊ីជម្រៅកំពុងធ្វើបច្ចុប្បន្នភាពនៅខាងក្រោយ" : "Deep news research is refreshing in the background"}` : ""}
+      <div class="chat-live-data-strip" style="margin:8px 0;padding:7px 9px;border-radius:6px;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.16);font-size:10px;color:#cbd5e1;">
+        ${chatIcon("clock")} ${isKhmer ? "តម្លៃ" : "Quote"}: <b>${escapeHtml(quoteStatus)}</b> · ${escapeHtml(marketContext.price_source || "source unavailable")} · ${escapeHtml(quoteTime)} (ICT)
+        <br>${chatIcon("scan")} ${isKhmer ? "ការស្កេន" : "Scan"}: <b>${escapeHtml(consensusContext.status || "UNVERIFIED")}</b> · ${escapeHtml(consensusContext.trade_style || "INTRADAY")} · ${consensusContext.cached ? (isKhmer ? "cache ថ្មី" : "recent cache") : (isKhmer ? "ស្កេនថ្មី" : "fresh scan")}
+        ${data.deep_research_status === "REFRESHING" ? `<br>${chatIcon("news")} ${isKhmer ? "ព័ត៌មានស៊ីជម្រៅកំពុងធ្វើបច្ចុប្បន្នភាពនៅខាងក្រោយ" : "Deep news research is refreshing in the background"}` : ""}
       </div>`;
     const aiWarningHtml = data.ai_status === "SUCCESS" ? "" : `
       <div style="margin:8px 0;padding:8px 10px;border-radius:6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);color:#fbbf24;font-size:11px;">
-        ⚠️ ${escapeHtml(isKhmer
+        ${chatIcon("alert")} ${escapeHtml(isKhmer
           ? "AI Cloud មិនបានឆ្លើយតបទេ។ ខាងក្រោមនេះជាទិន្នន័យស្កេនដែលបានផ្ទៀងផ្ទាត់ប៉ុណ្ណោះ មិនមែនចម្លើយ AI ពេញលេញទេ។"
           : (data.ai_warning || "Cloud AI did not respond. This is the verified deterministic scan only, not a full AI answer."))}
       </div>`;
 
-    const copyText = `⚡ TAIKRY AI ANALYSIS OUTPUT — PAPER ONLY
+    const copyText = `TAIKRY AI ANALYSIS OUTPUT — PAPER ONLY
 Asset: ${currentSymbol} (${currentTimeframe || "15m"})
 Action: ${action}
 Entry: ${entry}
@@ -4587,7 +4667,7 @@ Model: ${providerTag}
 
         ${khmerSummary ? `
           <div class="chat-khmer-analysis-box">
-            <div class="chat-khmer-title">🇰🇭 ការវិភាគមើលលម្អិត (Khmer Market Analysis):</div>
+            <div class="chat-khmer-title"><span class="chat-language-tag">KH</span> ការវិភាគមើលលម្អិត (Khmer Market Analysis):</div>
             <div>${escapeHtml(khmerSummary)}</div>
           </div>
         ` : ""}
@@ -4601,70 +4681,70 @@ Model: ${providerTag}
         ${data.deep_research ? `
           <div class="chat-deep-research-container" style="margin-top:10px; background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:6px;">
-              <span style="font-weight:700; color:#38bdf8; font-size:12px;">🔬 11-Agent Pre-News & Deep Research</span>
+              <span class="chat-research-heading">${chatIcon("research")}<b>11-Agent Pre-News & Deep Research</b></span>
               <span style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px;">Window: ${escapeHtml(data.deep_research.C_upcoming_news_calendar?.blackout_status || 'STANDARD')}</span>
             </div>
             
             ${data.deep_research.C_upcoming_news_calendar ? `
               <div style="font-size:11px; margin-bottom:8px; background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:4px;">
-                <b style="color:#f59e0b;">📅 Upcoming Catalyst:</b> ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_name)} (${escapeHtml(data.deep_research.C_upcoming_news_calendar.currency)})
+                <b class="chat-research-label">${chatIcon("calendar")} Upcoming Catalyst:</b> ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_name)} (${escapeHtml(data.deep_research.C_upcoming_news_calendar.currency)})
                 <span style="color:#94a3b8; margin-left:6px;">Forecast: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.forecast)} | Prev: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.previous)}</span>
-                <div style="font-size:10.5px; color:#38bdf8; margin-top:2px;">⏱ Countdown: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.countdown || '')} · Local: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_time_cambodia || '')}</div>
+                <div style="font-size:10.5px; color:#38bdf8; margin-top:2px;">${chatIcon("clock")} Countdown: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.countdown || '')} · Local: ${escapeHtml(data.deep_research.C_upcoming_news_calendar.event_time_cambodia || '')}</div>
               </div>
             ` : ""}
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
               ${data.deep_research.F_bullish_scenario ? `
                 <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:8px; font-size:11px;">
-                  <div style="font-weight:700; color:#10b981; margin-bottom:4px;">🟢 Bullish Scenario</div>
+                  <div class="chat-scenario-title is-bullish"><i></i> Bullish Scenario</div>
                   <div style="color:#94a3b8; font-size:10px;">Trigger: <span style="color:#fff;">${escapeHtml(data.deep_research.F_bullish_scenario.confirmation_trigger || '---')}</span></div>
                   <div style="color:#94a3b8; font-size:10px;">TP1: <span style="color:#10b981;">$${data.deep_research.F_bullish_scenario.target_1 || '---'}</span> | TP2: <span style="color:#10b981;">$${data.deep_research.F_bullish_scenario.target_2 || '---'}</span></div>
                   <div style="color:#94a3b8; font-size:10px;">SL: <span style="color:#ef4444;">$${data.deep_research.F_bullish_scenario.stop_loss || '---'}</span></div>
-                  <div style="color:#cbd5e1; font-size:9.5px; margin-top:3px;">❌ Inval: ${escapeHtml(data.deep_research.F_bullish_scenario.invalidation || '---')}</div>
+                  <div style="color:#cbd5e1; font-size:9.5px; margin-top:3px;">Invalidation: ${escapeHtml(data.deep_research.F_bullish_scenario.invalidation || '---')}</div>
                 </div>
               ` : ""}
 
               ${data.deep_research.G_bearish_scenario ? `
                 <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:8px; font-size:11px;">
-                  <div style="font-weight:700; color:#ef4444; margin-bottom:4px;">🔴 Bearish Scenario</div>
+                  <div class="chat-scenario-title is-bearish"><i></i> Bearish Scenario</div>
                   <div style="color:#94a3b8; font-size:10px;">Trigger: <span style="color:#fff;">${escapeHtml(data.deep_research.G_bearish_scenario.confirmation_trigger || '---')}</span></div>
                   <div style="color:#94a3b8; font-size:10px;">TP1: <span style="color:#10b981;">$${data.deep_research.G_bearish_scenario.target_1 || '---'}</span> | TP2: <span style="color:#10b981;">$${data.deep_research.G_bearish_scenario.target_2 || '---'}</span></div>
                   <div style="color:#94a3b8; font-size:10px;">SL: <span style="color:#ef4444;">$${data.deep_research.G_bearish_scenario.stop_loss || '---'}</span></div>
-                  <div style="color:#cbd5e1; font-size:9.5px; margin-top:3px;">❌ Inval: ${escapeHtml(data.deep_research.G_bearish_scenario.invalidation || '---')}</div>
+                  <div style="color:#cbd5e1; font-size:9.5px; margin-top:3px;">Invalidation: ${escapeHtml(data.deep_research.G_bearish_scenario.invalidation || '---')}</div>
                 </div>
               ` : ""}
             </div>
 
             ${data.deep_research.H_base_case_no_trade ? `
               <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:6px; padding:6px 8px; font-size:10.5px; margin-bottom:6px; color:#fde047;">
-                <b>🛡 Base Case:</b> ${escapeHtml(data.deep_research.H_base_case_no_trade.condition || '')}
+                <b>${chatIcon("shield")} Base Case:</b> ${escapeHtml(data.deep_research.H_base_case_no_trade.condition || '')}
               </div>
             ` : ""}
 
             ${data.deep_research.I_volatility_spread_warning ? `
               <div style="font-size:10px; color:#f87171; margin-bottom:4px;">
-                ⚠️ <b>Spread Warning:</b> ${escapeHtml(data.deep_research.I_volatility_spread_warning.warning_kh || data.deep_research.I_volatility_spread_warning.warning_en || '')}
+                ${chatIcon("alert")} <b>Spread Warning:</b> ${escapeHtml(data.deep_research.I_volatility_spread_warning.warning_kh || data.deep_research.I_volatility_spread_warning.warning_en || '')}
               </div>
             ` : ""}
 
             <div style="font-size:9.5px; color:#64748b; margin-top:6px; border-top:1px solid rgba(255,255,255,0.05); padding-top:4px;">
-              📊 Sources: ${escapeHtml((data.deep_research.J_source_list_and_freshness?.news_sources || []).join(' · ') || 'Investing.com · MarketWatch · FairEconomy')}
+              ${chatIcon("news")} Sources: ${escapeHtml((data.deep_research.J_source_list_and_freshness?.news_sources || []).join(' · ') || 'Investing.com · MarketWatch · FairEconomy')}
             </div>
           </div>
         ` : ""}
 
         <div class="chat-setup-actions">
           <button class="btn-chat-apply" onclick="applySetupToFastTrade('${action}', '${entry}', '${sl}', '${tp1}')" title="Send to 1-Click Fast Trade Panel">
-            ⚡ បញ្ជូនទៅ Fast Trade
+            ${chatIcon("apply")} បញ្ជូនទៅ Fast Trade
           </button>
           <button class="btn-chat-copy" onclick="copySetupToClipboard('${safeCopyText}', this)" title="Copy Trade Setup for Telegram or Notes">
-            📋 ចម្លង Setup
+            ${chatIcon("copy")} ចម្លង Setup
           </button>
         </div>
       </div>
     `;
 
-    typingMsg.querySelector(".chat-text").innerHTML = cardHtml;
+    typingMsg.querySelector(".chat-text").innerHTML = stripChatEmojiFromMarkup(cardHtml);
     stream.scrollTop = stream.scrollHeight;
   } catch (err) {
     console.error("AI Chat Error:", err);
@@ -4673,16 +4753,20 @@ Model: ${providerTag}
       : (err.message || "Service temporarily unavailable");
     typingMsg.querySelector(".chat-text").innerHTML = `
       <div style="color:var(--accent-red); font-size:11.5px;">
-        ⚠️ AI Chat notice: ${escapeHtml(errorText)}. Please retry or choose another provider.
+        ${chatIcon("alert")} AI Chat notice: ${escapeHtml(errorText)}. Please retry or choose another provider.
       </div>
     `;
     stream.scrollTop = stream.scrollHeight;
   } finally {
+    stopChatThinking();
     if (requestTimeoutId !== null) window.clearTimeout(requestTimeoutId);
     isChatRequestInProgress = false;
     if (sendButton) {
       sendButton.disabled = false;
       sendButton.removeAttribute("aria-busy");
+      if (sendButtonLabel === null) sendButton.removeAttribute("aria-label");
+      else sendButton.setAttribute("aria-label", sendButtonLabel);
+      sendButton.innerHTML = sendButtonMarkup;
     }
   }
 }

@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/brand/zyrox-logo-icon.svg">
   <link rel="alternate icon" type="image/png" href="assets/brand/zyrox-logo-icon.png">
   <link rel="apple-touch-icon" href="assets/brand/zyrox-logo-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.6.2">
+  <link rel="stylesheet" href="styles.css?v=2.6.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
@@ -1003,20 +1003,28 @@
       <aside class="terminal-ai-sidebar" id="terminal-ai-sidebar">
         <!-- Top Tabs Row -->
         <div class="ai-sidebar-header">
+          <div class="ai-chat-brand-row">
+            <div class="ai-chat-lockup">
+              <img class="ai-chat-brand-icon" src="assets/brand/zyrox-logo-icon.svg" alt="" aria-hidden="true" width="30" height="30">
+              <span><b>ZYROX <em>AI</em></b><small>MARKET COPILOT</small></span>
+            </div>
+            <span class="ai-chat-brand-status"><i></i> LIVE</span>
+          </div>
+          <div class="ai-chat-brand-caption">MULTI-AGENT INTELLIGENCE <span>·</span> LIVE MARKET CONTEXT</div>
           <div class="ai-tabs-row">
-            <button class="ai-tab-btn active" id="ai-tab-chat" onclick="switchAiSidebarTab('chat', this)">💬 Chat</button>
-            <button class="ai-tab-btn" id="ai-tab-trade" onclick="switchAiSidebarTab('trade', this)">⚡ Trade</button>
-            <button class="ai-tab-btn" id="ai-tab-ledger" onclick="switchAiSidebarTab('ledger', this)">💼 Ledger</button>
+            <button class="ai-tab-btn active" id="ai-tab-chat" onclick="switchAiSidebarTab('chat', this)"><svg class="ai-tab-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.5h14v9H9l-4.5 3v-3H3z"/><path d="M6.5 7.5h7M6.5 10.5h4"/></svg><span>Chat</span></button>
+            <button class="ai-tab-btn" id="ai-tab-trade" onclick="switchAiSidebarTab('trade', this)"><svg class="ai-tab-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 14.5 7 10l3 2.5L17.5 5M12.5 5h5v5"/></svg><span>Trade</span></button>
+            <button class="ai-tab-btn" id="ai-tab-ledger" onclick="switchAiSidebarTab('ledger', this)"><svg class="ai-tab-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3.5h12v13H4zM7 7h6M7 10h6M7 13h3"/><path d="M2.5 6v11h12"/></svg><span>Ledger</span></button>
             <button class="btn-collapse-ai" onclick="toggleAiSidebarCollapse()" title="Toggle Assistant Width">▶</button>
           </div>
           <!-- Provider selector; actual reachability is only known after a provider call. -->
           <div class="ai-context-indicator">
             <span class="ai-ctx-label">CLOUD LLM</span>
             <select id="ai-chat-provider-select" class="ai-provider-select" title="Choose a configured cloud LLM provider">
-              <option value="auto">⚡ Auto (configured providers)</option>
-              <option value="gemini">♊ Google Gemini</option>
-              <option value="groq">🚀 Groq Cloud</option>
-              <option value="openrouter">🌐 OpenRouter</option>
+              <option value="auto">Auto (configured providers)</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="groq">Groq Cloud</option>
+              <option value="openrouter">OpenRouter</option>
             </select>
             <span class="ai-ctx-status" id="ai-chat-provider-status">Checking configuration…</span>
           </div>
@@ -1028,13 +1036,13 @@
           <div class="ai-chat-stream" id="ai-chat-stream">
             <!-- Initial AI Welcome Bubble -->
             <div class="chat-msg chat-msg-ai">
-              <div class="chat-avatar">🤖</div>
+              <div class="chat-avatar chat-avatar-ai"><img src="assets/brand/zyrox-logo-icon.svg" alt="" aria-hidden="true"></div>
               <div class="chat-bubble">
-                <div class="chat-author">TAIKRY AI · REAL MULTIMODAL ASSISTANT</div>
+                <div class="chat-author">ZYROX AI <span class="chat-author-divider">/</span> MARKET COPILOT</div>
                 <div class="chat-text">
-                  សួស្តី! I'm <b>TAIKRY AI</b> (Real Multi-Agent AI).<br>
-                  📷 <b>ផ្ញើរូបថតក្រាហ្វិក (Photo Analysis):</b> ចុចប៊ូតុងកាមេរ៉ា 📷 ឬ Paste (<code>Ctrl+V</code>) រូប screenshot ពីទូរស័ព្ទ ឬកុំព្យូទ័រ ដើម្បីឲ្យ AI <b>វិភាគមើល</b> រក Entry, SL, TP1/2 និង SMC Order Block ភ្លាមៗ!<br>
-                  💬 ឬសួរពីទីផ្សារ <b><span id="chat-active-sym-tag">XAUUSD</span></b> បានគ្រប់ពេល។
+                  សួស្តី! ខ្ញុំគឺ <b>ZYROX AI</b> ជាជំនួយការ Multi-Agent សម្រាប់ទីផ្សារ។<br>
+                  <div class="chat-welcome-feature"><svg class="chat-ui-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.5-2h5l1.5 2h3v9H3z"/><circle cx="10" cy="11" r="3"/><path d="M14.5 8.5h.01"/></svg><span><b>ផ្ញើរូបថតក្រាហ្វិក (Photo Analysis):</b> ចុចប៊ូតុងកាមេរ៉ា ឬ Paste (<code>Ctrl+V</code>) screenshot ដើម្បីឲ្យ AI វិភាគ structure, Entry, SL និង TP។</span></div>
+                  <div class="chat-welcome-feature"><svg class="chat-ui-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.5h14v9H9l-4.5 3v-3H3z"/><path d="M6.5 7.5h7M6.5 10.5h4"/></svg><span>ឬសួរអំពីទីផ្សារ <b><span id="chat-active-sym-tag">XAUUSD</span></b> បានគ្រប់ពេល។</span></div>
                 </div>
                 <div class="chat-time">Live</div>
               </div>
@@ -1043,12 +1051,12 @@
 
           <!-- Quick Action Prompt Chips -->
           <div class="chat-quick-chips">
-            <button class="chat-chip" onclick="sendQuickPrompt('វិភាគមើលក្រាហ្វិកនេះ និងរក Entry, SL, TP')">⚡ វិភាគមើល (Analyze)</button>
-            <button class="chat-chip" onclick="triggerPhotoUpload()">📷 ផ្ញើរូបក្រាហ្វិក (Upload Photo)</button>
-            <button class="chat-chip" onclick="sendQuickPrompt('Best institutional setups now')">✨ Best setups</button>
-            <button class="chat-chip" onclick="sendQuickPrompt('Macro news & FOMC impact')">🌐 Macro news</button>
-            <button class="chat-chip" onclick="sendQuickPrompt('Risk check against configured server limits')">🛡️ Risk audit</button>
-            <button class="chat-chip chat-chip-research" onclick="sendQuickPrompt('Pre-news deep research report for ' + (currentSymbol || 'XAUUSD'))">🔬 Pre-News Research</button>
+            <button class="chat-chip" onclick="sendQuickPrompt('វិភាគមើលក្រាហ្វិកនេះ និងរក Entry, SL, TP')"><svg class="chat-chip-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15.5h14M5 13V8m5 5V4m5 9V6"/><path d="m3.5 6 3-2 3 1.5 5-3"/></svg><span>វិភាគ (Analyze)</span></button>
+            <button class="chat-chip" onclick="triggerPhotoUpload()"><svg class="chat-chip-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.5-2h5l1.5 2h3v9H3z"/><circle cx="10" cy="11" r="3"/></svg><span>ផ្ញើរូប (Upload)</span></button>
+            <button class="chat-chip" onclick="sendQuickPrompt('Best institutional setups now')"><svg class="chat-chip-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><circle cx="10" cy="10" r="2.5"/><path d="M10 1.5v3M18.5 10h-3M10 18.5v-3M1.5 10h3"/></svg><span>Best setups</span></button>
+            <button class="chat-chip" onclick="sendQuickPrompt('Macro news & FOMC impact')"><svg class="chat-chip-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3a11 11 0 0 1 0 14M10 3a11 11 0 0 0 0 14"/></svg><span>Macro news</span></button>
+            <button class="chat-chip" onclick="sendQuickPrompt('Risk check against configured server limits')"><svg class="chat-chip-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 6 2v5c0 4-2.5 6.8-6 9-3.5-2.2-6-5-6-9V4z"/><path d="m7.2 9.8 1.8 1.8 3.8-4"/></svg><span>Risk audit</span></button>
+            <button class="chat-chip chat-chip-research" onclick="sendQuickPrompt('Pre-news deep research report for ' + (currentSymbol || 'XAUUSD'))"><svg class="chat-chip-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 3.5h12v13H4zM7 7h6M7 10h6M7 13h3"/><path d="M2 6v11h12"/></svg><span>Pre-News Research</span></button>
           </div>
 
           <!-- Photo Attachment Preview Tray (Phone & PC) -->
@@ -1059,14 +1067,14 @@
             </div>
             <div class="chat-photo-preview-meta">
               <div class="chat-photo-name" id="chat-photo-name">chart_screenshot.png</div>
-              <div class="chat-photo-hint">📷 Ready for Multimodal Vision & SMC Analysis (Entry/SL/TP)</div>
+              <div class="chat-photo-hint"><svg class="chat-ui-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.5-2h5l1.5 2h3v9H3z"/><circle cx="10" cy="11" r="3"/></svg> Ready for image analysis and SMC review</div>
             </div>
           </div>
 
           <!-- Bottom Chat Input Bar -->
           <div class="chat-input-bar">
             <input type="file" id="ai-chat-photo-input" class="chat-file-input-hidden" accept="image/*" title="Attach chart photo or screenshot" aria-label="Attach chart photo or screenshot" onchange="onPhotoSelected(event)">
-            <button type="button" class="chat-photo-btn" id="btn-chat-photo" onclick="triggerPhotoUpload()" title="Attach Chart Photo (Phone Camera, Gallery or PC Screenshot)">📷</button>
+            <button type="button" class="chat-photo-btn" id="btn-chat-photo" onclick="triggerPhotoUpload()" title="Attach Chart Photo (Phone Camera, Gallery or PC Screenshot)" aria-label="Attach a chart image"><svg class="chat-ui-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6.5h3l1.5-2h5l1.5 2h3v9H3z"/><circle cx="10" cy="11" r="3"/></svg></button>
             <textarea id="ai-chat-input" class="chat-textarea" rows="1" placeholder="Analyze XAUUSD, attach chart photo, paste screenshot... [Enter to send]" onkeydown="onChatInputKeydown(event)"></textarea>
             <button class="chat-send-btn" id="btn-chat-send" onclick="submitChatMessage()" title="Send Message">
               <svg viewBox="0 0 24 24" class="send-svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -2990,7 +2998,7 @@
   <!-- Taikry Professional Interactive Chart Workspace Controller -->
   <script src="chart.js?v=2.6.2"></script>
   <div id="schema-studio-root"></div>
-  <script src="app.js?v=2.6.3"></script>
+  <script src="app.js?v=2.6.4"></script>
   <script src="schema_designer.js?v=2.6.2"></script>
 </body>
 </html>
