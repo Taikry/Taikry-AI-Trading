@@ -9910,6 +9910,47 @@ button, a, input, select, textarea, [tabindex]:not([tabindex="-1"]) {
 .chat-khmer-title { gap: 6px; }
 .chat-live-data-strip .chat-ui-icon { margin-right: 2px; }
 
+/* Keep chat content measured to the real sidebar width at every breakpoint. */
+.ai-chat-stream,
+.ai-sidebar-header,
+.ai-sidebar-pane,
+.chat-msg,
+.chat-bubble,
+.chat-setup-card,
+.chat-thinking-card,
+.chat-deep-research-container { min-width: 0; }
+.chat-msg-ai { width: 100%; max-width: 100%; }
+.chat-msg-ai .chat-bubble { flex: 1 1 0%; width: 0; }
+.chat-msg-user { width: fit-content; max-width: 100%; }
+.chat-msg-user .chat-bubble { flex: 0 1 auto; }
+.chat-bubble-thinking { width: auto; min-width: 0; max-width: 100%; }
+.chat-thinking-card,
+.chat-setup-card { width: 100%; max-width: 100%; }
+.chat-setup-header,
+.chat-setup-badge-group { min-width: 0; flex-wrap: wrap; }
+.chat-provider-pill { min-width: 0; max-width: 100%; }
+.chat-setup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chat-setup-grid-full { grid-column: 1 / -1; }
+.chat-setup-item { min-width: 0; overflow-wrap: anywhere; }
+.chat-setup-grid-full > div { flex-wrap: wrap; gap: 5px 9px; justify-content: flex-start !important; }
+.chat-setup-grid-full .chat-setup-lbl { margin-left: 0 !important; }
+.chat-setup-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr)); }
+.chat-setup-actions > button { min-width: 0; justify-content: center; text-align: center; white-space: normal; line-height: 1.35; }
+.chat-research-header { min-width: 0; flex-wrap: wrap; gap: 6px; }
+.chat-research-heading { min-width: 0; flex: 1 1 150px; }
+.chat-scenarios-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr)); }
+.ai-chat-brand-caption { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.ai-ctx-label { white-space: nowrap; }
+
+@media (max-width: 360px) {
+  .ai-sidebar-header { padding-right: 8px; padding-left: 8px; }
+  .ai-chat-brand-caption { font-size: 5.5px; }
+  .ai-chat-stream { padding-right: 8px; padding-left: 8px; }
+  .chat-thinking-card { padding: 7px; }
+  .chat-thinking-steps { gap: 3px; }
+  .chat-thinking-steps > span { padding-right: 2px; padding-left: 2px; font-size: 5.5px; }
+}
+
 @keyframes chat-brand-breathe { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(16, 185, 129, .16)); } 50% { transform: scale(1.055); filter: drop-shadow(0 0 9px rgba(52, 211, 153, .46)); } }
 @keyframes chat-wave-pulse { 0%, 100% { opacity: .55; transform: scaleX(.86); } 50% { opacity: 1; transform: scaleX(1.1); } }
 @keyframes chat-progress-sweep { 0% { transform: translateX(-115%); } 65% { transform: translateX(210%); } 100% { transform: translateX(310%); } }

@@ -4680,7 +4680,7 @@ Model: ${providerTag}
 
         ${data.deep_research ? `
           <div class="chat-deep-research-container" style="margin-top:10px; background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:6px;">
+            <div class="chat-research-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:6px;">
               <span class="chat-research-heading">${chatIcon("research")}<b>11-Agent Pre-News & Deep Research</b></span>
               <span style="font-size:10px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:2px 6px; border-radius:4px;">Window: ${escapeHtml(data.deep_research.C_upcoming_news_calendar?.blackout_status || 'STANDARD')}</span>
             </div>
@@ -4693,7 +4693,7 @@ Model: ${providerTag}
               </div>
             ` : ""}
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <div class="chat-scenarios-grid" style="display:grid; gap:8px; margin-bottom:8px;">
               ${data.deep_research.F_bullish_scenario ? `
                 <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:8px; font-size:11px;">
                   <div class="chat-scenario-title is-bullish"><i></i> Bullish Scenario</div>
