@@ -34,6 +34,34 @@ from taikry.trading.xauusd_tracker import xauusd_performance_tracker
 
 logger = logging.getLogger("taikry.monitoring.engine")
 
+
+def _expire_trial_subscriptions(now_utc=None) -> int:
+    """Mark expired SaaS trials on their subscription records."""
+    from taikry.database.models import UserSubscription
+    from taikry.database.session import SessionLocal
+
+    if now_utc is None:
+        # Subscription timestamps use timezone-naive UTC database columns.
+        now_utc = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    elif now_utc.tzinfo is not None:
+        now_utc = now_utc.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+    db = SessionLocal()
+    try:
+        expired_subscriptions = db.query(UserSubscription).filter(
+            UserSubscription.status == "trial_active",
+            UserSubscription.trial_expires_at.isnot(None),
+            UserSubscription.trial_expires_at <= now_utc,
+        ).all()
+        for subscription in expired_subscriptions:
+            subscription.status = "trial_expired"
+        if expired_subscriptions:
+            db.commit()
+        return len(expired_subscriptions)
+    finally:
+        db.close()
+
+
 class MarketMonitor247:
     """Continuous market surveillance while the host process is running."""
 
@@ -193,21 +221,7 @@ class MarketMonitor247:
                 logger.exception("VIP subscription expiration sweep failed")
             # SaaS 14-Day Free Trial expiration sweep
             try:
-                from taikry.database.session import SessionLocal
-                from taikry.database.models import User
-                db_saas = SessionLocal()
-                try:
-                    utc_now = datetime.datetime.now(datetime.timezone.utc)
-                    expired_users = db_saas.query(User).filter(
-                        User.trial_status == "trial_active",
-                        User.trial_expires_at <= utc_now
-                    ).all()
-                    for exp_u in expired_users:
-                        exp_u.trial_status = "trial_expired"
-                    if expired_users:
-                        db_saas.commit()
-                finally:
-                    db_saas.close()
+                _expire_trial_subscriptions()
             except Exception:
                 self.stats["errors_handled"] += 1
                 self.last_error = "trial expiration sweep failed"
