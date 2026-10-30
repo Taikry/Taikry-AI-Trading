@@ -64,14 +64,14 @@ class PortfolioAnalysisAgent:
             return {
                 "agent_id": self.agent_id,
                 "agent_name": self.name,
-                "portfolio_status": "APPROVED_STANDBY",
+                "portfolio_status": "UNAVAILABLE_LOCKOUT",
                 "open_positions_count": 0,
                 "current_risk_pct": 0.0,
                 "projected_risk_pct": proposed_risk_pct,
                 "max_risk_cap_pct": self.max_portfolio_risk_pct,
-                "is_approved": True,
-                "evidence": ["Portfolio tracking active; baseline capital parameters verified."],
-                "rationale": "Portfolio exposure verified within safety thresholds."
+                "is_approved": False,
+                "evidence": ["Portfolio query failed; exposure could not be verified, so the candidate is blocked."],
+                "rationale": "Portfolio exposure is unavailable; a safe allocation cannot be confirmed."
             }
         finally:
             db.close()

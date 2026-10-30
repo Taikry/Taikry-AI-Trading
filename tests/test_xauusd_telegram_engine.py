@@ -26,6 +26,7 @@ Covers all 20 required verification scenarios:
 
 import datetime
 import zoneinfo
+from types import SimpleNamespace
 import requests
 import pytest
 from unittest.mock import patch, MagicMock
@@ -43,8 +44,43 @@ from taikry.trading.xauusd_signal_engine import (
 )
 from taikry.trading.xauusd_tracker import xauusd_performance_tracker
 from taikry.notifications.telegram_service import telegram_service
+from taikry.agents.registry import agent_registry
+from taikry.trading.xauusd_signal_engine import SIGNAL_VOTER_IDS
 
 client = TestClient(app)
+
+
+def _consensus_voter_reports(direction="BULLISH", confidence=90):
+    """Creates complete test reports for the eight signal-voting specialists."""
+    reports = {}
+    for agent_id in SIGNAL_VOTER_IDS:
+        reports[agent_id] = {
+            "agent_id": agent_id,
+            "name": agent_id,
+            "bias": direction,
+            "confidence": confidence,
+            "status": "SUCCESS",
+            "contributes_to_consensus": True,
+            "evidence": [],
+        }
+    reports["technical_analyst"]["key_levels"] = {"atr": 2.0}
+    return reports
+
+
+def _allow_candidate_reviews(monkeypatch):
+    """Stubs the final risk arbiter and candidate-stage specialist adapters."""
+    monkeypatch.setattr(xauusd_signal_engine, "_load_agent_weights", lambda: {})
+    results = {
+        "risk_validator": {"decision": "APPROVE", "reasons": []},
+        "counter_analysis_agent": {"critique_stance": "CHALLENGE_CLEARED", "fragility_score": 20},
+        "portfolio_analysis_agent": {"is_approved": True},
+        "execution_simulation_agent": {"is_execution_viable": True, "net_risk_reward": 2.0},
+    }
+    adapters = {
+        agent_id: SimpleNamespace(execute=lambda _report=report, **kwargs: dict(_report))
+        for agent_id, report in results.items()
+    }
+    monkeypatch.setattr(agent_registry, "get_adapter", lambda agent_id: adapters.get(agent_id))
 
 
 # -----------------------------------------------------------------------------
@@ -154,15 +190,10 @@ def test_daily_limit_never_exceeds_four():
 # -----------------------------------------------------------------------------
 
 def test_zero_signals_when_no_setup_passes():
-    # Simulate conflicting agent biases (Bullish vs Bearish)
-    mock_agents = {
-        "technical_analyst": {
-            "name": "Technical Analyst", "bias": "BULLISH", "confidence": 90, "status": "SUCCESS", "evidence": []
-        },
-        "ict_smc_analyst": {
-            "name": "SMC Analyst", "bias": "BEARISH", "confidence": 90, "status": "SUCCESS", "evidence": []
-        }
-    }
+    # Four bullish and four bearish reports must resolve as a material conflict.
+    mock_agents = _consensus_voter_reports("BULLISH")
+    for agent_id in list(SIGNAL_VOTER_IDS)[4:]:
+        mock_agents[agent_id]["bias"] = "BEARISH"
     consensus = xauusd_signal_engine.synthesize_consensus("XAUUSD", 2700.0, mock_agents, {})
     assert consensus["decision"] == "WAIT"
     assert "Material conflict" in consensus["rejection_reason"]
@@ -222,33 +253,22 @@ def test_multiple_eligible_ai_agents_discovery():
 
 
 def test_agent_timeout_and_graceful_fallback():
-    mock_outputs = {
-        "technical_analyst": {
-            "name": "Technical Analyst", "bias": "BULLISH", "confidence": 85, "status": "SUCCESS", "evidence": []
-        },
-        "ict_smc_analyst": {
-            "name": "SMC Analyst", "bias": "BULLISH", "confidence": 85, "status": "SUCCESS", "evidence": []
-        },
-        "macro_analyst": {
-            "name": "Macro Analyst", "bias": "NEUTRAL", "confidence": 0, "status": "ERROR", "error": "HTTP timeout", "evidence": []
-        }
-    }
-    # Coverage is 2/3 (66.7%), above min 60%
+    mock_outputs = _consensus_voter_reports("BULLISH", 85)
+    mock_outputs["macro_analyst"].update({"bias": "NEUTRAL", "confidence": 0, "status": "ERROR", "error": "HTTP timeout"})
+    # Coverage remains above 60%, but the mandatory macro report is unavailable.
     consensus = xauusd_signal_engine.synthesize_consensus("XAUUSD", 2700.0, mock_outputs, {})
-    assert consensus["decision"] == "BUY"
-    assert consensus["score"] >= 80
+    assert consensus["decision"] == "NO TRADE"
+    assert "required technical, structure, or macro report" in consensus["rejection_reason"]
 
 
 # -----------------------------------------------------------------------------
 # 7. BUY AND SELL LEVEL ORDERING & R:R VALIDATION
 # -----------------------------------------------------------------------------
 
-def test_buy_and_sell_levels_ordering_validation():
+def test_buy_and_sell_levels_ordering_validation(monkeypatch):
+    _allow_candidate_reviews(monkeypatch)
     # BUY setup: SL < Entry < TP1 < TP2 < TP3
-    buy_agents = {
-        "technical_analyst": {"name": "Tech", "bias": "BULLISH", "confidence": 90, "status": "SUCCESS", "evidence": []},
-        "ict_smc_analyst": {"name": "SMC", "bias": "BULLISH", "confidence": 90, "status": "SUCCESS", "evidence": []}
-    }
+    buy_agents = _consensus_voter_reports("BULLISH")
     buy_res = xauusd_signal_engine.synthesize_consensus("XAUUSD", 2700.0, buy_agents, {})
     assert buy_res["decision"] == "BUY"
     assert buy_res["stop_loss"] < buy_res["entry_price"]
@@ -258,10 +278,7 @@ def test_buy_and_sell_levels_ordering_validation():
     assert buy_res["risk_reward_1"] >= 2.0
 
     # SELL setup: SL > Entry > TP1 > TP2 > TP3
-    sell_agents = {
-        "technical_analyst": {"name": "Tech", "bias": "BEARISH", "confidence": 90, "status": "SUCCESS", "evidence": []},
-        "ict_smc_analyst": {"name": "SMC", "bias": "BEARISH", "confidence": 90, "status": "SUCCESS", "evidence": []}
-    }
+    sell_agents = _consensus_voter_reports("BEARISH")
     sell_res = xauusd_signal_engine.synthesize_consensus("XAUUSD", 2700.0, sell_agents, {})
     assert sell_res["decision"] == "SELL"
     assert sell_res["stop_loss"] > sell_res["entry_price"]

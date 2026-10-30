@@ -13,7 +13,7 @@ from taikry.config import ADMIN_API_KEY, API_KEY_HEADER
 client = TestClient(app)
 
 def test_agent_registry_initialization():
-    """Verify all 7 core agents are registered and healthy."""
+    """Verify registered agents are not reported healthy before their first run."""
     agents = agent_registry.list_agents()
     assert len(agents) >= 7
 
@@ -31,8 +31,8 @@ def test_agent_registry_initialization():
 
     summary = agent_registry.get_fleet_summary()
     assert summary["total_registered_agents"] >= 7
-    assert summary["healthy_count"] >= 7
-    assert summary["system_status"] in ["OPTIMAL", "PARTIAL"]
+    assert summary["not_run_count"] >= 7
+    assert summary["system_status"] == "INITIALIZING"
 
 
 def test_agent_adapter_execution_and_telemetry():

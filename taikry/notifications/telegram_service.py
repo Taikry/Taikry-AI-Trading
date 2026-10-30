@@ -497,6 +497,27 @@ class TelegramService:
             LAST_SENT_ALERTS[symbol] = (bias, status)
         return ok
 
+    def send_validated_signal_report(self, consensus_result: Dict[str, Any]) -> bool:
+        """Send an automatic signal only when the original consensus plan is fully validated."""
+        symbol = str(consensus_result.get("symbol") or "").strip().upper()
+        if not symbol or not self.is_configured():
+            return False
+
+        message = self._format_approved_signal(consensus_result)
+        if not message:
+            return False
+
+        sent = self.send_message(
+            message,
+            reply_markup=self.build_signal_keyboard(symbol),
+        )
+        if sent:
+            LAST_SENT_ALERTS[symbol] = (
+                consensus_result.get("market_bias", "NEUTRAL"),
+                consensus_result.get("setup_status", "APPROVE"),
+            )
+        return sent
+
     def send_high_impact_news_alert(self, event_info: Dict[str, Any]) -> bool:
         """
         Broadcasts an immediate high-impact news catalyst alert (FOMC, PPI, CPI, NFP)

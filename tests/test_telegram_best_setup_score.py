@@ -65,6 +65,8 @@ def test_market_monitor_dispatches_only_single_best_setup():
     mock_analysis_gold = {
         "symbol": "XAUUSD",
         "verified_price": 2745.0,
+        "price_source": "MT5",
+        "data_quality": {"synthetic_timeframes": [], "freshness": {"fresh": True}},
         "setup_status": "APPROVE",
         "proposed_direction": "BUY",
         "ai_score": 92,
@@ -78,6 +80,8 @@ def test_market_monitor_dispatches_only_single_best_setup():
     mock_analysis_eur = {
         "symbol": "EURUSD",
         "verified_price": 1.0850,
+        "price_source": "YAHOO_FINANCE",
+        "data_quality": {"synthetic_timeframes": [], "freshness": {"fresh": True}},
         "setup_status": "APPROVE",
         "proposed_direction": "BUY",
         "ai_score": 83,
@@ -102,8 +106,10 @@ def test_market_monitor_dispatches_only_single_best_setup():
         if sym == "EURUSD": return mock_analysis_eur
         return mock_analysis_btc
 
+    fake_consensus_adapter = MagicMock()
+    fake_consensus_adapter.execute.side_effect = lambda **kwargs: fake_analyze(kwargs["symbol"])
     with patch("taikry.monitoring.engine.is_market_open", return_value=(True, "Open")), \
-         patch("taikry.monitoring.engine.ai_consensus_engine.analyze_symbol", side_effect=fake_analyze), \
+         patch("taikry.monitoring.engine.agent_registry.get_adapter", return_value=fake_consensus_adapter), \
          patch.object(monitor, "_handle_approved_setup") as mock_handle:
 
         monitor.scan_once(symbols=["XAUUSD", "EURUSD", "BTCUSDT"])
@@ -113,6 +119,7 @@ def test_market_monitor_dispatches_only_single_best_setup():
         called_setup = mock_handle.call_args[0][0]
         assert called_setup["symbol"] == "XAUUSD"
         assert called_setup["ai_score"] == 92
+        assert fake_consensus_adapter.execute.call_count == 3
 
 def test_broadcast_alert_api_endpoint():
     """Tests POST /api/v1/telegram/broadcast-alert returns ai_score in 80%-95% range."""

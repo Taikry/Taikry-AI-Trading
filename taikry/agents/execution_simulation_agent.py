@@ -8,7 +8,8 @@ Calculates real-world execution friction:
 - Net effective R:R and break-even slippage tolerance
 """
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from taikry.config import get_symbol_config
 
 logger = logging.getLogger("taikry.agents.execution_simulation")
 
@@ -29,22 +30,37 @@ class ExecutionSimulationAgent:
         stop_loss: float,
         take_profit_1: float,
         current_spread_points: float = 0.25,
-        volatility_state: str = "NORMAL_LIQUIDITY"
+        volatility_state: str = "NORMAL_LIQUIDITY",
+        commission_per_unit: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Simulates the execution friction on entry and exit.
         """
         dir_upper = direction.upper()
+        # Convert pip-scaled friction into the instrument's quoted price units.
+        # For XAUUSD pip_value=0.10 retains the legacy 0.10-0.35 point model.
+        symbol_cfg = get_symbol_config(symbol)
+        try:
+            pip_value = max(0.000001, float(symbol_cfg.get("pip_value", 0.10)))
+        except (TypeError, ValueError):
+            pip_value = 0.10
+
         # Slippage estimate based on volatility regime
         if volatility_state == "HIGH_VOLATILITY_EXPANSION":
-            est_slippage_points = 0.35
+            est_slippage_points = 3.5 * pip_value
         elif volatility_state == "SQUEEZE_COMPRESSION":
-            est_slippage_points = 0.10
+            est_slippage_points = 1.0 * pip_value
         else:
-            est_slippage_points = 0.15
+            est_slippage_points = 1.5 * pip_value
 
         spread_cost = current_spread_points
-        comm_per_unit = COMMISSION_PER_STANDARD_LOT / 100.0  # $0.07 on Gold
+        if commission_per_unit is None:
+            comm_per_unit = COMMISSION_PER_STANDARD_LOT / 100.0  # Default XAUUSD contract: 100 oz/lot
+        else:
+            try:
+                comm_per_unit = max(0.0, float(commission_per_unit))
+            except (TypeError, ValueError):
+                comm_per_unit = COMMISSION_PER_STANDARD_LOT / 100.0
 
         total_friction_points = spread_cost + est_slippage_points + comm_per_unit
 

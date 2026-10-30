@@ -173,7 +173,9 @@ def get_system_health():
             "cycles_completed": market_monitor_247.stats["cycles_completed"],
             "reports_generated": market_monitor_247.stats["reports_generated"],
             "alerts_dispatched": market_monitor_247.stats["alerts_dispatched"],
-            "last_scan_time": market_monitor_247.last_scan_time
+            "last_scan_time": market_monitor_247.last_scan_time,
+            "interval_seconds": market_monitor_247.interval_seconds,
+            "last_error": market_monitor_247.last_error,
         },
         "market_status": {
             "XAUUSD": {"open": open_gold, "detail": status_gold, **provider_observation(price_gold, src_gold, ts_gold, freshness_gold)},

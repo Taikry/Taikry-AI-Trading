@@ -24,15 +24,18 @@ flowchart TD
     end
 
     subgraph AI Analyst [AI Agent Reasoning Engine]
-        D[Technical, SMC, Macro & Risk Python agents]
+        D[Eight directional analysts plus data, risk & candidate reviewers]
+        D --> D1[Technical, SMC, Macro, Order Flow & Fractal]
+        D --> D2[Regime, Quantitative & ML Forecast]
+        D --> D3[Fresh-data gate, strategy concepts, portfolio & execution checks]
         D -->|Optional synthesis only when explicitly selected and configured| E1[Cloud LLM provider]
         D -->|Default| E2[Deterministic multi-agent consensus]
     end
 
     subgraph Dispatcher [Background Scanner — runs while the process is available]
-        F[engine_247.py]
-        F --> G{Confidence >= 70% & Cooldown Passed?}
-        G -->|Yes| H[Make.com Webhook]
+        F[engine_247.py / FastAPI monitor]
+        F --> G{Approved plan, fresh data, score 80–95, cooldown passed?}
+        G -->|Yes| H[Configured Telegram + Make.com]
     end
 
     subgraph Make.com Scenario [Optional Make.com Workflow]
@@ -67,10 +70,10 @@ flowchart TD
 
 ## 🚀 Quick Start
 
-The supported web application is the FastAPI service under `taikry/`. Without an available and fresh market-data feed, analysis returns **NO TRADE**; demo candles are never substituted. Crypto uses Binance public market data where supported. Gold/forex Yahoo data is a fallback and may be delayed; broker-grade XAUUSD data requires the authenticated Windows MT5 bridge. Four core analysts are deterministic Python agents; cloud LLM synthesis is optional and must be selected and configured separately.
+The supported web application is the FastAPI service under `taikry/`. Without an available and fresh market-data feed, analysis returns **NO TRADE**; demo candles are never substituted. Crypto uses Binance public market data where supported. Gold/forex Yahoo data is a fallback and may be delayed; broker-grade XAUUSD data requires the authenticated Windows MT5 bridge. Eight local signal analysts vote on the same scan snapshot: technical, ICT/SMC, macro, order flow, fractal MTF, regime, quantitative research, and ML forecast. Data quality, independent risk, concept, portfolio, execution, and counter-analysis agents run at their relevant stages. Debate and self-training run on demand or after outcomes resolve. Cloud LLM synthesis remains optional and must be selected and configured separately.
 
 ### 1. Run a Single Test Scan
-Scans all 8 symbols, evaluates with AI, and prints current market status:
+Scans the configured watchlist, evaluates each open market, and sends the single best approved plan to configured destinations:
 ```powershell
 python engine_247.py --once
 ```
@@ -136,11 +139,13 @@ GEMINI_API_KEY=your_gemini_api_key_here
 MAKE_WEBHOOK_URL=https://hook.us2.make.com/YOUR_MAKE_WEBHOOK_ID
 
 # Engine Parameters
-MIN_CONFIDENCE_THRESHOLD=70
+MIN_CONFIDENCE_THRESHOLD=80
 COOLDOWN_MINUTES=15
-SCAN_INTERVAL_SECONDS=30
+MONITORING_INTERVAL_MINUTES=15
 DEFAULT_TIMEFRAME=M15
 ```
+
+The FastAPI service starts this monitor when `AUTO_START_MONITORING=true`. Each cycle uses fresh, non-synthetic data and the validated entry, stop, and target levels from consensus. Non-gold setups use the validated multi-asset Telegram report; XAUUSD Telegram delivery also requires a fresh MT5 quote and an available daily quota. Approved plans are sent to the configured critical Make webhook. The monitor sends at most one best setup per cycle and never places broker orders.
 
 ---
 

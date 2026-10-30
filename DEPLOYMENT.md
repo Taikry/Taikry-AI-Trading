@@ -20,14 +20,13 @@ TAIKRY AI MARKET INTELLIGENCE PRO uses registered analysis and orchestration com
    Break of Structure (BOS), Change of Character (CHoCH), Fair Value Gaps (FVG with mitigation tracking), Order Blocks (OB with body/wick bounds), and Liquidity Sweeps (BSL/SSL).
 3. **Agent 3 — Macro Catalyst & Currency Regime Analyst (`macro_analyst`):**  
    Available DXY context, economic calendar events, and macro news. Yield data is not currently loaded by this component; missing feeds remain unavailable.
-4. **Agent 4 — Independent Risk Validator & Gatekeeper (`risk_validator`):**  
-   Server-side risk controls use the configured risk percentage (default 0.5%, maximum 2%), configured minimum R:R (default 1:2.0), maximum simultaneous positions, and economic-calendar availability checks. Analysis fails closed when required data or risk checks are unavailable.
-5. **Multi-Agent Consensus Engine (`consensus_engine`):**  
-   Combines the available agent outputs, preserves dissent, applies risk checks, and generates Khmer and English reports. Participation is checked against the eligible agents discovered for the request.
-6. **Round-Table Adversarial Debate Engine (`debate_engine`):**  
-   Organizes analysis and dissent summaries. A generated debate summary should not be interpreted as proof that independent model calls occurred unless the response identifies those calls.
-7. **Continuous Self-Trainer & Recalibration Engine (`self_trainer`):**  
-   Tracks resolved directional outcomes and Brier scores, and updates weights only when eligible resolved outcome data is available.
+4. **Directional specialist voters:** Order-flow/CVD, fractal multi-timeframe, market regime, quantitative research, and ML forecast agents run with Agents 1–3 on the same candle snapshot. Their output labels are normalized before weighted consensus; failed or fallback reports do not count as healthy votes.
+5. **Data Quality Guardian (`data_quality_agent`):** Checks feed freshness and spread using the scan's existing market snapshot. Stale, unavailable, or unhealthy data blocks an actionable plan.
+6. **Agent 4 — Independent Risk Validator & Gatekeeper (`risk_validator`):** Server-side risk controls use the configured risk percentage (default 0.5%, maximum 2%), configured minimum R:R (default 1:2.0), maximum simultaneous positions, and economic-calendar availability checks. Analysis fails closed when required data or risk checks are unavailable.
+7. **Candidate reviewers:** Concept recommendation runs after analyst reports; counter-analysis critiques a proposed plan; portfolio exposure and post-cost execution checks can veto it. These are stage-specific reviewers and do not cast duplicate direction votes.
+8. **Multi-Agent Consensus Engine (`consensus_engine`):** Combines available directional votes, preserves dissent, applies risk checks, and generates Khmer and English reports. The monitor refreshes the scan instead of reusing a recent cache entry.
+9. **Round-Table Adversarial Debate Engine (`debate_engine`):** Organizes analysis and dissent summaries. A generated debate summary should not be interpreted as proof that independent model calls occurred unless the response identifies those calls.
+10. **Continuous Self-Trainer & Recalibration Engine (`self_trainer`):** Tracks resolved directional outcomes and Brier scores, and updates weights only when eligible resolved outcome data is available.
 
 ---
 
@@ -205,17 +204,18 @@ The dedicated XAUUSD Signal Engine provides institutional-grade Gold trade signa
 ### 10.1 Core Policies & Constraints
 
 1. **Strict XAUUSD-Only Pipeline:**
-   Trading signals dispatched to Telegram are restricted exclusively to XAUUSD. Non-Gold assets (BTCUSD, EURUSD, etc.) are strictly blocked from Telegram delivery while remaining accessible on the internal web dashboard and paper trading desk. Symbol aliases (`GOLD`, `XAU/USD`, `OANDA:XAUUSD`) are normalized to canonical `XAUUSD`.
+   The dedicated XAUUSD signal engine remains Gold-only and applies its fresh MT5 quote, spread, persistence, duplicate, and daily quota checks. The continuous monitor can also send its fresh, approved consensus plan for non-Gold watchlist assets through the validated multi-asset Telegram formatter. Symbol aliases (`GOLD`, `XAU/USD`, `OANDA:XAUUSD`) are normalized to canonical `XAUUSD` for the dedicated engine.
 
 2. **Atomic Daily Quota (Asia/Phnom_Penh):**
    - **Target:** 2–4 high-quality signals per Cambodia calendar day.
    - **Hard Cap:** Exactly 4 new signals per day. Never exceeded.
    - **Persistence:** Signal delivery reservations and states are stored in the configured database. A process-local lock reduces duplicate sends within one worker; it does not coordinate multiple app replicas. Use a shared production database and add a database-level reservation/unique constraint before running multiple workers if a strict global daily cap is required.
-   - **Zero Forcing:** Zero signals are sent when market conditions, spread, volatility, or AI consensus are unfavorable.
+   - **Zero Forcing:** Zero XAUUSD signals are sent when market conditions, spread, volatility, or AI consensus are unfavorable. The multi-asset monitor only dispatches approved plans with fresh data and directionally valid levels.
 
 3. **All-Agent Dynamic Discovery & Consensus:**
-   - Discovers all enabled, healthy agents dynamically from `AgentRegistry`.
-   - Requires $\ge 60\%$ eligible-agent participation.
+   - Discovers enabled, instrument-eligible agents from `AgentRegistry` and reports each role's status in the scan result.
+   - Requires at least 60% participation from the eight directional voters, with technical, structure, and macro reports available and a healthy data-quality result.
+   - Risk, portfolio, and post-cost execution reviewers run after a candidate is formed; a failed portfolio or execution check blocks it. Debate and training are task-triggered rather than repeated on every market scan.
    - Conflicting biases (Bullish vs Bearish) trigger an immediate `WAIT` decision.
    - Uses a measured setup-confluence score (not a win probability), a score gate of 80–95, and the configured minimum R:R (default 2.0).
 

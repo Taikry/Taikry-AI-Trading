@@ -51,7 +51,12 @@ class MarketDataQualityAgent:
     Guarantees no trade analysis proceeds on fabricated, stale, or severely widened feeds.
     """
 
-    def analyze(self, symbol: str = "XAUUSD", timeframe: str = "M15") -> Dict[str, Any]:
+    def analyze(
+        self,
+        symbol: str = "XAUUSD",
+        timeframe: str = "M15",
+        market_snapshot: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         Executes comprehensive market data audit:
         1. Checks MT5 authentic broker terminal connection and tick state.
@@ -81,9 +86,22 @@ class MarketDataQualityAgent:
             calc_spread = spread if spread is not None else 0.0
             evidence.append("Windows MT5 broker bridge is not connected or streaming ticks.")
 
-        # 2. Reference & Verified Price Retrieval
-        verified_p, verified_src, verified_dt = market_data_engine.get_verified_price(sym)
-        candles_df = market_data_engine.get_candles(sym, timeframe=timeframe, limit=100)
+        # 2. Reference & Verified Price Retrieval. A signal scan supplies its
+        # already-validated snapshot so this guardian audits the same candles and
+        # quote rather than comparing against a second, newer market read.
+        snapshot_frames = market_snapshot.get("multi_tf_data") if isinstance(market_snapshot, dict) else None
+        snapshot_frame = snapshot_frames.get(timeframe) if isinstance(snapshot_frames, dict) else None
+        if isinstance(market_snapshot, dict) and snapshot_frame is not None:
+            try:
+                verified_p = float(market_snapshot.get("verified_price") or 0.0)
+            except (TypeError, ValueError):
+                verified_p = 0.0
+            verified_src = str(market_snapshot.get("price_source") or "signal_scan_snapshot")
+            verified_dt = market_snapshot.get("price_timestamp")
+            candles_df = snapshot_frame
+        else:
+            verified_p, verified_src, verified_dt = market_data_engine.get_verified_price(sym)
+            candles_df = market_data_engine.get_candles(sym, timeframe=timeframe, limit=100)
 
         # 3. Freshness Check
         last_candle_time = None

@@ -7,7 +7,13 @@ import time
 import requests
 from typing import Dict, Any, Optional
 
-from taikry.config import MAKE_WEBHOOK_URL, MAX_RETRIES, BACKOFF_BASE_SECONDS
+from taikry.config import (
+    MAKE_WEBHOOK_URL,
+    MAKE_CRITICAL_ALERT_WEBHOOK,
+    MAKE_PAPER_TRADE_WEBHOOK,
+    MAX_RETRIES,
+    BACKOFF_BASE_SECONDS,
+)
 from taikry.database.session import SessionLocal
 from taikry.database.models import NotificationAudit
 
@@ -19,7 +25,13 @@ def dispatch_to_make(
     """
     Dispatches a structured JSON payload to Make.com webhook endpoint.
     """
-    target_url = webhook_url or MAKE_WEBHOOK_URL
+    event_targets = {
+        "critical_market_alert": MAKE_CRITICAL_ALERT_WEBHOOK,
+        "signal_lifecycle_transition": MAKE_CRITICAL_ALERT_WEBHOOK,
+        "paper_trade": MAKE_PAPER_TRADE_WEBHOOK,
+        "paper_trade_update": MAKE_PAPER_TRADE_WEBHOOK,
+    }
+    target_url = webhook_url or event_targets.get(event_type) or MAKE_WEBHOOK_URL
     if not target_url:
         return {"success": False, "status_code": 0, "error": "No Make webhook URL configured."}
 
@@ -28,7 +40,8 @@ def dispatch_to_make(
     error_msg = None
     t0 = time.time()
 
-    for attempt in range(MAX_RETRIES):
+    attempts = max(1, int(MAX_RETRIES))
+    for attempt in range(attempts):
         try:
             res = requests.post(target_url, json=payload, headers=headers, timeout=10)
             status_code = res.status_code
@@ -44,8 +57,13 @@ def dispatch_to_make(
                 }
             else:
                 error_msg = f"HTTP {status_code}: {res.text[:100]}"
+                # Retry transient upstream failures; fail fast for permanent client errors.
+                if status_code < 500 and status_code != 429 and status_code != 408:
+                    break
         except Exception as e:
-            error_msg = str(e)
+            error_msg = str(e).replace(target_url, "[REDACTED_WEBHOOK_URL]")
+
+        if attempt + 1 < attempts:
             time.sleep(BACKOFF_BASE_SECONDS * (attempt + 1))
 
     latency_ms = int((time.time() - t0) * 1000)
@@ -58,6 +76,7 @@ def dispatch_to_make(
     }
 
 def _audit_notification(channel, event_type, payload, status, code, err):
+    db = None
     try:
         db = SessionLocal()
         summary = {
@@ -75,6 +94,8 @@ def _audit_notification(channel, event_type, payload, status, code, err):
         )
         db.add(rec)
         db.commit()
-        db.close()
     except Exception:
         pass
+    finally:
+        if db is not None:
+            db.close()

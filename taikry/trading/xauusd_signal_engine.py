@@ -4,7 +4,7 @@ TAIKRY SIGNAL AI — XAUUSD-ONLY TELEGRAM SIGNAL ENGINE
 Specialized institutional signal engine focusing exclusively on XAUUSD (Gold vs USD).
 Features:
 1. Strict XAUUSD-only policy (disallows all other crypto, forex, commodities).
-2. Dynamic discovery and execution of ALL eligible registered AI agents.
+2. Dynamic discovery and role-aware execution of eligible registered agents.
 3. Multi-agent consensus synthesis with transparent scoring (80% - 95% gate).
 4. Atomic persistent daily quota (2-4 target, hard cap of 4 signals per Cambodia calendar day).
 5. Comprehensive risk validation (SL/TP ordering, positive distance, >= 1:2.0 R:R).
@@ -21,7 +21,8 @@ import math
 from typing import Dict, Any, List, Optional, Tuple
 import threading
 from taikry.config import (
-    DEFAULT_STRATEGY_VERSION, COMMISSION_PER_LOT, MIN_RISK_REWARD_RATIO
+    DEFAULT_STRATEGY_VERSION, COMMISSION_PER_LOT, MIN_RISK_REWARD_RATIO,
+    get_symbol_config,
 )
 from taikry.database.session import SessionLocal
 from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel
@@ -48,6 +49,26 @@ DEFAULT_MIN_SCORE = 80
 DEFAULT_MAX_SCORE = 95
 DEFAULT_MAX_ENTRY_DEVIATION_POINTS = 3.5  # Max allowable price drift from entry
 DEFAULT_SIGNAL_EXPIRY_HOURS = 6
+
+# These agents produce independent directional opinions for the XAUUSD quorum.
+# Other registered agents are still part of the scan, but run in their proper
+# stage (data quality, candidate review, risk arbitration, or outcome training).
+SIGNAL_VOTER_IDS = frozenset({
+    "technical_analyst",
+    "ict_smc_analyst",
+    "macro_analyst",
+    "orderflow_sentiment_analyst",
+    "fractal_mtf_analyst",
+    "regime_detection_agent",
+    "quantitative_research_agent",
+    "ml_forecast_agent",
+})
+
+DEFERRED_SIGNAL_AGENT_REASONS = {
+    "consensus_engine": "The XAUUSD signal engine itself owns consensus for this scan; a second engine would refetch data and duplicate votes.",
+    "debate_engine": "Debate reports are generated on demand and refetch their own market snapshot.",
+    "self_trainer": "Training runs only after signal outcomes are resolved, never during signal generation.",
+}
 
 
 def normalize_xauusd_symbol(raw_symbol: str) -> Optional[str]:
@@ -174,7 +195,7 @@ class XAUUSDSignalEngine:
             db.close()
 
     # -------------------------------------------------------------------------
-    # 2. DYNAMIC DISCOVERY & EXECUTION OF ALL ELIGIBLE REGISTERED AGENTS
+    # 2. DYNAMIC DISCOVERY & ROLE-AWARE EXECUTION OF REGISTERED AGENTS
     # -------------------------------------------------------------------------
 
     def discover_eligible_agents(self) -> List[Any]:
@@ -200,78 +221,209 @@ class XAUUSDSignalEngine:
         self,
         symbol: str,
         multi_tf_data: Dict[str, Any],
-        verified_price: float
+        verified_price: float,
+        price_timestamp: Optional[datetime.datetime] = None,
+        price_source: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Runs every eligible agent on the exact same market snapshot,
-        records latency, models, evidence, and errors.
+        Runs signal analysts on one market snapshot, records specialist agents
+        for their proper later stage, and tracks latency, evidence, and errors.
         """
         eligible = self.discover_eligible_agents()
         results: Dict[str, Any] = {}
+        m15 = multi_tf_data.get("M15")
+        if m15 is None or getattr(m15, "empty", False):
+            m15 = multi_tf_data.get("M5")
 
         for adapter in eligible:
             meta = adapter.metadata
             agent_id = meta.agent_id
             start_t = time.perf_counter()
 
-            try:
-                # Tailor arguments based on agent specialization
-                if agent_id == "technical_analyst":
-                    out = adapter.execute(symbol, multi_tf_data)
-                elif agent_id == "ict_smc_analyst":
-                    out = adapter.execute(symbol, multi_tf_data)
-                elif agent_id == "macro_analyst":
-                    out = adapter.execute(symbol)
-                elif agent_id == "risk_validator":
-                    # Evaluated subsequently during consensus synthesis
-                    continue
-                elif agent_id in ["consensus_engine", "debate_engine"]:
-                    # Coordination engines, not raw signal contributors
-                    continue
-                else:
-                    # Generic invocation for dynamically added plugin agents
-                    out = adapter.execute(symbol=symbol, multi_tf_data=multi_tf_data, verified_price=verified_price)
+            if agent_id in DEFERRED_SIGNAL_AGENT_REASONS:
+                results[agent_id] = self._agent_status_record(
+                    adapter,
+                    status="DEFERRED",
+                    reason=DEFERRED_SIGNAL_AGENT_REASONS[agent_id],
+                )
+                continue
+            if agent_id in {"risk_validator", "counter_analysis_agent", "portfolio_analysis_agent", "execution_simulation_agent"}:
+                # These require candidate levels or are the final risk arbiter.
+                results[agent_id] = self._agent_status_record(
+                    adapter,
+                    status="PENDING_CANDIDATE",
+                    reason="Runs after a candidate trade plan has been calculated.",
+                )
+                continue
 
+            try:
+                # Explicit argument routing prevents signature mismatches and
+                # keeps each specialist on the same candle snapshot where possible.
+                if agent_id == "data_quality_agent":
+                    out = adapter.execute(
+                        symbol=symbol,
+                        timeframe="M15",
+                        market_snapshot={
+                            "multi_tf_data": multi_tf_data,
+                            "verified_price": verified_price,
+                            "price_timestamp": price_timestamp,
+                            "price_source": price_source,
+                        },
+                    )
+                elif agent_id in {"technical_analyst", "ict_smc_analyst", "fractal_mtf_analyst", "regime_detection_agent", "quantitative_research_agent", "ml_forecast_agent"}:
+                    out = adapter.execute(symbol=symbol, multi_tf_data=multi_tf_data)
+                elif agent_id == "macro_analyst":
+                    out = adapter.execute(symbol=symbol)
+                elif agent_id == "orderflow_sentiment_analyst":
+                    out = adapter.execute(symbol=symbol, df_m15=m15, verified_price=verified_price)
+                elif agent_id == "concept_recommender":
+                    # Concepts need the regime and quantitative/model reports first.
+                    out = adapter.execute(
+                        symbol=symbol,
+                        regime_data=results.get("regime_detection_agent", {}),
+                        technical_data=results.get("technical_analyst", {}),
+                        smc_data=results.get("ict_smc_analyst", {}),
+                        quant_data=results.get("quantitative_research_agent", {}),
+                        ml_data=results.get("ml_forecast_agent", {}),
+                    )
+                else:
+                    # Unknown extensions are not called with guessed arguments.
+                    results[agent_id] = self._agent_status_record(
+                        adapter,
+                        status="DEFERRED",
+                        reason="No safe argument mapping is registered for this agent.",
+                    )
+                    continue
+
+                raw = self._coerce_agent_output(out)
+                result_status = self._classify_agent_result(raw)
+                normalized_bias, normalized_confidence = self._normalize_agent_vote(agent_id, raw)
                 latency_ms = (time.perf_counter() - start_t) * 1000.0
+                is_voter = agent_id in SIGNAL_VOTER_IDS
                 results[agent_id] = {
+                    **raw,
                     "agent_id": agent_id,
                     "name": meta.name,
                     "specialization": meta.specialization,
                     "model_provider": meta.model_provider,
                     "model_identifier": meta.model_identifier,
-                    "bias": out.get("bias", "NEUTRAL").upper(),
-                    "confidence": out.get("confidence", 50),
-                    "setup_eligible": out.get("setup_eligible", False),
-                    "evidence": out.get("evidence", []),
-                    "key_levels": out.get("key_price_levels") or out.get("key_price_zones") or {},
-                    "key_price_levels": out.get("key_price_levels") or {},
-                    "key_price_zones": out.get("key_price_zones") or {},
-                    "rationale": out.get("rationale", ""),
-                    "status": "SUCCESS",
+                    "source_status": raw.get("status"),
+                    "bias": normalized_bias,
+                    "confidence": normalized_confidence,
+                    "setup_eligible": raw.get("setup_eligible", False),
+                    "evidence": raw.get("evidence", []),
+                    "key_levels": raw.get("key_price_levels") or raw.get("key_price_zones") or {},
+                    "key_price_levels": raw.get("key_price_levels") or {},
+                    "key_price_zones": raw.get("key_price_zones") or {},
+                    "rationale": raw.get("rationale") or raw.get("rationale_en", ""),
+                    "status": result_status,
+                    "contributes_to_consensus": is_voter and result_status == "SUCCESS",
                     "latency_ms": round(latency_ms, 1),
-                    "error": None
+                    "error": raw.get("_fallback_reason") if raw.get("_fallback_applied") else None,
                 }
-            except Exception as e:
+            except Exception as exc:
                 latency_ms = (time.perf_counter() - start_t) * 1000.0
-                logger.warning(f"Error executing agent {agent_id}: {e}")
+                logger.warning("Error executing agent %s: %s", agent_id, exc)
                 results[agent_id] = {
-                    "agent_id": agent_id,
-                    "name": meta.name,
-                    "specialization": meta.specialization,
-                    "model_provider": meta.model_provider,
-                    "model_identifier": meta.model_identifier,
-                    "bias": "NEUTRAL",
-                    "confidence": 0,
-                    "setup_eligible": False,
-                    "evidence": [f"Execution error: {str(e)}"],
-                    "key_levels": {},
-                    "rationale": "Execution failed, treated as neutral.",
-                    "status": "ERROR",
+                    **self._agent_status_record(adapter, status="ERROR", reason=str(exc)),
                     "latency_ms": round(latency_ms, 1),
-                    "error": str(e)
+                    "contributes_to_consensus": False,
                 }
 
         return results
+
+    @staticmethod
+    def _coerce_agent_output(output: Any) -> Dict[str, Any]:
+        """Convert dict and Pydantic agent outputs into a consistent mapping."""
+        if isinstance(output, dict):
+            return dict(output)
+        if hasattr(output, "model_dump"):
+            return output.model_dump()
+        if hasattr(output, "dict"):
+            return output.dict()
+        raise TypeError(f"Agent returned unsupported output type: {type(output).__name__}")
+
+    @staticmethod
+    def _classify_agent_result(output: Dict[str, Any]) -> str:
+        if output.get("_fallback_applied"):
+            return "FALLBACK"
+        source_status = str(output.get("status", "")).upper()
+        if source_status in {"ERROR", "FAILED", "UNAVAILABLE", "NOT_AVAILABLE", "DEGRADED", "STALE", "INVALID"}:
+            return "DEGRADED"
+        return "SUCCESS"
+
+    @staticmethod
+    def _normalize_agent_vote(agent_id: str, output: Dict[str, Any]) -> Tuple[str, float]:
+        """Normalize specialist-specific directional labels for consensus voting."""
+        bias = str(output.get("bias", "NEUTRAL") or "NEUTRAL").upper().replace("_", " ")
+        confidence = output.get("confidence")
+
+        if agent_id == "regime_detection_agent":
+            regime = str(output.get("regime", "UNKNOWN")).upper()
+            bias = "BULLISH" if "BULLISH" in regime else ("BEARISH" if "BEARISH" in regime else "NEUTRAL")
+            confidence = 65 if bias != "NEUTRAL" else 50
+        elif agent_id == "quantitative_research_agent":
+            bias = "BULLISH" if bias in {"LONG", "BUY"} else ("BEARISH" if bias in {"SHORT", "SELL"} else "NEUTRAL")
+            confidence = output.get("mean_reversion_probability", 50) if bias != "NEUTRAL" else 50
+        elif agent_id == "ml_forecast_agent":
+            predicted = str(output.get("predicted_direction", bias)).upper()
+            bias = "BULLISH" if predicted in {"BULLISH", "BUY", "LONG"} else ("BEARISH" if predicted in {"BEARISH", "SELL", "SHORT"} else "NEUTRAL")
+            confidence = output.get("confidence", confidence)
+        elif agent_id == "fractal_mtf_analyst":
+            direction = str(output.get("overall_direction", "WAIT")).upper()
+            bias = "BULLISH" if direction in {"BUY", "BULLISH", "LONG"} else ("BEARISH" if direction in {"SELL", "BEARISH", "SHORT"} else "NEUTRAL")
+            confidence = output.get("confidence", confidence)
+        elif agent_id == "data_quality_agent" or agent_id == "concept_recommender":
+            bias = "NEUTRAL"
+
+        try:
+            confidence_value = float(confidence if confidence is not None else 50)
+        except (TypeError, ValueError):
+            confidence_value = 0.0
+        if not math.isfinite(confidence_value):
+            confidence_value = 0.0
+        return bias, max(0.0, min(100.0, confidence_value))
+
+    @staticmethod
+    def _agent_status_record(adapter: Any, status: str, reason: str) -> Dict[str, Any]:
+        meta = adapter.metadata
+        return {
+            "agent_id": meta.agent_id,
+            "name": meta.name,
+            "specialization": meta.specialization,
+            "model_provider": meta.model_provider,
+            "model_identifier": meta.model_identifier,
+            "status": status,
+            "contributes_to_consensus": False,
+            "evidence": [],
+            "rationale": reason,
+            "error": None if status not in {"ERROR", "FALLBACK"} else reason,
+        }
+
+    @staticmethod
+    def _summarize_agent_outputs(agent_outputs: Dict[str, Any]) -> Dict[str, Any]:
+        status_counts: Dict[str, int] = {}
+        for output in agent_outputs.values():
+            if not isinstance(output, dict):
+                continue
+            status = str(output.get("status", "UNKNOWN"))
+            status_counts[status] = status_counts.get(status, 0) + 1
+        return {
+            "registered_agents_reported": len(agent_outputs),
+            "status_counts": status_counts,
+            "agent_statuses": {
+                agent_id: str(output.get("status", "UNKNOWN"))
+                for agent_id, output in agent_outputs.items()
+                if isinstance(output, dict)
+            },
+            "voting_agents": sum(1 for agent_id in agent_outputs if agent_id in SIGNAL_VOTER_IDS),
+            "voting_agents_participated": sum(
+                1 for agent_id, output in agent_outputs.items()
+                if agent_id in SIGNAL_VOTER_IDS
+                and isinstance(output, dict)
+                and output.get("contributes_to_consensus") is True
+            ),
+        }
 
     # -------------------------------------------------------------------------
     # 3. CONSENSUS SYNTHESIS & SCORING
@@ -290,8 +442,16 @@ class XAUUSDSignalEngine:
         Synthesizes individual agent outputs into an institutional consensus decision.
         Returns: {decision: BUY|SELL|WAIT|NO TRADE, score, entry, sl, tp1, tp2, tp3, ...}
         """
-        # 1. Coverage Check
-        total_eligible = len(agent_outputs)
+        # 1. Quality and coverage checks. Quality/specialist reports are recorded
+        # alongside votes but never inflate the directional quorum denominator.
+        eligible_voters = [
+            adapter.metadata.agent_id
+            for adapter in self.discover_eligible_agents()
+            if adapter.metadata.agent_id in SIGNAL_VOTER_IDS
+        ]
+        if not eligible_voters:
+            eligible_voters = [agent_id for agent_id in agent_outputs if agent_id in SIGNAL_VOTER_IDS]
+        total_eligible = len(eligible_voters)
         if total_eligible == 0:
             return {
                 "decision": "NO TRADE",
@@ -299,9 +459,28 @@ class XAUUSDSignalEngine:
                 "rejection_reason": "No eligible agents available for XAUUSD analysis."
             }
 
+        data_quality = agent_outputs.get("data_quality_agent")
+        if data_quality is not None and (
+            data_quality.get("status") != "SUCCESS"
+            or str(data_quality.get("feed_status", "")).upper() != "HEALTHY"
+            or not data_quality.get("is_fresh", False)
+        ):
+            return {
+                "decision": "NO TRADE",
+                "score": 0,
+                "rejection_reason": "Market data quality agent did not confirm a fresh, healthy feed.",
+                "agent_opinions": agent_outputs,
+                "eligible_count": total_eligible,
+                "participating_count": 0,
+            }
+
         successful_agents = []
         for agent_id, output in agent_outputs.items():
+            if agent_id not in SIGNAL_VOTER_IDS:
+                continue
             if not isinstance(output, dict) or output.get("status") != "SUCCESS":
+                continue
+            if output.get("contributes_to_consensus", True) is not True:
                 continue
             try:
                 confidence = float(output.get("confidence"))
@@ -315,7 +494,10 @@ class XAUUSDSignalEngine:
             return {
                 "decision": "NO TRADE",
                 "score": 0,
-                "rejection_reason": f"Insufficient agent coverage ({len(successful_agents)}/{total_eligible} = {coverage:.0%}, required >= {self.min_agent_coverage_ratio:.0%})"
+                "rejection_reason": f"Insufficient agent coverage ({len(successful_agents)}/{total_eligible} = {coverage:.0%}, required >= {self.min_agent_coverage_ratio:.0%})",
+                "agent_opinions": agent_outputs,
+                "eligible_count": total_eligible,
+                "participating_count": len(successful_agents),
             }
 
         # 2. Count Directional Bias
@@ -439,10 +621,23 @@ class XAUUSDSignalEngine:
             spread_price=spread_price,
             candidate_levels={"stop_loss": sl, "take_profit_1": tp1, "take_profit_2": tp2}
         )
-        if not isinstance(risk_res, dict):
+        try:
+            risk_report = self._coerce_agent_output(risk_res)
+        except TypeError as exc:
+            risk_report = {"decision": "REJECT", "reasons": [str(exc)]}
+        risk_fallback = bool(risk_report.get("_fallback_applied"))
+        agent_outputs["risk_validator"] = {
+            **risk_report,
+            "agent_id": "risk_validator",
+            "status": "FALLBACK" if risk_fallback else "SUCCESS",
+            "contributes_to_consensus": False,
+        }
+        if risk_fallback:
+            reasons = risk_report.get("reasons") or [risk_report.get("_fallback_reason", "Risk validator fallback engaged.")]
+        elif not isinstance(risk_report, dict):
             reasons = ["Risk validator returned an invalid result."]
-        elif risk_res.get("decision") != "APPROVE":
-            reasons = risk_res.get("reasons") or risk_res.get("evidence") or [risk_res.get("decision", "Risk validation unavailable")]
+        elif risk_report.get("decision") != "APPROVE":
+            reasons = risk_report.get("reasons") or risk_report.get("evidence") or [risk_report.get("decision", "Risk validation unavailable")]
         else:
             reasons = []
         if reasons:
@@ -463,6 +658,91 @@ class XAUUSDSignalEngine:
                 "rejection_reason": f"Measured directional support {score}/100 is below the configured minimum {self.min_score}/100.",
                 "evidence": all_evidence
             }
+
+        # Candidate-dependent reviews run only after a directional plan and the
+        # independent risk arbiter both approve. Portfolio and execution checks
+        # are hard gates; counter-analysis remains a recorded advisory.
+        counter_adapter = agent_registry.get_adapter("counter_analysis_agent")
+        portfolio_adapter = agent_registry.get_adapter("portfolio_analysis_agent")
+        execution_adapter = agent_registry.get_adapter("execution_simulation_agent")
+        if not counter_adapter or not portfolio_adapter or not execution_adapter:
+            return {
+                "decision": "NO TRADE",
+                "score": 0,
+                "rejection_reason": "A candidate review agent is unavailable; portfolio and execution review cannot be completed.",
+                "agent_opinions": agent_outputs,
+                "eligible_count": total_eligible,
+                "participating_count": len(successful_agents),
+            }
+
+        symbol_config = get_symbol_config(symbol)
+        lot_size = float(symbol_config.get("lot_size") or 100)
+        commission_per_unit = COMMISSION_PER_LOT / lot_size if lot_size > 0 else 0.0
+        candidate_reviews = (
+            (
+                "counter_analysis_agent",
+                counter_adapter,
+                {
+                    "symbol": symbol,
+                    "proposed_direction": proposed_direction,
+                    "entry_price": entry,
+                    "stop_loss": sl,
+                    "take_profit_1": tp1,
+                    "technical_report": agent_outputs["technical_analyst"],
+                    "smc_report": agent_outputs["ict_smc_analyst"],
+                    "macro_report": agent_outputs["macro_analyst"],
+                },
+            ),
+            ("portfolio_analysis_agent", portfolio_adapter, {"proposed_symbol": symbol, "proposed_risk_pct": 0.5}),
+            (
+                "execution_simulation_agent",
+                execution_adapter,
+                {
+                    "symbol": symbol,
+                    "direction": proposed_direction,
+                    "entry_price": entry,
+                    "stop_loss": sl,
+                    "take_profit_1": tp1,
+                    "current_spread_points": spread_price if spread_price is not None else 0.25,
+                    "volatility_state": agent_outputs.get("regime_detection_agent", {}).get("volatility_state", "NORMAL_LIQUIDITY"),
+                    "commission_per_unit": commission_per_unit,
+                },
+            ),
+        )
+        for specialist_id, adapter, kwargs in candidate_reviews:
+            try:
+                review = self._coerce_agent_output(adapter.execute(**kwargs))
+            except Exception as exc:
+                review = {"_fallback_applied": True, "_fallback_reason": str(exc), "evidence": [str(exc)]}
+            fallback_used = bool(review.get("_fallback_applied"))
+            agent_outputs[specialist_id] = {
+                **review,
+                "agent_id": specialist_id,
+                "status": "FALLBACK" if fallback_used else "SUCCESS",
+                "contributes_to_consensus": False,
+            }
+            if specialist_id == "portfolio_analysis_agent" and (
+                fallback_used or review.get("is_approved") is not True
+            ):
+                return {
+                    "decision": "NO TRADE",
+                    "score": 0,
+                    "rejection_reason": "Portfolio exposure review did not approve the proposed allocation.",
+                    "agent_opinions": agent_outputs,
+                    "eligible_count": total_eligible,
+                    "participating_count": len(successful_agents),
+                }
+            if specialist_id == "execution_simulation_agent" and (
+                fallback_used or review.get("is_execution_viable") is not True
+            ):
+                return {
+                    "decision": "NO TRADE",
+                    "score": 0,
+                    "rejection_reason": "Execution cost simulation rejected the setup after spread and slippage.",
+                    "agent_opinions": agent_outputs,
+                    "eligible_count": total_eligible,
+                    "participating_count": len(successful_agents),
+                }
 
         return {
             "decision": proposed_direction,
@@ -501,7 +781,7 @@ class XAUUSDSignalEngine:
     def _generate_xauusd_signal_locked(self, raw_symbol: str = "XAUUSD") -> Dict[str, Any]:
         """
         Main pipeline entry point.
-        Enforces strict XAUUSD-only validation, runs all eligible agents, checks quota,
+        Enforces strict XAUUSD-only validation, runs eligible agents by role, checks quota,
         validates levels, and persists approved signal to database.
         """
         # Step 1: Strict XAUUSD-Only Enforcement
@@ -638,8 +918,14 @@ class XAUUSDSignalEngine:
                 "quota_status": quota_status
             }
 
-        # Step 5: Execute All Eligible Registered AI Agents
-        agent_outputs = self.execute_all_agents(canonical_symbol, multi_tf_data, verified_price)
+        # Step 5: Execute each eligible agent in its intended stage on one snapshot.
+        agent_outputs = self.execute_all_agents(
+            canonical_symbol,
+            multi_tf_data,
+            verified_price,
+            price_timestamp=price_ts,
+            price_source=price_source,
+        )
 
         # Step 6: Consensus Synthesis
         consensus = self.synthesize_consensus(
@@ -658,6 +944,7 @@ class XAUUSDSignalEngine:
                 "decision": decision,
                 "rejection_reason": consensus.get("rejection_reason", "Market conditions unsuitable for trade entry."),
                 "canonical_symbol": canonical_symbol,
+                "agent_run_summary": self._summarize_agent_outputs(consensus.get("agent_opinions", agent_outputs)),
                 "status": f"REJECTED_{decision}"
             }
 
@@ -801,6 +1088,7 @@ class XAUUSDSignalEngine:
                 "strategy_version": DEFAULT_STRATEGY_VERSION,
                 "consensus_summary": summary_text,
                 "supporting_evidence": consensus["supporting_evidence"],
+                "agent_run_summary": self._summarize_agent_outputs(consensus.get("agent_opinions", agent_outputs)),
                 "cambodia_date": cambodia_date,
                 "idempotency_key": idempotency_key,
                 "expires_at": signal_model.expires_at.isoformat() if signal_model.expires_at else None,
