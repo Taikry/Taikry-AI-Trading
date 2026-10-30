@@ -246,17 +246,28 @@ def apply_verified_payment(
         if previous and previous.invoice_id != invoice.id:
             mismatches.append("duplicate_transaction")
 
+    if mismatches:
+        _record_transaction(db, invoice, verified, "MISMATCH", verified.payment_status.upper())
+        invoice.status = "REVIEW"
+        db.flush()
+        return {"status": "REVIEW", "activated": False, "reason": ",".join(mismatches)}
+
+    # Status queries can run before the payer finishes the hosted checkout.
+    # A pending result must leave the invoice payable and must not revoke or
+    # activate an entitlement. Reusing the provider transaction ID updates the
+    # same ledger row when a later check becomes approved or declined.
+    terminal_failures = {"DECLINED", "FAILED", "CANCELLED", "CANCELED", "EXPIRED"}
+    if not approved and verified.payment_status.upper() not in terminal_failures:
+        _record_transaction(db, invoice, verified, "PENDING", "PENDING")
+        invoice.status = "PENDING"
+        db.flush()
+        return {"status": "PENDING", "activated": False, "idempotent": False}
+
     if not approved:
         _record_transaction(db, invoice, verified, "VERIFIED_NOT_APPROVED", verified.payment_status.upper())
         invoice.status = "FAILED"
         db.flush()
         return {"status": "FAILED", "activated": False, "idempotent": False}
-
-    if mismatches:
-        _record_transaction(db, invoice, verified, "MISMATCH", "APPROVED")
-        invoice.status = "REVIEW"
-        db.flush()
-        return {"status": "REVIEW", "activated": False, "reason": ",".join(mismatches)}
 
     expires = normalize_utc(invoice.expires_at)
     if expires and now >= expires:

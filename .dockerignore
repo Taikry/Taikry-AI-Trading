@@ -1,0 +1,15 @@
+.git/
+.env
+*.env
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+update_debate_and_cache.py

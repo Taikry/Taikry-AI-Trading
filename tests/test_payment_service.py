@@ -131,6 +131,46 @@ def test_verified_payment_activates_subscription_exactly_once(payment_db):
     assert db.query(PaymentTransaction).count() == 1
 
 
+def test_pending_provider_status_keeps_invoice_payable(payment_db):
+    db, user, _plan = payment_db
+    now = datetime.datetime(2026, 10, 30, tzinfo=datetime.timezone.utc)
+    invoice, _created = create_invoice(db, user, "pro", now=now)
+
+    pending = verified(
+        invoice,
+        payment_status="PENDING",
+        payment_status_code=2,
+        provider_reference=None,
+    )
+    result = apply_verified_payment(
+        db,
+        invoice.id,
+        pending,
+        expected_merchant_id="sandbox-merchant",
+        now=now + datetime.timedelta(minutes=1),
+    )
+    db.commit()
+
+    assert result["status"] == "PENDING"
+    assert result["activated"] is False
+    assert invoice.status == "PENDING"
+    assert db.query(UserSubscription).filter_by(user_id=user.id).first() is None
+    assert db.query(PaymentTransaction).one().status == "PENDING"
+
+    second_result = apply_verified_payment(
+        db,
+        invoice.id,
+        verified(invoice),
+        expected_merchant_id="sandbox-merchant",
+        now=now + datetime.timedelta(minutes=2),
+    )
+    assert second_result["status"] == "PAID"
+    assert second_result["activated"] is True
+    assert invoice.status == "PAID"
+    assert db.query(PaymentTransaction).count() == 1
+    assert db.query(PaymentTransaction).one().status == "APPROVED"
+
+
 @pytest.mark.parametrize(
     "overrides",
     [

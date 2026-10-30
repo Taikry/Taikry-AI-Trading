@@ -24,6 +24,7 @@ from app.payments.service import (
     apply_verified_payment,
     cancel_auto_renewal,
     create_invoice,
+    callback_event_reference,
     record_webhook_event,
     utc_now,
 )
@@ -31,6 +32,7 @@ from taikry.api.saas_routes import get_current_admin, get_current_user
 from taikry.database.models import (
     PaymentInvoice,
     PaymentTransaction,
+    PaymentWebhookEvent,
     SubscriptionPlan,
     User,
     UserSubscription,
@@ -290,6 +292,19 @@ def _process_payment_callback(
         )
     except Exception:
         db.rollback()
+        # Persist the successful signature check even when the downstream status
+        # query is temporarily unavailable. In particular, do not leave a valid
+        # retry marked as INVALID_SIGNATURE after rolling back its state change.
+        if valid_signature:
+            pending_event = db.query(PaymentWebhookEvent).filter(
+                PaymentWebhookEvent.provider == "aba_payway",
+                PaymentWebhookEvent.event_reference == callback_event_reference(raw_body),
+            ).first()
+            if pending_event:
+                pending_event.processing_status = "PENDING_SERVER_VERIFICATION"
+                pending_event.error_message = "Provider status verification is temporarily unavailable"
+                pending_event.processed_at = None
+                db.commit()
         logger.exception("PayWay callback was stored but could not be verified")
         return JSONResponse(
             {"received": True, "status": "pending_server_verification"},

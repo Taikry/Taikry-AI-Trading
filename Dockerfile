@@ -16,6 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=app:app . .
 
+# SQLite uses a file in the working directory by default. COPY changes the
+# ownership of copied files, but not necessarily the /app directory created by
+# WORKDIR, so the unprivileged runtime user must own that directory too.
+RUN chown app:app /app
+
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 

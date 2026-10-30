@@ -6,7 +6,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.payments import routes
-from app.payments.providers.aba_payway import ABAPayWayAdapter, PayWaySettings
+from app.payments.providers.aba_payway import (
+    ABAPayWayAdapter,
+    PayWayAPIError,
+    PayWaySettings,
+)
 from app.payments.routes import CheckoutRequest
 from app.payments.service import create_invoice
 from taikry.database.models import (
@@ -80,15 +84,16 @@ def test_owner_cannot_read_another_users_invoice(payment_db):
     assert exc.value.status_code == 404
 
 
-def test_checkout_stays_disabled_without_confirmed_provider_signing(payment_db, monkeypatch):
+def test_checkout_returns_signed_sandbox_form(payment_db, monkeypatch):
     db, user, _plan = payment_db
     monkeypatch.setattr(routes, "_adapter", _adapter)
 
-    with pytest.raises(HTTPException) as exc:
-        routes.create_checkout(CheckoutRequest(plan_id="pro"), user=user, db=db)
+    response = routes.create_checkout(CheckoutRequest(plan_id="pro"), user=user, db=db)
 
-    assert exc.value.status_code == 503
-    assert db.query(PaymentInvoice).count() == 0
+    assert response["success"] is True
+    assert response["checkout"]["encoding"] == "multipart/form-data"
+    assert response["checkout"]["fields"]["hash"]
+    assert db.query(PaymentInvoice).count() == 1
 
 
 def test_unsigned_callback_is_audited_and_valid_retry_is_not_poisoned(payment_db, monkeypatch):
@@ -106,6 +111,10 @@ def test_unsigned_callback_is_audited_and_valid_retry_is_not_poisoned(payment_db
     assert db.query(PaymentWebhookEvent).one().processing_status == "INVALID_SIGNATURE"
 
     signature = adapter.callback_signature(payload, adapter.settings.api_key)
+    def unavailable(_invoice):
+        raise PayWayAPIError("temporary test outage")
+
+    monkeypatch.setattr(adapter, "verify_transaction_status", unavailable)
     response = routes._process_payment_callback(db, payload, raw_body, signature)
     assert response.status_code == 202
     assert db.query(PaymentWebhookEvent).one().processing_status == "PENDING_SERVER_VERIFICATION"
