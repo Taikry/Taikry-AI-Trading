@@ -1300,8 +1300,9 @@
       <div class="overlay-card">
         <div class="overlay-header">
           <div>
-            <div class="overlay-title">📅 <span id="t-macro-title">High-Impact Forex Factory & News</span></div>
-            <div class="overlay-subtitle" id="t-macro-sub">FOMC, PPI, CPI, NFP Real-Time Calendar & Blackout HUD</div>
+            <div class="overlay-title">📅 <span id="t-macro-title">High-Impact Economic Calendar & News</span></div>
+            <div class="overlay-subtitle" id="t-macro-sub">FOMC, PPI, CPI, NFP · Live Countdown & News Blackout</div>
+            <div id="calendar-source-status" class="overlay-subtitle" aria-live="polite">Connecting to economic calendar…</div>
           </div>
           <div class="overlay-header-actions">
             <button class="btn btn-outline" onclick="fetchMacroEvents(true)">🔄 Refresh</button>
@@ -1317,7 +1318,7 @@
 
         <!-- High Impact Events List -->
         <div id="calendar-events-container" class="calendar-list">
-          <div class="calendar-loading-state">Loading Forex Factory High-Impact Events...</div>
+          <div class="calendar-loading-state">Loading high-impact economic events...</div>
         </div>
 
         <!-- Live Breaking Financial Headlines -->

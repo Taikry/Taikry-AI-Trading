@@ -825,9 +825,11 @@ def get_high_impact_calendar(force_refresh: bool = False):
     events = economic_calendar_provider.get_upcoming_high_impact_events(force_refresh=force_refresh)
     blackout = economic_calendar_provider.check_news_blackout("XAUUSD")
     next_catalyst = economic_calendar_provider.get_next_xauusd_catalyst()
+    calendar_feed = economic_calendar_provider.get_calendar_status()
     return {
         "status": "DEGRADED" if blackout.get("status") == "UNAVAILABLE" else "SUCCESS",
         "total_events": len(events),
+        "calendar_feed": calendar_feed,
         "blackout_status": blackout,
         "next_xauusd_catalyst": next_catalyst,
         "events": events,

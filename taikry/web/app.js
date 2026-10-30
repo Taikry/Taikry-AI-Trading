@@ -111,8 +111,8 @@ const I18N = {
     tagline: "Read the Market. Own Your Edge.",
     scan_btn: "Scan Market Now",
     watchlist_title: "Market Watchlist",
-    macro_title: "High-Impact Forex Factory & News",
-    macro_sub: "FOMC, PPI, CPI, NFP Real-Time Calendar & Blackout HUD",
+    macro_title: "High-Impact Economic Calendar & News",
+    macro_sub: "FOMC, PPI, CPI, NFP · Live Countdown & News Blackout",
     live_news_label: "Live Macro News Headlines",
     hud_title: "ICT / SMC Institutional Structure HUD",
     smart_analysis_title: "Smart Multi-Agent Cause Analysis (វិភាគមូលហេតុ)",
@@ -161,8 +161,8 @@ const I18N = {
     tagline: "អានដំណើរទីផ្សារ · ក្តាប់ឱកាសចំណេញរបស់អ្នក",
     scan_btn: "វិភាគទីផ្សារឥឡូវនេះ",
     watchlist_title: "បញ្ជីតាមដានទីផ្សារ",
-    macro_title: "ព័ត៌មានម៉ាក្រូឥទ្ធិពលខ្លាំង Forex Factory",
-    macro_sub: "ប្រតិទិនពេលវេលាជាក់ស្តែង FOMC, PPI, CPI, NFP & បំរាមជួញដូរ",
+    macro_title: "ប្រតិទិនសេដ្ឋកិច្ច និងព័ត៌មានឥទ្ធិពលខ្លាំង",
+    macro_sub: "FOMC, PPI, CPI, NFP · រាប់ថយក្រោយ និងបំរាមជួញដូរព័ត៌មាន",
     live_news_label: "ព័ត៌មានទាន់ហេតុការណ៍ម៉ាក្រូសកល",
     hud_title: "ផ្ទាំងបញ្ជាត្រួតពិនិត្យរចនាសម្ព័ន្ធស្ថាប័ន ICT / SMC",
     smart_analysis_title: "ការវិភាគមូលហេតុឆ្លាតវៃពីគ្រប់ AI Agents",
@@ -1109,10 +1109,20 @@ async function fetchHealthAndPaper() {
 }
 
 function updateMacroCatalystUI(catalyst) {
-  if (!catalyst) return;
-  currentXauusdCatalyst = catalyst;
   const badgeEl = document.getElementById("macro-catalyst-badge");
   const textEl = document.getElementById("macro-catalyst-text");
+  if (!catalyst) {
+    currentXauusdCatalyst = null;
+    if (textEl) textEl.innerText = isKhmer ? "មិនមានព្រឹត្តិការណ៍សេដ្ឋកិច្ចជិតមកដល់" : "No upcoming high-impact event";
+    if (badgeEl) {
+      badgeEl.classList.remove("pill-blackout-active");
+      badgeEl.title = isKhmer ? "មិនមានព្រឹត្តិការណ៍ដែលបានផ្ទៀងផ្ទាត់" : "No verified upcoming high-impact event";
+      const iconEl = badgeEl.querySelector(".macro-fire-icon");
+      if (iconEl) iconEl.innerText = "📅";
+    }
+    return;
+  }
+  currentXauusdCatalyst = catalyst;
   if (!badgeEl || !textEl) return;
 
   const rawBadge = isKhmer ? (catalyst.badge_kh || catalyst.badge_en) : (catalyst.badge_en || catalyst.badge_kh);
@@ -1146,7 +1156,7 @@ function updateMacroCatalystUI(catalyst) {
     `📊 Forecast: ${catalyst.forecast || 'N/A'} | Previous: ${catalyst.previous || 'N/A'}\n` +
     `🥇 Gold Volatility: ${catalyst.volatility_risk || 'EXTREME'}\n` +
     `💡 ${goldImpact || ''}\n` +
-    `[Click to open Full Forex Factory Macro Calendar]`;
+    `[Click to open Full Economic Calendar]`;
 }
 
 function startMacroCountdownTimer() {
@@ -1268,13 +1278,26 @@ async function fetchMacroEvents(forceRefresh = false) {
   try {
     const url = `${API_BASE}/api/v1/calendar/high-impact${forceRefresh ? '?force_refresh=true' : ''}`;
     const r = await fetch(url);
+    if (!r.ok) throw new Error(`Calendar API returned HTTP ${r.status}`);
     const data = await r.json();
+    const feedStatus = document.getElementById("calendar-source-status");
+    if (feedStatus) {
+      const feed = data.calendar_feed || {};
+      const sourceName = feed.source || (isKhmer ? "មិនស្គាល់ប្រភព" : "unknown source");
+      const updated = feed.updated_at_utc ? new Date(feed.updated_at_utc).toLocaleTimeString(isKhmer ? "km-KH" : "en-GB", { timeZone: "UTC", hour12: false }) + " UTC" : "";
+      feedStatus.innerText = feed.available
+        ? (isKhmer ? `ប្រភព៖ ${sourceName} · បានពិនិត្យ ${updated}` : `Feed: ${sourceName} · checked ${updated}`)
+        : (isKhmer ? "ប្រតិទិនមិនអាចភ្ជាប់បាន · កំពុងប្រើទិន្នន័យចាស់ ប្រសិនបើមាន" : "Calendar feed unavailable · showing cached data if available");
+      feedStatus.style.color = feed.available ? "var(--text-muted, #94a3b8)" : "var(--danger, #fb7185)";
+    }
 
     // 0. Update Real-Time Macro Catalyst Badge on Chart HUD & Cockpit News
     if (data.next_xauusd_catalyst) {
       currentXauusdCatalyst = data.next_xauusd_catalyst;
       updateMacroCatalystUI(currentXauusdCatalyst);
       startMacroCountdownTimer();
+    } else if (data.calendar_feed?.available) {
+      updateMacroCatalystUI(null);
     }
     cachedMacroEvents = data.events || [];
     renderCockpitNewsQuickList(currentXauusdCatalyst, cachedMacroEvents);
@@ -1301,7 +1324,11 @@ async function fetchMacroEvents(forceRefresh = false) {
     const events = data.events || [];
     if (container) {
       if (events.length === 0) {
-        container.innerHTML = `<div class="text-center text-muted" style="padding: 12px; font-size: 11px;">No verified calendar events were returned.</div>`;
+        const feedUnavailable = data.calendar_feed && !data.calendar_feed.available;
+        const emptyMessage = feedUnavailable
+          ? (isKhmer ? "មិនអាចផ្ទៀងផ្ទាត់ហានិភ័យព័ត៌មានបានទេ ព្រោះប្រតិទិនមិនអាចភ្ជាប់បាន។" : "Calendar unavailable; upcoming event risk could not be verified.")
+          : (isKhmer ? "មិនមានព្រឹត្តិការណ៍ឥទ្ធិពលខ្លាំងនៅក្នុងបញ្ជីប្រតិទិនបច្ចុប្បន្នទេ។" : "No upcoming high-impact events in the current calendar window.");
+        container.innerHTML = `<div class="text-center text-muted" style="padding: 12px; font-size: 11px;">${escapeHtml(emptyMessage)}</div>`;
       } else {
         container.innerHTML = "";
         events.slice(0, 6).forEach(ev => {

@@ -4,6 +4,7 @@ Fetches verified high-impact economic calendar events (FOMC, PPI, CPI, NFP, GDP,
 and breaking financial news with real-time countdowns, blackout alerts, and Khmer translations.
 """
 import datetime
+import hashlib
 import logging
 import re
 import time
@@ -19,6 +20,9 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "application/json, application/xml, text/xml, */*"
 }
+
+CALENDAR_CURRENCIES = ("USD", "EUR", "GBP", "JPY", "AUD", "NZD", "CAD", "CHF", "CNY")
+CALENDAR_FETCH_TIMEOUT = (3, 8)
 
 # Khmer Translation & Macro Mapping Matrix for High-Impact Events
 MACRO_KHMER_CATALOG = {
@@ -90,7 +94,10 @@ class EconomicCalendarProvider:
         self._cached_events: List[Dict[str, Any]] = []
         self._last_event_fetch_ts: float = 0.0
         self._calendar_available = False
-        self._event_cache_ttl_seconds: int = 1800  # 30 minutes cache to avoid rate limits
+        self._event_cache_ttl_seconds: int = 600  # Refresh the schedule every 10 minutes; countdowns remain live per request.
+        self._calendar_source: Optional[str] = None
+        self._calendar_updated_at_utc: Optional[str] = None
+        self._calendar_last_error: Optional[str] = None
         self._cached_news: List[Dict[str, Any]] = []
         self._last_news_fetch_ts: float = 0.0
         self._news_cache_ttl_seconds: int = 120    # 2 minutes cache for live headlines
@@ -148,52 +155,130 @@ class EconomicCalendarProvider:
             # Recalculate countdowns dynamically
             return self._enrich_countdowns(self._cached_events, now_dt)
 
+        providers = (
+            ("ShowMyTrades", self._fetch_showmytrades_calendar),
+            ("FairEconomy", self._fetch_faireconomy_calendar),
+        )
         fetched_events: List[Dict[str, Any]] = []
-        self._calendar_available = False
+        successful_source: Optional[str] = None
+        last_error: Optional[str] = None
 
-        # 1. Attempt Forex Factory / FairEconomy public feed
-        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-        try:
-            r = requests.get(url, headers=HEADERS, timeout=4)
-            if r.status_code == 200:
-                raw = r.json()
-                self._calendar_available = isinstance(raw, list)
-                for item in raw:
-                    impact = str(item.get("impact", "")).lower()
-                    country = str(item.get("country", "")).upper()
-                    if impact == "high" and country in ["USD", "EUR", "GBP", "JPY"]:
-                        title = item.get("title", "")
-                        meta = self._match_khmer_meta(title)
-                        date_str = item.get("date", "")
-                        fetched_events.append({
-                            "id": f"ff_{abs(hash(title + date_str)) % 100000}",
-                            "title": title,
-                            "title_kh": meta["title_kh"],
-                            "country": country,
-                            "impact": "HIGH",
-                            "scheduled_utc": date_str,
-                            "scheduled_display": date_str,
-                            "forecast": item.get("forecast") or "N/A",
-                            "previous": item.get("previous") or "N/A",
-                            "actual": item.get("actual") or "PENDING",
-                            "volatility_risk": "EXTREME",
-                            "gold_impact_en": meta["gold_impact_en"],
-                            "gold_impact_kh": meta["gold_impact_kh"],
-                            "forex_impact_en": meta["forex_impact_en"],
-                            "forex_impact_kh": meta["forex_impact_kh"],
-                            "category": self._extract_event_category(title)
-                        })
-        except Exception as e:
-            logger.debug(f"FairEconomy feed skipped: {e}")
+        for source_name, fetch_provider in providers:
+            try:
+                fetched_events = fetch_provider()
+                successful_source = source_name
+                break
+            except Exception as exc:
+                # Keep diagnostics useful without logging response bodies or user credentials.
+                last_error = f"{source_name}: {type(exc).__name__}"
+                logger.warning("Economic calendar provider %s failed (%s).", source_name, type(exc).__name__)
 
-        # Do not fabricate a schedule when the public calendar is unavailable.
-        if not fetched_events:
-            logger.warning("Economic calendar feed returned no events; calendar status is unavailable.")
-
-        self._cached_events = fetched_events
         self._last_event_fetch_ts = now_ts
+        if successful_source:
+            self._cached_events = fetched_events
+            self._calendar_available = True
+            self._calendar_source = successful_source
+            self._calendar_updated_at_utc = datetime.datetime.fromtimestamp(
+                now_ts, datetime.timezone.utc
+            ).isoformat()
+            self._calendar_last_error = None
+        else:
+            self._calendar_available = False
+            self._calendar_last_error = last_error or "No calendar provider returned usable data."
+            logger.warning("Economic calendar is unavailable from all configured providers.")
 
         return self._enrich_countdowns(self._cached_events, now_dt)
+
+    def _normalise_calendar_event(self, item: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]:
+        """Convert supported provider fields into the calendar's stable internal shape."""
+        if not isinstance(item, dict):
+            return None
+        impact = str(item.get("impact", "")).strip().lower()
+        country = str(item.get("country") or item.get("currency") or "").strip().upper()
+        title = str(item.get("title") or item.get("name") or "").strip()
+        scheduled = (
+            item.get("time")
+            or item.get("scheduled_utc")
+            or item.get("release_at_utc")
+            or item.get("date")
+            or ""
+        )
+        if impact != "high" or country not in CALENDAR_CURRENCIES or not title or not scheduled:
+            return None
+
+        scheduled = str(scheduled).strip()
+        stable_id = str(item.get("id") or "").strip()
+        if not stable_id:
+            digest = hashlib.sha256(f"{country}|{title}|{scheduled}".encode("utf-8")).hexdigest()[:16]
+            stable_id = f"{source.lower()}_{digest}"
+        meta = self._match_khmer_meta(title)
+        return {
+            "id": stable_id,
+            "title": title,
+            "title_kh": meta["title_kh"],
+            "country": country,
+            "impact": "HIGH",
+            "scheduled_utc": scheduled,
+            "scheduled_display": scheduled,
+            "forecast": item.get("forecast") or item.get("consensus") or "N/A",
+            "previous": item.get("previous") or item.get("prior") or "N/A",
+            "actual": item.get("actual") or "PENDING",
+            "status": item.get("status"),
+            "confidence": item.get("confidence"),
+            "source": source,
+            "volatility_risk": "EXTREME",
+            "gold_impact_en": meta["gold_impact_en"],
+            "gold_impact_kh": meta["gold_impact_kh"],
+            "forex_impact_en": meta["forex_impact_en"],
+            "forex_impact_kh": meta["forex_impact_kh"],
+            "category": self._extract_event_category(title),
+        }
+
+    def _fetch_showmytrades_calendar(self) -> List[Dict[str, Any]]:
+        """Use the documented no-key calendar endpoint intended for trading bots."""
+        url = "https://showmytrades.com/api/public/calendar/v1"
+        response = requests.get(
+            url,
+            params={
+                "currency": ",".join(CALENDAR_CURRENCIES),
+                "impact": "high",
+                "days": 14,
+            },
+            headers=HEADERS,
+            timeout=CALENDAR_FETCH_TIMEOUT,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict) or not isinstance(payload.get("events"), list):
+            raise ValueError("Calendar response did not contain an events list.")
+        events = [
+            event for item in payload["events"]
+            if (event := self._normalise_calendar_event(item, "ShowMyTrades")) is not None
+        ]
+        return events
+
+    def _fetch_faireconomy_calendar(self) -> List[Dict[str, Any]]:
+        """Fallback to the existing Forex Factory/FairEconomy public weekly export."""
+        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        response = requests.get(url, headers=HEADERS, timeout=CALENDAR_FETCH_TIMEOUT)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise ValueError("Calendar response was not a list.")
+        return [
+            event for item in payload
+            if (event := self._normalise_calendar_event(item, "FairEconomy")) is not None
+        ]
+
+    def get_calendar_status(self) -> Dict[str, Any]:
+        """Return non-sensitive feed diagnostics for the status panel/API."""
+        return {
+            "available": self._calendar_available,
+            "source": self._calendar_source,
+            "updated_at_utc": self._calendar_updated_at_utc,
+            "error": self._calendar_last_error,
+            "refresh_interval_seconds": self._event_cache_ttl_seconds,
+        }
 
     def _enrich_countdowns(self, events: List[Dict[str, Any]], now_dt: datetime.datetime) -> List[Dict[str, Any]]:
         """Calculates real-time countdown, minutes remaining, and news blackout status."""
@@ -208,11 +293,19 @@ class EconomicCalendarProvider:
                     sched_dt = datetime.datetime.fromisoformat(cleaned_str)
                 else:
                     sched_dt = datetime.datetime.strptime(cleaned_str[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+                if sched_dt.tzinfo is None:
+                    sched_dt = sched_dt.replace(tzinfo=datetime.timezone.utc)
+                else:
+                    sched_dt = sched_dt.astimezone(datetime.timezone.utc)
             except Exception:
                 logger.warning("Skipping economic calendar event with invalid timestamp: %r", sched_str)
                 continue
 
             diff_sec = int((sched_dt - now_dt).total_seconds())
+            # Keep the active 30-minute post-release window for blackout checks, but
+            # do not show last week's releases as upcoming calendar items.
+            if diff_sec < -1800:
+                continue
             diff_min = int(diff_sec / 60)
             diff_hrs = round(diff_min / 60, 1)
 
