@@ -323,7 +323,7 @@ def get_verified_model_catalog(force_refresh: bool = False):
 
 # 2b. GET /api/v1/best-setup
 @router.get("/api/v1/best-setup")
-def get_best_market_setup(category: str = "ALL"):
+def get_best_market_setup(category: str = "ALL", trade_style: str = "INTRADAY", refresh: bool = False):
     """
     Returns a ranked analysis for every symbol in the selected market universe.
     Fresh monitor results are reused; missing or old results are refreshed locally.
@@ -334,6 +334,9 @@ def get_best_market_setup(category: str = "ALL"):
     category_key = str(category or "ALL").strip().upper()
     if category_key not in {"ALL", "CRYPTO", "FOREX"}:
         raise HTTPException(status_code=400, detail="category must be ALL, CRYPTO, or FOREX")
+    trade_style_key = str(trade_style or "INTRADAY").strip().upper()
+    if trade_style_key not in {"INTRADAY", "SWING"}:
+        raise HTTPException(status_code=400, detail="trade_style must be INTRADAY or SWING")
 
     if category_key == "CRYPTO":
         universe = [item for item in WATCHLIST if str(item.get("category", "")).upper() == "CRYPTO"]
@@ -356,6 +359,9 @@ def get_best_market_setup(category: str = "ALL"):
         for cache_key, cache_value in list(_ANALYSIS_CACHE.items()):
             if cache_key.split(":", 1)[0].upper() != symbol:
                 continue
+            cached_is_swing = cache_key.upper().endswith(":SWING")
+            if cached_is_swing != (trade_style_key == "SWING"):
+                continue
             if not isinstance(cache_value, (tuple, list)) or len(cache_value) < 2 or not isinstance(cache_value[1], dict):
                 continue
             try:
@@ -366,7 +372,7 @@ def get_best_market_setup(category: str = "ALL"):
             if age_seconds <= cache_ttl_seconds:
                 cache_matches.append((cached_at, cache_value[1], age_seconds))
 
-        if cache_matches:
+        if cache_matches and not refresh:
             _, analysis, analysis_age = max(cache_matches, key=lambda row: row[0])
             analysis_source = "CACHE"
         else:
@@ -376,6 +382,7 @@ def get_best_market_setup(category: str = "ALL"):
                     symbol,
                     preferred_llm="quant",
                     force_refresh=True,
+                    trade_style=trade_style_key,
                 )
                 analysis_age = 0.0
                 analysis_source = "LIVE_SCAN"
@@ -436,6 +443,7 @@ def get_best_market_setup(category: str = "ALL"):
 
         setups.append({
             "symbol": symbol,
+            "trade_style": trade_style_key,
             "ai_score": round(score),
             "confidence_score": round(score),
             "market_bias": analysis.get("market_bias", "N/A"),
@@ -443,6 +451,7 @@ def get_best_market_setup(category: str = "ALL"):
             "verified_price": price,
             "price_source": analysis.get("price_source"),
             "risk_reward_ratio": rr_str,
+            "entry_method": analysis.get("entry_method"),
             "entry_price": entry,
             "stop_loss": stop,
             "take_profit_1": target,
@@ -471,6 +480,7 @@ def get_best_market_setup(category: str = "ALL"):
         best = next((item for item in setups if item.get("setup_status") != "UNAVAILABLE"), None)
 
     return {
+        "trade_style": trade_style_key,
         "status": "SUCCESS" if setups else "NO_SETUP",
         "best_setup": best,
         "setups": setups,
@@ -2162,7 +2172,7 @@ def get_xauusd_signal_detail_endpoint(signal_id: str):
 
 
 @router.post("/api/v1/xauusd/signals/generate")
-def generate_xauusd_signal_endpoint(dispatch_telegram: bool = True, _: bool = Depends(require_admin_access)):
+def generate_xauusd_signal_endpoint(dispatch_telegram: bool = True, trade_style: str = "INTRADAY", _: bool = Depends(require_admin_access)):
     """
     Executes a real-time multi-agent scan on XAUUSD, synthesizes consensus,
     enforces atomic daily quota, and optionally dispatches to Telegram if approved.
@@ -2170,7 +2180,7 @@ def generate_xauusd_signal_endpoint(dispatch_telegram: bool = True, _: bool = De
     from taikry.trading.xauusd_signal_engine import xauusd_signal_engine
     from taikry.notifications.telegram_service import telegram_service
 
-    result = xauusd_signal_engine.generate_xauusd_signal("XAUUSD")
+    result = xauusd_signal_engine.generate_xauusd_signal("XAUUSD", trade_style=trade_style)
     if not result.get("success"):
         return {
             "status": "SUPPRESSED",

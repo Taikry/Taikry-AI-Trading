@@ -24,7 +24,7 @@ from taikry.config import (
 )
 from taikry.data.validator import check_data_freshness, is_market_open
 from taikry.data.economic_calendar import economic_calendar_provider
-from taikry.data.mt5_receiver import mt5_receiver
+from taikry.data.providers import market_data_engine
 from taikry.database.session import SessionLocal
 from taikry.database.models import PaperTrade
 
@@ -44,7 +44,9 @@ class RiskValidatorAgent:
         simulated_equity: float = INITIAL_PAPER_BALANCE,
         open_positions_count: Optional[int] = None,
         spread_price: Optional[float] = None,
-        candidate_levels: Optional[Dict[str, Any]] = None
+        candidate_levels: Optional[Dict[str, Any]] = None,
+        bid_price: Optional[float] = None,
+        ask_price: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Runs independent risk assessment.
@@ -66,12 +68,18 @@ class RiskValidatorAgent:
             rejection_reasons.append("Account equity is missing or invalid; position sizing cannot be verified.")
 
         if spread_price is None:
-            _, _, spread_fresh, spread_tick = mt5_receiver.get_latest_price(symbol)
-            if spread_fresh:
+            # Render and other cloud deployments cannot read a desktop MT5
+            # bridge. Use the same verified broker quote path as data quality
+            # (MT5 when available, otherwise authenticated OANDA v20).
+            quote = market_data_engine.get_verified_quote(symbol)
+            if quote:
                 try:
-                    bid = float(spread_tick.get("bid"))
-                    ask = float(spread_tick.get("ask"))
-                    spread_price = ask - bid
+                    bid = float(quote.get("bid"))
+                    ask = float(quote.get("ask"))
+                    if math.isfinite(bid) and math.isfinite(ask) and bid > 0 and ask > bid:
+                        spread_price = ask - bid
+                        bid_price = bid
+                        ask_price = ask
                 except (TypeError, ValueError):
                     spread_price = None
         try:
@@ -171,7 +179,11 @@ class RiskValidatorAgent:
         if not math.isfinite(atr) or atr <= 0:
             atr = 0.0
 
-        entry = verified_price
+        try:
+            bid_price = float(bid_price) if bid_price is not None else None
+            ask_price = float(ask_price) if ask_price is not None else None
+        except (TypeError, ValueError):
+            bid_price = ask_price = None
 
         # Select candidate SL/TP from the agent that actually proposed the direction
         candidate_source = candidate_levels
@@ -199,12 +211,19 @@ class RiskValidatorAgent:
         sl, tp1, tp2 = normalized_levels
 
         # Do not manufacture a trade direction or price levels when all agents are neutral.
+        entry = verified_price
+        dec = 3 if "JPY" in str(symbol).upper() else (2 if verified_price > 10 else 4)
         if proposed_dir not in ("LONG", "SHORT"):
             sl = tp1 = tp2 = None
             risk = reward_tp1 = 0.0
         else:
+            # For a real market-entry plan, account for the executable side of
+            # the spread instead of pricing both directions at the midpoint.
+            if bid_price is not None and ask_price is not None and math.isfinite(bid_price) and math.isfinite(ask_price) and bid_price > 0 and ask_price > bid_price:
+                entry = round(ask_price if proposed_dir == "LONG" else bid_price, dec)
+            else:
+                entry = verified_price
             # Check and refine price geometry
-            dec = 2 if entry > 10 else 4
             levels_valid = True
             if proposed_dir == "SHORT":
                 # For Short: SL must be above Entry and TP1 below Entry

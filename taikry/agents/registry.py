@@ -264,7 +264,7 @@ class AgentRegistry:
             health_status="NOT_RUN",
             version="2.1.0"
         )
-        def fallback_tech(reason: str, symbol: str, multi_tf_data: Dict[str, Any]) -> Dict[str, Any]:
+        def fallback_tech(reason: str, symbol: str, multi_tf_data: Dict[str, Any], setup_timeframe: str = "M15") -> Dict[str, Any]:
             return {
                 "agent_id": "technical_analyst",
                 "agent_name": "Agent 1: Quantitative Technical Analyst",
@@ -294,7 +294,7 @@ class AgentRegistry:
             health_status="NOT_RUN",
             version="2.1.0"
         )
-        def fallback_smc(reason: str, symbol: str, multi_tf_data: Dict[str, Any]) -> Dict[str, Any]:
+        def fallback_smc(reason: str, symbol: str, multi_tf_data: Dict[str, Any], setup_timeframe: str = "M15") -> Dict[str, Any]:
             return {
                 "agent_id": "ict_smc_analyst",
                 "agent_name": "Agent 2: Institutional ICT / SMC Analyst",

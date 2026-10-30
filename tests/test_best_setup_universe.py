@@ -82,3 +82,29 @@ def test_best_setup_refreshes_every_stale_symbol_in_filtered_market(monkeypatch)
     assert result["candidate_count"] == result["scanned_count"] == 2
     assert [item["analysis_source"] for item in result["setups"]] == ["LIVE_SCAN", "LIVE_SCAN"]
 
+
+def test_best_setup_selects_swing_cache_and_exposes_swing_levels(monkeypatch):
+    universe = [{"symbol": "EURUSD", "category": "Forex"}]
+    intraday = _analysis("EURUSD", "APPROVE", 88, "LONG")
+    swing = _analysis("EURUSD", "APPROVE", 91, "SHORT")
+    swing.update({"trade_style": "SWING", "entry_price": 1.08, "stop_loss": 1.09, "take_profit_1": 1.06, "take_profit_2": 1.05})
+    cache = {
+        "EURUSD:quant": (time.time(), intraday),
+        "EURUSD:quant:SWING": (time.time(), swing),
+    }
+    monkeypatch.setattr("taikry.config.WATCHLIST", universe)
+    monkeypatch.setattr(consensus_engine, "_ANALYSIS_CACHE", cache)
+    monkeypatch.setattr(
+        routes.ai_consensus_engine,
+        "analyze_symbol",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("fresh swing result should be reused")),
+    )
+
+    result = routes.get_best_market_setup("FOREX", "SWING")
+
+    assert result["trade_style"] == "SWING"
+    assert result["best_setup"]["trade_style"] == "SWING"
+    assert result["best_setup"]["proposed_direction"] == "SHORT"
+    assert result["best_setup"]["entry_price"] == 1.08
+    assert result["best_setup"]["stop_loss"] == 1.09
+

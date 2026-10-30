@@ -41,14 +41,18 @@ class AIConsensusEngine:
         simulated_equity: float = INITIAL_PAPER_BALANCE,
         open_positions_count: Optional[int] = None,
         preferred_llm: str = "quant",
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        trade_style: str = "INTRADAY"
     ) -> Dict[str, Any]:
         """
         Executes complete multi-agent workflow.
         """
         import time
         t_start = time.time()
-        cache_key = f"{symbol.upper()}:{preferred_llm or 'auto'}"
+        trade_style = str(trade_style or "INTRADAY").strip().upper()
+        if trade_style not in {"INTRADAY", "SWING"}:
+            raise ValueError("trade_style must be INTRADAY or SWING")
+        cache_key = f"{symbol.upper()}:{preferred_llm or 'auto'}" + (":SWING" if trade_style == "SWING" else "")
         now_ts = t_start
         if not force_refresh and cache_key in _ANALYSIS_CACHE:
             c_time, c_data = _ANALYSIS_CACHE[cache_key]
@@ -62,12 +66,13 @@ class AIConsensusEngine:
                 }
                 return ret
         # 1. Fetch & Validate Market Data
-        timeframes = ["D1", "H4", "H1", "M15", "M5"]
+        timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
         multi_tf_data = market_data_engine.get_multi_timeframe_candles(symbol, timeframes)
 
-        primary_df = multi_tf_data.get("M15")
+        setup_timeframe = "H4" if trade_style == "SWING" else "M15"
+        primary_df = multi_tf_data.get(setup_timeframe)
         if primary_df is None or primary_df.empty:
-            primary_df = multi_tf_data.get("M5")
+            primary_df = multi_tf_data.get("M5") if trade_style == "INTRADAY" else None
 
         val = validate_dataframe(primary_df, min_bars=15)
 
@@ -101,8 +106,10 @@ class AIConsensusEngine:
             tf for tf, frame in multi_tf_data.items()
             if frame is None or frame.empty or ("source" in frame.columns and frame["source"].astype(str).str.upper().str.contains("SYNTHETIC|DEMO").any())
         ]
-        freshness = check_data_freshness(symbol, primary_df.iloc[-1].get("timestamp"), "M15")
-        if synthetic_timeframes or not freshness.get("fresh") or any(marker in str(price_source).upper() for marker in ("SYNTHETIC", "DEMO", "UNAVAILABLE")):
+        required_timeframes = ["W1", "D1", "H4", "H1"] if trade_style == "SWING" else ["D1", "H4", "H1", "M15", "M5"]
+        required_synthetic = [tf for tf in required_timeframes if tf in synthetic_timeframes]
+        freshness = check_data_freshness(symbol, primary_df.iloc[-1].get("timestamp"), setup_timeframe)
+        if required_synthetic or not freshness.get("fresh") or any(marker in str(price_source).upper() for marker in ("SYNTHETIC", "DEMO", "UNAVAILABLE")):
             reason = "Synthetic or stale market data is not eligible for actionable analysis."
             return {
                 "symbol": symbol,
@@ -118,7 +125,8 @@ class AIConsensusEngine:
                 "take_profit_1": None,
                 "take_profit_2": None,
                 "error": reason,
-                "data_quality": {"synthetic_timeframes": synthetic_timeframes, "freshness": freshness},
+                "trade_style": trade_style,
+                "data_quality": {"synthetic_timeframes": required_synthetic, "freshness": freshness},
                 "report_english": f"TAIKRY AI MARKET INTELLIGENCE PRO\n\nSymbol: {symbol}\nStatus: NO TRADE ({reason})",
                 "report_khmer": f"TAIKRY AI MARKET INTELLIGENCE PRO\n\nគូរូបិយវត្ថុ: {symbol}\nស្ថានភាព: គ្មានការជួញដូរ (ទិន្នន័យសិប្បនិម្មិត ឬចាស់ មិនអាចប្រើសម្រាប់សញ្ញាជួញដូរបានទេ)"
             }
@@ -156,7 +164,7 @@ class AIConsensusEngine:
             def _run_dq():
                 return dq_ad.execute(
                     symbol=symbol,
-                    timeframe="M15",
+                    timeframe=setup_timeframe,
                     market_snapshot={
                         "multi_tf_data": multi_tf_data,
                         "verified_price": verified_price,
@@ -165,7 +173,7 @@ class AIConsensusEngine:
                     },
                 ) if dq_ad else data_quality_agent.analyze(
                     symbol=symbol,
-                    timeframe="M15",
+                    timeframe=setup_timeframe,
                     market_snapshot={
                         "multi_tf_data": multi_tf_data,
                         "verified_price": verified_price,
@@ -175,9 +183,13 @@ class AIConsensusEngine:
                 )
 
             def _run_a1():
+                if trade_style == "SWING":
+                    return a1_ad.execute(symbol, multi_tf_data, setup_timeframe=setup_timeframe) if a1_ad else technical_analyst_agent.analyze(symbol, multi_tf_data, setup_timeframe=setup_timeframe)
                 return a1_ad.execute(symbol, multi_tf_data) if a1_ad else technical_analyst_agent.analyze(symbol, multi_tf_data)
 
             def _run_a2():
+                if trade_style == "SWING":
+                    return a2_ad.execute(symbol, multi_tf_data, setup_timeframe=setup_timeframe) if a2_ad else ict_smc_analyst_agent.analyze(symbol, multi_tf_data, setup_timeframe=setup_timeframe)
                 return a2_ad.execute(symbol, multi_tf_data) if a2_ad else ict_smc_analyst_agent.analyze(symbol, multi_tf_data)
 
             def _run_a3():
@@ -328,6 +340,7 @@ class AIConsensusEngine:
 
             # 3. Challenge with Agent 4 (Risk Validator) via Adapter
             a4_ad = agent_registry.get_adapter("risk_validator")
+            risk_quote_fields = self._risk_quote_fields(data_quality_out)
             if a4_ad:
                 risk_out = a4_ad.execute(
                     symbol=symbol,
@@ -337,7 +350,8 @@ class AIConsensusEngine:
                     agent2_report=agent2_out,
                     agent3_report=agent3_out,
                     simulated_equity=simulated_equity,
-                    open_positions_count=open_positions_count
+                    open_positions_count=open_positions_count,
+                    **risk_quote_fields
                 )
             else:
                 risk_out = risk_validator_agent.validate(
@@ -348,7 +362,8 @@ class AIConsensusEngine:
                     agent2_report=agent2_out,
                     agent3_report=agent3_out,
                     simulated_equity=simulated_equity,
-                    open_positions_count=open_positions_count
+                    open_positions_count=open_positions_count,
+                    **risk_quote_fields
                 )
             risk_out = _track_report("risk_validator", risk_out)
         # 4. Synthesize weighted eight-agent consensus and enforce data-quality quorum.
@@ -676,6 +691,7 @@ class AIConsensusEngine:
         # Khmer Report Generation
         report_kh_data = {
             "symbol": symbol,
+            "trade_style": trade_style,
             "verified_price": verified_price,
             "price_source": price_source,
             "timestamp_utc": ts_utc_str,
@@ -733,6 +749,8 @@ class AIConsensusEngine:
 
         out_dict = {
             "symbol": symbol,
+            "trade_style": trade_style,
+            "setup_timeframe": setup_timeframe,
             "verified_price": verified_price,
             "price_source": price_source,
             "data_quality": {
@@ -807,6 +825,22 @@ class AIConsensusEngine:
         }
         _ANALYSIS_CACHE[cache_key] = (now_ts, out_dict)
         return out_dict
+
+    @staticmethod
+    def _risk_quote_fields(report: Dict[str, Any]) -> Dict[str, Optional[float]]:
+        """Return only spread and executable sides from the audited fresh quote."""
+        if not isinstance(report, dict) or report.get("is_fresh") is not True:
+            return {"spread_price": None, "bid_price": None, "ask_price": None}
+        if str(report.get("feed_status", "")).upper() != "HEALTHY":
+            return {"spread_price": None, "bid_price": None, "ask_price": None}
+        try:
+            bid = float(report.get("bid_price"))
+            ask = float(report.get("ask_price"))
+        except (TypeError, ValueError):
+            return {"spread_price": None, "bid_price": None, "ask_price": None}
+        if not math.isfinite(bid) or not math.isfinite(ask) or bid <= 0 or ask <= bid:
+            return {"spread_price": None, "bid_price": None, "ask_price": None}
+        return {"spread_price": round(ask - bid, 8), "bid_price": bid, "ask_price": ask}
 
     def _build_english_report(
         self,

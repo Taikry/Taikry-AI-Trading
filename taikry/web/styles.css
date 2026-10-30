@@ -2165,6 +2165,27 @@ body.theme-solar-gold {
 }
 
 /* Primary Action Buttons: Analyze vs Best Setup (Sleek Compact Size) */
+.cockpit-style-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cockpit-style-control select {
+  min-width: 190px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+  background: #0d121c;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  font: inherit;
+}
+
 .cockpit-action-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2717,6 +2738,17 @@ body.theme-solar-gold {
   margin-top: 9px;
   color: #cbd5e1;
   font-size: 9px;
+}
+
+.cockpit-setup-plan {
+  margin-top: 7px;
+  padding: 6px 7px;
+  border-radius: 6px;
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.09);
+  font-size: 9px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .cockpit-setup-reason {

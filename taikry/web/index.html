@@ -420,6 +420,14 @@
               </div>
             </div>
 
+            <label class="cockpit-style-control" for="cockpit-trade-style">
+              <span id="t-cockpit-style-label">Analysis style</span>
+              <select id="cockpit-trade-style" onchange="selectCockpitTradeStyle(this.value)">
+                <option value="INTRADAY">Intraday · M15</option>
+                <option value="SWING">Swing · H4 / D1 / W1</option>
+              </select>
+            </label>
+
             <!-- Primary Action Buttons: Analyze vs Best Setup -->
             <div class="cockpit-action-row">
               <button class="cockpit-btn cockpit-btn-analyze" id="btn-cockpit-analyze" onclick="runCockpitAnalyze()" title="Run Multi-Timeframe Institutional Scan">

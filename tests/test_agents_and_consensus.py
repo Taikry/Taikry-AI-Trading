@@ -62,6 +62,31 @@ def test_risk_validator_approves_valid_setup(monkeypatch):
     assert "1:2.2" in res["calculated_rr"]
     assert res["position_sizing"]["risk_percent"] == 0.5
 
+
+def test_risk_validator_uses_fresh_oanda_quote_for_spread_and_market_entry(monkeypatch):
+    import datetime
+    from taikry.agents import risk_validator as risk_module
+    from taikry.data.economic_calendar import economic_calendar_provider
+
+    quote_time = datetime.datetime.now(datetime.timezone.utc)
+    monkeypatch.setattr(economic_calendar_provider, "check_news_blackout", lambda _sym: {"is_blackout": False, "status": "CLEAR", "advisory_en": None, "advisory_kh": None})
+    monkeypatch.setattr(risk_module.market_data_engine, "get_verified_quote", lambda _sym: {
+        "bid": 2010.0, "ask": 2010.2, "timestamp": quote_time, "source": "OANDA_V20"
+    })
+
+    result = risk_validator_agent.validate(
+        symbol="XAUUSD",
+        verified_price=2010.1,
+        price_timestamp=quote_time,
+        agent1_report={"bias": "BULLISH", "key_price_levels": {"suggested_stop_loss": 2000.0, "take_profit_1": 2032.0, "take_profit_2": 2045.0}},
+        agent2_report={"bias": "BULLISH", "key_price_zones": {}},
+        agent3_report={"bias": "NEUTRAL"},
+        open_positions_count=0,
+    )
+
+    assert result["checks"]["spread_price"] == pytest.approx(0.2)
+    assert result["entry_price"] == pytest.approx(2010.2)
+
 def test_macro_analyst_returns_verified_dxy():
     res = macro_analyst_agent.analyze("XAUUSD")
     assert "usd_index" in res

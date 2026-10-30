@@ -13,6 +13,7 @@ let currentLLMProvider = "auto";
 let isKhmer = false;
 let latestAnalysisData = null;
 let latestBestSetups = [];
+let currentCockpitTradeStyle = "INTRADAY";
 let currentXauusdCatalyst = null;
 let cachedMacroEvents = [];
 let macroCountdownInterval = null;
@@ -344,6 +345,12 @@ function toggleLanguage() {
   setTxt("t-tab-autofix", dict.tab_autofix);
   setTxt("t-cockpit-analyze", isKhmer ? "វិភាគ" : "Analyze");
   setTxt("t-cockpit-best", isKhmer ? "ការរៀបចំល្អបំផុត" : "Best setup");
+  setTxt("t-cockpit-style-label", isKhmer ? "របៀបវិភាគ" : "Analysis style");
+  const styleSelect = document.getElementById("cockpit-trade-style");
+  if (styleSelect?.options?.length >= 2) {
+    styleSelect.options[0].text = isKhmer ? "Intraday · M15" : "Intraday · M15";
+    styleSelect.options[1].text = isKhmer ? "Swing · H4 / D1 / W1" : "Swing · H4 / D1 / W1";
+  }
   setTxt("t-top-trade", isKhmer ? "ជួញដូរសាកល្បង" : "Paper Trade");
 
   setTxt("t-debate-title", dict.debate_title);
@@ -2454,7 +2461,12 @@ async function runCockpitBestSetup() {
   if (statText) statText.innerText = "FINDING BEST SETUP...";
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/best-setup?category=${currentChipFilter}`, { credentials: "include" });
+    const scanParams = new URLSearchParams({
+      category: currentChipFilter,
+      trade_style: currentCockpitTradeStyle,
+      refresh: "true",
+    });
+    const res = await fetch(`${API_BASE}/api/v1/best-setup?${scanParams}`, { credentials: "include" });
     if (!res.ok) throw new Error(`Best-setup scan failed (${res.status})`);
     const data = await res.json();
     renderCockpitBestSetups(data);
@@ -2492,6 +2504,13 @@ async function runCockpitBestSetup() {
   }
 }
 
+function selectCockpitTradeStyle(style) {
+  const normalized = String(style || "INTRADAY").toUpperCase();
+  currentCockpitTradeStyle = normalized === "SWING" ? "SWING" : "INTRADAY";
+  const label = document.getElementById("t-cockpit-style-label");
+  if (label) label.innerText = isKhmer ? "របៀបវិភាគ" : "Analysis style";
+}
+
 function selectCockpitBestSetup(symbol) {
   const candidate = latestBestSetups.find(item => item.symbol === symbol);
   if (!candidate) return;
@@ -2520,9 +2539,13 @@ function renderCockpitBestSetups(data) {
   const scanned = Number(data.scanned_count ?? setups.length);
   const total = Number(data.candidate_count ?? setups.length);
   const title = isKhmer ? "ជម្រើសស្កេនទីផ្សារទាំងអស់" : "All Market Scan Options";
+  const tradeStyle = String(data?.trade_style || currentCockpitTradeStyle).toUpperCase();
+  const styleLabel = tradeStyle === "SWING"
+    ? (isKhmer ? "Swing · H4 / D1 / W1" : "Swing · H4 / D1 / W1")
+    : (isKhmer ? "Intraday · M15" : "Intraday · M15");
   const summary = isKhmer
-    ? `បានវិភាគ ${scanned}/${total} · អនុម័ត ${qualified}`
-    : `Analyzed ${scanned}/${total} · Approved ${qualified}`;
+    ? `${styleLabel} · បានវិភាគ ${scanned}/${total} · អនុម័ត ${qualified}`
+    : `${styleLabel} · Analyzed ${scanned}/${total} · Approved ${qualified}`;
   const cards = setups.map((item, index) => {
     const symbol = String(item.symbol || "");
     if (!/^[A-Z0-9._-]{1,20}$/.test(symbol)) return "";
@@ -2540,6 +2563,9 @@ function renderCockpitBestSetups(data) {
     const direction = String(item.proposed_direction || "NONE").toUpperCase();
     const reason = String(item.reason_summary || item.error || (isKhmer ? "មិនមានមូលហេតុបន្ថែម។" : "No additional risk note."));
     const source = String(item.price_source || "");
+    const planLabel = approved && item.entry_price != null && item.stop_loss != null && item.take_profit_1 != null
+      ? `<div class="cockpit-setup-plan">${isKhmer ? "ចូល" : "Entry"} ${escapeHtml(String(item.entry_price))} · SL ${escapeHtml(String(item.stop_loss))} · TP1 ${escapeHtml(String(item.take_profit_1))}${item.take_profit_2 != null ? ` · TP2 ${escapeHtml(String(item.take_profit_2))}` : ""}</div>`
+      : "";
     const ageSeconds = Number(item.analysis_age_seconds);
     const ageLabel = Number.isFinite(ageSeconds)
       ? (ageSeconds < 60 ? (isKhmer ? "ទើបស្កេន" : "just scanned") : `${Math.floor(ageSeconds / 60)}m ${isKhmer ? "មុន" : "ago"}`)
@@ -2557,6 +2583,7 @@ function renderCockpitBestSetups(data) {
           <span>${isKhmer ? "ពិន្ទុ" : "Score"}: ${escapeHtml(scoreLabel)}</span>
           <span>${isKhmer ? "តម្លៃ" : "Price"}: ${escapeHtml(priceLabel)}</span>
         </div>
+        ${planLabel}
         <p class="cockpit-setup-reason">${escapeHtml(reason)}</p>
         <div class="cockpit-setup-option-foot">
           <small>${escapeHtml(source)} · ${escapeHtml(ageLabel)}</small>

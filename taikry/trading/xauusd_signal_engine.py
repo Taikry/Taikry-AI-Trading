@@ -28,7 +28,6 @@ from taikry.database.session import SessionLocal
 from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel
 from taikry.data.providers import market_data_engine
 from taikry.data.validator import validate_dataframe, is_market_open, check_data_freshness
-from taikry.data.mt5_receiver import mt5_receiver
 from taikry.agents.registry import agent_registry
 
 logger = logging.getLogger("taikry.trading.xauusd_signal_engine")
@@ -104,6 +103,80 @@ def _make_json_safe(obj: Any) -> Any:
     elif hasattr(obj, "item"):
         return obj.item()
     return obj
+
+
+def calculate_trade_levels(
+    direction: str,
+    entry: float,
+    atr: float,
+    technical_levels: Optional[Dict[str, Any]] = None,
+    smc_zones: Optional[Dict[str, Any]] = None,
+    min_rr: float = DEFAULT_MIN_RR,
+    trade_style: str = "INTRADAY",
+) -> Dict[str, float]:
+    """Build measured levels from a chart swing, ATR and viable structure targets."""
+    direction = str(direction or "").upper()
+    trade_style = str(trade_style or "INTRADAY").upper()
+    technical_levels = technical_levels if isinstance(technical_levels, dict) else {}
+    smc_zones = smc_zones if isinstance(smc_zones, dict) else {}
+    entry = float(entry)
+    atr = float(atr)
+    if direction not in {"BUY", "SELL"} or not math.isfinite(entry) or not math.isfinite(atr) or entry <= 0 or atr <= 0:
+        raise ValueError("A valid direction, entry, and measured ATR are required.")
+
+    is_buy = direction == "BUY"
+    pivot_key = "swing_low" if is_buy else "swing_high"
+    structure_key = "dealing_range_high" if is_buy else "dealing_range_low"
+    base_risk = 1.6 * atr
+    max_structure_risk = (6.0 if trade_style == "SWING" else 4.0) * atr
+    try:
+        pivot = float(technical_levels.get(pivot_key))
+        structural_stop = pivot - (0.15 * atr) if is_buy else pivot + (0.15 * atr)
+        structural_risk = entry - structural_stop if is_buy else structural_stop - entry
+    except (TypeError, ValueError):
+        structural_stop = 0.0
+        structural_risk = 0.0
+    if math.isfinite(structural_risk) and (0.5 * atr) <= structural_risk <= max_structure_risk:
+        stop = structural_stop
+    else:
+        stop = entry - base_risk if is_buy else entry + base_risk
+    stop = round(stop, 2)
+    risk = entry - stop if is_buy else stop - entry
+
+    # The nearest structural target is used only when it still meets the
+    # configured reward/risk floor. ATR multiples remain the fallback.
+    min_rr = max(float(min_rr), 2.0)
+    target_candidates = [technical_levels.get("take_profit_1"), smc_zones.get(structure_key)]
+    viable_distances = []
+    for raw_target in target_candidates:
+        try:
+            target = float(raw_target)
+        except (TypeError, ValueError):
+            continue
+        distance = target - entry if is_buy else entry - target
+        if math.isfinite(distance) and distance >= risk * min_rr:
+            viable_distances.append(distance)
+    first_distance = min(viable_distances) if viable_distances else risk * min_rr
+    tp1_rr = first_distance / risk
+    tp2_rr = max(3.3, tp1_rr + 1.0)
+    tp3_rr = max(4.8, tp2_rr + 1.5)
+    sign = 1.0 if is_buy else -1.0
+    tp1 = round(entry + sign * first_distance, 2)
+    actual_rr = abs(tp1 - entry) / risk
+    if actual_rr < min_rr:
+        tp1 = round(entry + sign * risk * (min_rr + 0.02), 2)
+        first_distance = abs(tp1 - entry)
+    tp1_rr = first_distance / risk
+    return {
+        "stop_loss": round(stop, 2),
+        "take_profit_1": tp1,
+        "take_profit_2": round(entry + sign * risk * tp2_rr, 2),
+        "take_profit_3": round(entry + sign * risk * tp3_rr, 2),
+        "risk_distance": risk,
+        "risk_reward_1": round(tp1_rr, 2),
+        "risk_reward_2": round(tp2_rr, 2),
+        "risk_reward_3": round(tp3_rr, 2),
+    }
 
 
 class XAUUSDSignalEngine:
@@ -224,6 +297,7 @@ class XAUUSDSignalEngine:
         verified_price: float,
         price_timestamp: Optional[datetime.datetime] = None,
         price_source: Optional[str] = None,
+        trade_style: str = "INTRADAY",
     ) -> Dict[str, Any]:
         """
         Runs signal analysts on one market snapshot, records specialist agents
@@ -231,6 +305,7 @@ class XAUUSDSignalEngine:
         """
         eligible = self.discover_eligible_agents()
         results: Dict[str, Any] = {}
+        setup_timeframe = "H4" if str(trade_style).upper() == "SWING" else "M15"
         m15 = multi_tf_data.get("M15")
         if m15 is None or getattr(m15, "empty", False):
             m15 = multi_tf_data.get("M5")
@@ -262,7 +337,7 @@ class XAUUSDSignalEngine:
                 if agent_id == "data_quality_agent":
                     out = adapter.execute(
                         symbol=symbol,
-                        timeframe="M15",
+                        timeframe=setup_timeframe,
                         market_snapshot={
                             "multi_tf_data": multi_tf_data,
                             "verified_price": verified_price,
@@ -271,7 +346,10 @@ class XAUUSDSignalEngine:
                         },
                     )
                 elif agent_id in {"technical_analyst", "ict_smc_analyst", "fractal_mtf_analyst", "regime_detection_agent", "quantitative_research_agent", "ml_forecast_agent"}:
-                    out = adapter.execute(symbol=symbol, multi_tf_data=multi_tf_data)
+                    if trade_style == "SWING" and agent_id in {"technical_analyst", "ict_smc_analyst"}:
+                        out = adapter.execute(symbol=symbol, multi_tf_data=multi_tf_data, setup_timeframe=setup_timeframe)
+                    else:
+                        out = adapter.execute(symbol=symbol, multi_tf_data=multi_tf_data)
                 elif agent_id == "macro_analyst":
                     out = adapter.execute(symbol=symbol)
                 elif agent_id == "orderflow_sentiment_analyst":
@@ -436,7 +514,8 @@ class XAUUSDSignalEngine:
         agent_outputs: Dict[str, Any],
         multi_tf_data: Dict[str, Any],
         price_timestamp: Optional[datetime.datetime] = None,
-        spread_price: Optional[float] = None
+        spread_price: Optional[float] = None,
+        trade_style: str = "INTRADAY"
     ) -> Dict[str, Any]:
         """
         Synthesizes individual agent outputs into an institutional consensus decision.
@@ -570,24 +649,37 @@ class XAUUSDSignalEngine:
         tp2_rr = max(3.3, tp1_rr + 1.2)
         tp3_rr = max(4.8, tp2_rr + 1.5)
 
-        if proposed_direction == "BUY":
-            entry = verified_price
-            sl = round(entry - (1.6 * atr), 2)
-            risk_dist = entry - sl
-            tp1 = round(entry + (risk_dist * tp1_rr), 2)
-            tp2 = round(entry + (risk_dist * tp2_rr), 2)
-            tp3 = round(entry + (risk_dist * tp3_rr), 2)
-        else:
-            entry = verified_price
-            sl = round(entry + (1.6 * atr), 2)
-            risk_dist = sl - entry
-            tp1 = round(entry - (risk_dist * tp1_rr), 2)
-            tp2 = round(entry - (risk_dist * tp2_rr), 2)
-            tp3 = round(entry - (risk_dist * tp3_rr), 2)
-
-        rr1 = round(abs(tp1 - entry) / max(0.01, risk_dist), 2)
-        rr2 = round(abs(tp2 - entry) / max(0.01, risk_dist), 2)
-        rr3 = round(abs(tp3 - entry) / max(0.01, risk_dist), 2)
+        quality_quote = agent_outputs.get("data_quality_agent", {})
+        try:
+            bid = float(quality_quote.get("bid_price"))
+            ask = float(quality_quote.get("ask_price"))
+            quote_is_valid = math.isfinite(bid) and math.isfinite(ask) and bid > 0 and ask > bid
+        except (TypeError, ValueError):
+            bid = ask = 0.0
+            quote_is_valid = False
+        entry = round((ask if proposed_direction == "BUY" else bid) if quote_is_valid else verified_price, 2)
+        technical_levels = agent_outputs.get("technical_analyst", {}).get("key_levels", {})
+        smc_zones = agent_outputs.get("ict_smc_analyst", {}).get("key_price_zones", {})
+        try:
+            measured_levels = calculate_trade_levels(
+                proposed_direction,
+                entry,
+                atr,
+                technical_levels=technical_levels,
+                smc_zones=smc_zones,
+                min_rr=self.min_rr,
+                trade_style=trade_style,
+            )
+        except (TypeError, ValueError):
+            return {"decision": "NO TRADE", "score": 0, "rejection_reason": "Trade level calculation failed validation."}
+        sl = measured_levels["stop_loss"]
+        tp1 = measured_levels["take_profit_1"]
+        tp2 = measured_levels["take_profit_2"]
+        tp3 = measured_levels["take_profit_3"]
+        risk_dist = measured_levels["risk_distance"]
+        rr1 = measured_levels["risk_reward_1"]
+        rr2 = measured_levels["risk_reward_2"]
+        rr3 = measured_levels["risk_reward_3"]
 
         # 4. Strict Risk Validation (Agent 4 / Risk Arbiter). Missing reports,
         # a missing validator, and every non-APPROVE verdict must block the setup.
@@ -619,6 +711,8 @@ class XAUUSDSignalEngine:
             agent2_report=agent_outputs["ict_smc_analyst"],
             agent3_report=agent_outputs["macro_analyst"],
             spread_price=spread_price,
+            bid_price=bid if quote_is_valid else None,
+            ask_price=ask if quote_is_valid else None,
             candidate_levels={"stop_loss": sl, "take_profit_1": tp1, "take_profit_2": tp2}
         )
         try:
@@ -747,6 +841,8 @@ class XAUUSDSignalEngine:
         return {
             "decision": proposed_direction,
             "score": score,
+            "trade_style": str(trade_style).upper(),
+            "entry_method": "LIVE_ASK" if proposed_direction == "BUY" and quote_is_valid else ("LIVE_BID" if proposed_direction == "SELL" and quote_is_valid else "VERIFIED_MIDPOINT"),
             "entry_price": entry,
             "stop_loss": sl,
             "take_profit_1": tp1,
@@ -765,7 +861,7 @@ class XAUUSDSignalEngine:
     # 4. END-TO-END XAUUSD SIGNAL GENERATION & PERSISTENCE
     # -------------------------------------------------------------------------
 
-    def generate_xauusd_signal(self, raw_symbol: str = "XAUUSD") -> Dict[str, Any]:
+    def generate_xauusd_signal(self, raw_symbol: str = "XAUUSD", trade_style: str = "INTRADAY") -> Dict[str, Any]:
         """Serialize signal generation within this application process."""
         if not self._generation_lock.acquire(blocking=False):
             return {
@@ -774,11 +870,11 @@ class XAUUSDSignalEngine:
                 "status": "GENERATION_IN_PROGRESS"
             }
         try:
-            return self._generate_xauusd_signal_locked(raw_symbol)
+            return self._generate_xauusd_signal_locked(raw_symbol, trade_style=trade_style)
         finally:
             self._generation_lock.release()
 
-    def _generate_xauusd_signal_locked(self, raw_symbol: str = "XAUUSD") -> Dict[str, Any]:
+    def _generate_xauusd_signal_locked(self, raw_symbol: str = "XAUUSD", trade_style: str = "INTRADAY") -> Dict[str, Any]:
         """
         Main pipeline entry point.
         Enforces strict XAUUSD-only validation, runs eligible agents by role, checks quota,
@@ -795,6 +891,10 @@ class XAUUSDSignalEngine:
                 "status": "REJECTED_NON_XAUUSD"
             }
 
+        trade_style = str(trade_style or "INTRADAY").strip().upper()
+        if trade_style not in {"INTRADAY", "SWING"}:
+            return {"success": False, "error": "trade_style must be INTRADAY or SWING.", "status": "INVALID_TRADE_STYLE"}
+
         # Step 2: Market Open & Calendar Hours
         market_ok, reason = is_market_open(canonical_symbol)
         if not market_ok:
@@ -806,22 +906,25 @@ class XAUUSDSignalEngine:
             }
 
         # Step 3: Fetch Market Data Snapshot
-        timeframes = ["D1", "H4", "H1", "M15", "M5"]
+        timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
+        setup_timeframe = "H4" if trade_style == "SWING" else "M15"
         multi_tf_data = market_data_engine.get_multi_timeframe_candles(canonical_symbol, timeframes)
         synthetic_timeframes = [
             tf for tf, frame in multi_tf_data.items()
             if frame is None or frame.empty or ("source" in frame.columns and frame["source"].astype(str).str.upper().str.contains("DEMO|SYNTHETIC").any())
         ]
-        if synthetic_timeframes:
+        required_timeframes = {"W1", "D1", "H4", "H1"} if trade_style == "SWING" else {"D1", "H4", "H1", "M15", "M5"}
+        required_synthetic_timeframes = [tf for tf in synthetic_timeframes if tf in required_timeframes]
+        if required_synthetic_timeframes:
             return {
                 "success": False,
                 "error": "Synthetic fallback candles cannot be used to generate trade signals.",
                 "canonical_symbol": canonical_symbol,
                 "status": "BLOCKED_SYNTHETIC_MARKET_DATA",
-                "synthetic_timeframes": synthetic_timeframes
+                "synthetic_timeframes": required_synthetic_timeframes
             }
-        primary_df = multi_tf_data.get("M15")
-        if primary_df is None or primary_df.empty:
+        primary_df = multi_tf_data.get(setup_timeframe)
+        if trade_style == "INTRADAY" and (primary_df is None or primary_df.empty):
             primary_df = multi_tf_data.get("M5")
 
         val = validate_dataframe(primary_df, min_bars=15)
@@ -848,61 +951,49 @@ class XAUUSDSignalEngine:
                 "canonical_symbol": canonical_symbol,
                 "status": "BLOCKED_SYNTHETIC_MARKET_DATA"
             }
-        m15_freshness = check_data_freshness(canonical_symbol, primary_df.iloc[-1].get("timestamp"), "M15")
-        if not m15_freshness.get("fresh"):
+        setup_freshness = check_data_freshness(canonical_symbol, primary_df.iloc[-1].get("timestamp"), setup_timeframe)
+        if not setup_freshness.get("fresh"):
             return {
                 "success": False,
-                "error": "The latest M15 market data is stale; signal generation is blocked.",
+                "error": f"The latest {setup_timeframe} market data is stale; signal generation is blocked.",
                 "canonical_symbol": canonical_symbol,
                 "status": "BLOCKED_STALE_MARKET_DATA",
-                "data_freshness": m15_freshness
+                "data_freshness": setup_freshness
             }
-        verified_price = round(float(verified_price), 2)
-
-        # Step 3b: Stale/Disconnected Feed Guardrail: Never use a price from a stale or disconnected feed
-        bridge_status = mt5_receiver.get_status()
-        b_status = bridge_status.get("status", "DISCONNECTED")
-        if b_status == "STALE":
-            return {
-                "success": False,
-                "error": "Market feed from Exness MT5 is currently STALE (>30s without update). Actionable signals blocked to preserve capital.",
-                "canonical_symbol": canonical_symbol,
-                "status": "BLOCKED_STALE_BROKER_FEED"
-            }
-
-        if b_status != "CONNECTED":
-            return {
-                "success": False,
-                "error": "A fresh Exness MT5 market feed is required for verified bid/ask spread and actionable signal validation.",
-                "canonical_symbol": canonical_symbol,
-                "status": "BLOCKED_DISCONNECTED_BROKER_FEED"
-            }
-
-        # Step 3c: A verified bid/ask spread is required for risk validation.
-        mt5_p, mt5_src, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(canonical_symbol)
+        # A single validated quote snapshot supports either the desktop MT5
+        # bridge or Render's authenticated OANDA v20 provider.
+        quote = market_data_engine.get_verified_quote(canonical_symbol)
         try:
-            bid = float(mt5_tick.get("bid")) if mt5_tick else 0.0
-            ask = float(mt5_tick.get("ask")) if mt5_tick else 0.0
-            spread_points = float(mt5_tick.get("spread")) if mt5_tick else 0.0
+            bid = float(quote.get("bid")) if quote else 0.0
+            ask = float(quote.get("ask")) if quote else 0.0
+            quote_price = float(quote.get("price")) if quote else 0.0
+            quote_source = str(quote.get("source") or "") if quote else ""
+            quote_timestamp = quote.get("timestamp") if quote else None
         except (TypeError, ValueError):
-            bid = ask = spread_points = 0.0
+            bid = ask = quote_price = 0.0
+            quote_source = ""
+            quote_timestamp = None
         if (
-            not mt5_fresh
-            or not math.isfinite(bid)
+            not math.isfinite(bid)
             or not math.isfinite(ask)
             or bid <= 0
             or ask <= bid
-            or not math.isfinite(spread_points)
-            or spread_points <= 0
+            or not math.isfinite(quote_price)
+            or quote_price <= 0
+            or quote_source not in {"EXNESS_MT5", "OANDA_V20"}
         ):
             return {
                 "success": False,
-                "error": "A fresh broker bid/ask spread is required for XAUUSD risk validation.",
+                "error": "A fresh authenticated MT5 or OANDA bid/ask quote is required for XAUUSD risk validation.",
                 "canonical_symbol": canonical_symbol,
                 "status": "BLOCKED_MISSING_VERIFIED_SPREAD"
             }
         spread_price = ask - bid
-        spread_points = round(spread_points, 1)
+        verified_price = round(quote_price, 2)
+        price_source = quote_source
+        price_ts = quote_timestamp or price_ts
+        # XAU points convention: 0.01 price units per point.
+        spread_points = round(spread_price * 100.0, 1)
         # 1 standard gold lot = 100 oz; $7 round-turn commission is $0.07/oz.
         estimated_costs = round(spread_price + (COMMISSION_PER_LOT / 100.0), 2)
 
@@ -925,7 +1016,23 @@ class XAUUSDSignalEngine:
             verified_price,
             price_timestamp=price_ts,
             price_source=price_source,
+            trade_style=trade_style,
         )
+
+        # Reuse the quote audited by Agent 1 for entry and cost calculations so
+        # every risk check sees one bid/ask snapshot.
+        quality_quote = agent_outputs.get("data_quality_agent", {})
+        if isinstance(quality_quote, dict) and quality_quote.get("is_fresh") is True and str(quality_quote.get("feed_status", "")).upper() == "HEALTHY":
+            try:
+                quality_bid = float(quality_quote.get("bid_price"))
+                quality_ask = float(quality_quote.get("ask_price"))
+                if math.isfinite(quality_bid) and math.isfinite(quality_ask) and quality_bid > 0 and quality_ask > quality_bid:
+                    bid, ask = quality_bid, quality_ask
+                    spread_price = ask - bid
+                    spread_points = round(spread_price * 100.0, 1)
+                    verified_price = round((bid + ask) / 2.0, 2)
+            except (TypeError, ValueError):
+                pass
 
         # Step 6: Consensus Synthesis
         consensus = self.synthesize_consensus(
@@ -934,7 +1041,8 @@ class XAUUSDSignalEngine:
             agent_outputs,
             multi_tf_data,
             price_timestamp=price_ts,
-            spread_price=spread_price
+            spread_price=spread_price,
+            trade_style=trade_style
         )
         decision = consensus.get("decision")
 
@@ -994,7 +1102,7 @@ class XAUUSDSignalEngine:
         idempotency_key = hashlib.sha256(idempotency_raw.encode("utf-8")).hexdigest()
 
         summary_text = (
-            f"Multi-Agent Institutional Quorum: {decision} XAUUSD @ {entry:.2f} "
+            f"Multi-Agent Institutional {trade_style} Quorum: {decision} XAUUSD @ {entry:.2f} "
             f"(Score {consensus['score']}%, SL {sl:.2f}, TP1 {tp1:.2f}, R:R 1:{consensus['risk_reward_1']})"
         )
 
@@ -1022,7 +1130,7 @@ class XAUUSDSignalEngine:
                 signal_id=sig_id,
                 canonical_symbol=canonical_symbol,
                 direction=decision,
-                timeframes_analyzed=timeframes,
+                timeframes_analyzed=(timeframes if trade_style == "INTRADAY" else ["W1", "D1", "H4", "H1"]),
                 entry_price=entry,
                 entry_zone_low=round(entry - 0.75, 2),
                 entry_zone_high=round(entry + 0.75, 2),
@@ -1068,6 +1176,8 @@ class XAUUSDSignalEngine:
                 "signal_id": sig_id,
                 "canonical_symbol": canonical_symbol,
                 "broker": price_source,
+                "trade_style": trade_style,
+                "entry_method": consensus.get("entry_method"),
                 "direction": decision,
                 "entry_price": entry,
                 "stop_loss": sl,

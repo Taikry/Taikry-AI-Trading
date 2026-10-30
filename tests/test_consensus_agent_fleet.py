@@ -2,6 +2,7 @@ import datetime
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from taikry.agents import consensus_engine as consensus_module
 from taikry.agents.consensus_engine import AIConsensusEngine
@@ -20,7 +21,8 @@ class StubAdapter:
         return dict(self.result)
 
 
-def test_consensus_engine_runs_full_signal_fleet_on_one_snapshot(monkeypatch):
+@pytest.mark.parametrize("trade_style,setup_timeframe", [("INTRADAY", "M15"), ("SWING", "H4")])
+def test_consensus_engine_runs_full_signal_fleet_on_one_snapshot(monkeypatch, trade_style, setup_timeframe):
     now = datetime.datetime.now(datetime.timezone.utc)
     frame = pd.DataFrame({
         "timestamp": [now - datetime.timedelta(minutes=15 * i) for i in range(30)],
@@ -30,7 +32,7 @@ def test_consensus_engine_runs_full_signal_fleet_on_one_snapshot(monkeypatch):
         "close": [2700.0] * 30,
         "volume": [100.0] * 30,
     })
-    snapshot = {tf: frame for tf in ("D1", "H4", "H1", "M15", "M5")}
+    snapshot = {tf: frame for tf in ("W1", "D1", "H4", "H1", "M15", "M5")}
     monkeypatch.setattr(consensus_module.market_data_engine, "get_multi_timeframe_candles", lambda *_args: snapshot)
     monkeypatch.setattr(consensus_module.market_data_engine, "get_verified_price", lambda _symbol: (2700.0, "MOCK_BROKER", now))
     monkeypatch.setattr(consensus_module, "validate_dataframe", lambda *_args, **_kwargs: {"valid": True, "reason": None})
@@ -40,7 +42,7 @@ def test_consensus_engine_runs_full_signal_fleet_on_one_snapshot(monkeypatch):
     monkeypatch.setattr(consensus_module, "get_llm_status", lambda: {"status": "NOT_PROBED"})
 
     reports = {
-        "data_quality_agent": {"feed_status": "HEALTHY", "is_fresh": True, "spread_points": 0.25},
+        "data_quality_agent": {"feed_status": "HEALTHY", "is_fresh": True, "spread_points": 0.25, "bid_price": 2699.9, "ask_price": 2700.1},
         "technical_analyst": {"bias": "BULLISH", "confidence": 90, "key_price_levels": {"atr": 2.0}, "evidence": []},
         "ict_smc_analyst": {"bias": "BULLISH", "confidence": 90, "key_price_zones": {}, "evidence": []},
         "macro_analyst": {"bias": "BULLISH", "confidence": 90, "evidence": [], "high_impact_events": []},
@@ -62,7 +64,7 @@ def test_consensus_engine_runs_full_signal_fleet_on_one_snapshot(monkeypatch):
     adapters = {agent_id: StubAdapter(agent_id, result) for agent_id, result in reports.items()}
     monkeypatch.setattr(agent_registry, "get_adapter", lambda agent_id: adapters.get(agent_id))
 
-    result = AIConsensusEngine().analyze_symbol("XAUUSD", preferred_llm="quant", force_refresh=True)
+    result = AIConsensusEngine().analyze_symbol("XAUUSD", preferred_llm="quant", force_refresh=True, trade_style=trade_style)
 
     assert result["setup_status"] == "APPROVE"
     assert result["proposed_direction"] == "LONG"
@@ -77,3 +79,12 @@ def test_consensus_engine_runs_full_signal_fleet_on_one_snapshot(monkeypatch):
     assert adapters["data_quality_agent"].calls[0][1]["market_snapshot"]["multi_tf_data"] is snapshot
     assert adapters["orderflow_sentiment_analyst"].calls[0][1]["df_m15"] is frame
     assert adapters["concept_recommender"].calls[0][1]["regime_data"]["regime"] == "TRENDING_BULLISH"
+    risk_kwargs = adapters["risk_validator"].calls[0][1]
+    assert risk_kwargs["spread_price"] == pytest.approx(0.2)
+    assert risk_kwargs["bid_price"] == 2699.9
+    assert risk_kwargs["ask_price"] == 2700.1
+    assert adapters["data_quality_agent"].calls[0][1]["timeframe"] == setup_timeframe
+    if trade_style == "SWING":
+        assert adapters["technical_analyst"].calls[0][1]["setup_timeframe"] == "H4"
+        assert adapters["ict_smc_analyst"].calls[0][1]["setup_timeframe"] == "H4"
+        assert result["setup_timeframe"] == "H4"

@@ -19,11 +19,14 @@ class IctSmcAnalystAgent:
     AGENT_ID = "ict_smc"
     AGENT_NAME = "Agent 2 — ICT / SMC Structure Analyst"
 
-    def analyze(self, symbol: str, multi_tf_data: Dict[str, pd.DataFrame]) -> Dict[str, Any]:
-        df_m15 = multi_tf_data.get("M15")
-        if df_m15 is None or df_m15.empty:
-            df_m15 = multi_tf_data.get("M5")
-        if df_m15 is None or df_m15.empty or len(df_m15) < 20:
+    def analyze(self, symbol: str, multi_tf_data: Dict[str, pd.DataFrame], setup_timeframe: str = "M15") -> Dict[str, Any]:
+        setup_timeframe = str(setup_timeframe or "M15").upper()
+        setup_frame = multi_tf_data.get(setup_timeframe)
+        if setup_frame is None or setup_frame.empty:
+            setup_frame = multi_tf_data.get("M15")
+        if setup_frame is None or setup_frame.empty:
+            setup_frame = multi_tf_data.get("M5")
+        if setup_frame is None or setup_frame.empty or len(setup_frame) < 20:
             return {
                 "agent_id": self.AGENT_ID,
                 "agent_name": self.AGENT_NAME,
@@ -34,8 +37,8 @@ class IctSmcAnalystAgent:
                 "rationale": "Need at least 20 bars to map liquidity, FVGs, and order blocks."
             }
 
-        curr_price = float(df_m15["close"].iloc[-1])
-        smc = extract_ict_smc_summary(df_m15)
+        curr_price = float(setup_frame["close"].iloc[-1])
+        smc = extract_ict_smc_summary(setup_frame)
 
         sweeps = smc.get("liquidity_sweeps", [])
         fvgs = smc.get("unmitigated_fvgs", [])
@@ -232,6 +235,7 @@ class IctSmcAnalystAgent:
             "evidence": evidence,
             "key_price_zones": {
                 "current_price": curr_price,
+                "setup_timeframe": setup_timeframe,
                 "dealing_range_high": prem_disc.get("range_high"),
                 "dealing_range_low": prem_disc.get("range_low"),
                 "equilibrium_50pct": prem_disc.get("equilibrium"),

@@ -37,6 +37,7 @@ from taikry.database.session import SessionLocal
 from taikry.database.models import XAUUSDTelegramSignalModel, XAUUSDDailyReportRecord
 from taikry.trading.xauusd_signal_engine import (
     xauusd_signal_engine,
+    calculate_trade_levels,
     normalize_xauusd_symbol,
     get_cambodia_date_str,
     CAMBODIA_TZ,
@@ -286,6 +287,76 @@ def test_buy_and_sell_levels_ordering_validation(monkeypatch):
     assert sell_res["take_profit_1"] > sell_res["take_profit_2"]
     assert sell_res["take_profit_2"] > sell_res["take_profit_3"]
     assert sell_res["risk_reward_1"] >= 2.0
+
+
+def test_structural_levels_use_directional_swings_and_viable_targets():
+    buy = calculate_trade_levels(
+        "BUY", 2700.0, 10.0,
+        technical_levels={"swing_low": 2685.0, "take_profit_1": 2740.0},
+        smc_zones={"dealing_range_high": 2750.0},
+    )
+    sell = calculate_trade_levels(
+        "SELL", 2700.0, 10.0,
+        technical_levels={"swing_high": 2715.0, "take_profit_1": 2660.0},
+        smc_zones={"dealing_range_low": 2650.0},
+    )
+
+    assert buy["stop_loss"] == 2683.5
+    assert buy["take_profit_1"] == 2740.0
+    assert buy["risk_reward_1"] >= 2.0
+    assert buy["stop_loss"] < 2700.0 < buy["take_profit_1"] < buy["take_profit_2"] < buy["take_profit_3"]
+    assert sell["stop_loss"] == 2716.5
+    assert sell["take_profit_1"] == 2660.0
+    assert sell["risk_reward_1"] >= 2.0
+    assert sell["stop_loss"] > 2700.0 > sell["take_profit_1"] > sell["take_profit_2"] > sell["take_profit_3"]
+
+
+def test_render_oanda_quote_can_reach_swing_signal_risk_gate(monkeypatch):
+    import datetime
+    import pandas as pd
+    import taikry.trading.xauusd_signal_engine as signal_module
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    frame = pd.DataFrame([{
+        "timestamp": now,
+        "open": 2700.0,
+        "high": 2701.0,
+        "low": 2699.0,
+        "close": 2700.0,
+        "volume": 10.0,
+        "source": "oanda_v20",
+    } for _ in range(20)])
+    quote = {
+        "price": 2700.1,
+        "bid": 2700.0,
+        "ask": 2700.2,
+        "timestamp": now,
+        "source": "OANDA_V20",
+        "provider": "OANDA",
+    }
+    monkeypatch.setattr(signal_module, "is_market_open", lambda *_args: (True, "OPEN"))
+    monkeypatch.setattr(signal_module.market_data_engine, "get_multi_timeframe_candles", lambda *_args: {tf: frame.copy() for tf in ("W1", "D1", "H4", "H1", "M15", "M5")})
+    monkeypatch.setattr(signal_module.market_data_engine, "get_verified_price", lambda _symbol: (2700.1, "OANDA_V20", now))
+    monkeypatch.setattr(signal_module.market_data_engine, "get_verified_quote", lambda _symbol: quote)
+    monkeypatch.setattr(signal_module, "check_data_freshness", lambda *_args, **_kwargs: {"fresh": True, "status": "LIVE_FRESH"})
+    monkeypatch.setattr(xauusd_signal_engine, "get_daily_quota_status", lambda *_args: {"is_limit_reached": False, "signals_sent_today": 0})
+    monkeypatch.setattr(xauusd_signal_engine, "execute_all_agents", lambda *_args, **_kwargs: {
+        "data_quality_agent": {"status": "SUCCESS", "feed_status": "HEALTHY", "is_fresh": True, "bid_price": 2700.0, "ask_price": 2700.2}
+    })
+    captured = {}
+
+    def wait_for_confirmation(*args, **kwargs):
+        captured["verified_price"] = args[1]
+        captured["spread_price"] = kwargs.get("spread_price")
+        captured["trade_style"] = kwargs.get("trade_style")
+        return {"decision": "WAIT", "rejection_reason": "test safely stops before signal dispatch"}
+
+    monkeypatch.setattr(xauusd_signal_engine, "synthesize_consensus", wait_for_confirmation)
+
+    result = xauusd_signal_engine._generate_xauusd_signal_locked("XAUUSD", trade_style="SWING")
+
+    assert result["status"] == "REJECTED_WAIT"
+    assert captured == {"verified_price": 2700.1, "spread_price": pytest.approx(0.2), "trade_style": "SWING"}
 
 
 # -----------------------------------------------------------------------------
