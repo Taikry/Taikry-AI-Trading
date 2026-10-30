@@ -674,6 +674,7 @@ async function triggerScan() {
     const r = await fetch(`${API_BASE}/api/v1/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       signal: controller.signal,
       body: JSON.stringify({
         symbol: currentSymbol,
@@ -745,11 +746,44 @@ async function triggerScan() {
       biasEl.innerText = isKhmer ? "សេវាកំពុងមានបញ្ហា" : "SERVICE DEGRADED";
       biasEl.className = "metric-value val-gold";
     }
+    if (statusEl) {
+      statusEl.innerText = isKhmer ? "ស្កេនបរាជ័យ" : "SCAN FAILED";
+      statusEl.className = "metric-value val-red";
+    }
     const message = e?.name === "AbortError"
       ? (isKhmer ? "ការវិភាគអស់ពេលរង់ចាំ ៤៥ វិនាទី។" : "Analysis timed out after 45 seconds.")
       : (e?.message || (isKhmer ? "មិនអាចភ្ជាប់សេវាវិភាគបានទេ។" : "Unable to reach the analysis service."));
+    const errorKh = /sign in|session expired|unauthorized/i.test(message)
+      ? "សូមចូលគណនីឡើងវិញ ដើម្បីដំណើរការវិភាគ។"
+      : (/quota|limit|trial/i.test(message)
+        ? "បានដល់កំណត់ប្រើប្រាស់ស្កេន។ សូមពិនិត្យគម្រោងគណនីរបស់អ្នក។"
+        : `ការស្កេនបរាជ័យ៖ ${message}`);
+    const failureText = isKhmer ? errorKh : message;
+    latestAnalysisData = null;
+    const failedScan = {
+      setup_status: "UNAVAILABLE",
+      proposed_direction: "NONE",
+      risk_reward_ratio: "N/A",
+      error_message: message,
+      error_message_kh: errorKh,
+      agents: { agent_4_risk: { reasons: [failureText] } },
+    };
+    const verifiedPriceNode = document.getElementById("disp-verified-price");
+    if (verifiedPriceNode && verifiedPriceNode.innerText === "---") {
+      verifiedPriceNode.innerText = isKhmer ? "ទិន្នន័យ quote កំពុងផ្ទុក…" : "Waiting for live quote…";
+    }
+    const riskRewardNode = document.getElementById("disp-risk-reward");
+    if (riskRewardNode) riskRewardNode.innerText = "N/A";
+    updateExecutionCard(failedScan);
+    updateCockpitPlanCard(failedScan);
+    updateSmcHud(failedScan);
+    document.querySelectorAll(".regime-val").forEach(node => {
+      if (node.id === "regime-vol-val" || node.id === "regime-bias-val") {
+        node.innerText = isKhmer ? "មិនមានលទ្ធផលស្កេន" : "Scan unavailable";
+      }
+    });
     const agents = await pollAgentRuntimeActivity("FAILED", message);
-    renderAnalysisAgentActivity("FAILED", agents, message);
+    renderAnalysisAgentActivity("FAILED", agents, failureText);
     return null;
   } finally {
     clearTimeout(timeoutId);
@@ -889,6 +923,7 @@ function updateExecutionCard(data) {
   const badge = document.getElementById("exec-action-badge");
   const notice = document.getElementById("rejection-notice");
   const isApproved = data.setup_status === "APPROVE";
+  const scanUnavailable = ["UNAVAILABLE", "ERROR"].includes(String(data.setup_status || "").toUpperCase());
   const dir = data.proposed_direction || "NONE";
   const candidate = data.candidate_plan;
   const candidateDirection = String(candidate?.direction || "").toUpperCase();
@@ -918,7 +953,9 @@ function updateExecutionCard(data) {
     if (badge) {
       badge.innerText = hasCandidatePlan
         ? `${data.setup_status || "WAIT"} · ANALYSIS ONLY · ${candidateDirection}`
-        : (data.setup_status === "REJECT" ? "LOCKED (REJECTED)" : "WAITING CONFIRMATION");
+        : (scanUnavailable
+          ? (isKhmer ? "ស្កេនបរាជ័យ" : "SCAN FAILED")
+          : (data.setup_status === "REJECT" ? "LOCKED (REJECTED)" : "WAITING CONFIRMATION"));
       badge.className = "exec-action-badge badge-bear";
     }
     if (notice) {
@@ -931,7 +968,9 @@ function updateExecutionCard(data) {
       const lockNotice = isKhmer
         ? "សញ្ញាត្រូវបានចាក់សោ រហូតដល់ការត្រួតពិនិត្យហានិភ័យអនុម័ត។"
         : "Execution remains locked until all risk checks approve.";
-      notice.innerHTML = `🛡️ <b>${isKhmer ? "ការពារដើមទុន:" : "Capital Protection:"}</b> ${hasCandidatePlan ? `${previewNotice} ` : ""}${escapeHtml(lockNotice)} <span>${reasons.map(escapeHtml).join(" · ")}</span>`;
+      notice.innerHTML = scanUnavailable
+        ? `⚠️ <b>${isKhmer ? "មិនអាចទទួលលទ្ធផលវិភាគ:" : "Analysis unavailable:"}</b> ${escapeHtml(data.error_message_kh && isKhmer ? data.error_message_kh : (data.error_message || reasons[0] || "Unknown scan error"))}`
+        : `🛡️ <b>${isKhmer ? "ការពារដើមទុន:" : "Capital Protection:"}</b> ${hasCandidatePlan ? `${previewNotice} ` : ""}${escapeHtml(lockNotice)} <span>${reasons.map(escapeHtml).join(" · ")}</span>`;
     }
 
     document.getElementById("exec-entry").innerText = hasCandidatePlan ? formatCandidateLevel(candidate.entry_price) : "LOCKED";
@@ -949,6 +988,8 @@ function updateExecutionCard(data) {
 
 
 function updateSmcHud(data) {
+  const analysisUnavailable = ["UNAVAILABLE", "ERROR"].includes(String(data.setup_status || "").toUpperCase());
+  const unavailableLabel = isKhmer ? "មិនអាចវិភាគបាន" : "Analysis unavailable";
   const smc = data.ict_smc_summary || {};
   const ote = smc.ote || {};
   const dealing = smc.dealing_range || {};
@@ -956,7 +997,7 @@ function updateSmcHud(data) {
   const zones = a2.key_price_zones || {};
 
   // 1. Killzone Status & Pulse Badge
-  const kzText = zones.killzone_status || smc.killzones || "⚪ STANDBY (Interbank Range)";
+  const kzText = analysisUnavailable ? unavailableLabel : (zones.killzone_status || smc.killzones || "⚪ STANDBY (Interbank Range)");
   const kzEl = document.getElementById("kz-status-text");
   if (kzEl) kzEl.innerText = kzText;
 
@@ -1000,7 +1041,7 @@ function updateSmcHud(data) {
       const latestOb = obs[obs.length - 1];
       obEl.innerText = `${latestOb.type.replace("_ORDER_BLOCK", "")} [${latestOb.low} - ${latestOb.high}]`;
     } else {
-      obEl.innerText = "No Order Block detected";
+      obEl.innerText = analysisUnavailable ? unavailableLabel : "No Order Block detected";
     }
   }
 
@@ -1011,7 +1052,7 @@ function updateSmcHud(data) {
       const latestBb = breakers[breakers.length - 1];
       bbEl.innerText = `${latestBb.type.replace("_BREAKER", "")} [${latestBb.low} - ${latestBb.high}]`;
     } else {
-      bbEl.innerText = "No Breaker Active";
+      bbEl.innerText = analysisUnavailable ? unavailableLabel : "No Breaker Active";
     }
   }
 
@@ -1022,13 +1063,13 @@ function updateSmcHud(data) {
       const latestFvg = fvgs[fvgs.length - 1];
       fvgEl.innerText = `${latestFvg.type.replace("_FVG", "")} [${latestFvg.bottom} - ${latestFvg.top}]`;
     } else {
-      fvgEl.innerText = "Mitigated (Zero Imbalances)";
+      fvgEl.innerText = analysisUnavailable ? unavailableLabel : "Mitigated (Zero Imbalances)";
     }
   }
 
   const liqEl = document.getElementById("smc-liq-val");
   if (liqEl) {
-    liqEl.innerText = `${currZone} Equilibrium (Rangebound)`;
+    liqEl.innerText = analysisUnavailable ? unavailableLabel : `${currZone} Equilibrium (Rangebound)`;
   }
 
   // 3b. Fixed Range Volume Profile (POC / VAH / VAL)
@@ -1041,7 +1082,7 @@ function updateSmcHud(data) {
       vpSubEl.innerText = `VAH: ${vp.vah || '---'} | VAL: ${vp.val || '---'}`;
     }
   } else if (vpValEl) {
-    vpValEl.innerText = "Computing POC...";
+    vpValEl.innerText = analysisUnavailable ? unavailableLabel : "Computing POC...";
   }
 
   // 3c. Inversion FVG (IFVG) & Balanced Price Range (BPR)
@@ -1067,7 +1108,7 @@ function updateSmcHud(data) {
       ifvgValEl.innerText = `🧲 BPR [${latestBpr.bottom} - ${latestBpr.top}]`;
       if (ifvgSubEl) ifvgSubEl.innerText = "Balanced Price Magnet";
     } else {
-      ifvgValEl.innerText = "Zero Inversions";
+      ifvgValEl.innerText = analysisUnavailable ? unavailableLabel : "Zero Inversions";
       if (ifvgSubEl) ifvgSubEl.innerText = "Clean Price Action";
     }
   }
@@ -2241,6 +2282,11 @@ async function pollRealtimePrices() {
 
         const dispP = document.getElementById("display-verified-price");
         if (dispP) dispP.innerText = Number(p).toLocaleString();
+        const analysisPrice = document.getElementById("disp-verified-price");
+        if (analysisPrice) {
+          const analysisDecimals = currentSymbol.includes("JPY") ? 3 : (isForex ? 4 : (Number(p) < 1 ? 6 : 2));
+          analysisPrice.innerText = Number(p).toLocaleString(undefined, { maximumFractionDigits: analysisDecimals });
+        }
 
         lastKnownPrices[currentSymbol] = p;
 
@@ -2894,6 +2940,7 @@ function updateCockpitPlanCard(data) {
   const toastText = document.getElementById("cockpit-toast-text");
 
   const statusApproved = data.setup_status === "APPROVE";
+  const scanUnavailable = ["UNAVAILABLE", "ERROR"].includes(String(data.setup_status || "").toUpperCase());
   const vPrice = Number(data.verified_price);
   const candidate = data.candidate_plan;
   const candidateDirection = String(candidate?.direction || "").toUpperCase();
@@ -2925,7 +2972,7 @@ function updateCockpitPlanCard(data) {
       ? `PLAN · ${action} ${Number(rangeLow).toLocaleString()}`
       : (hasCandidatePlan
         ? `${isKhmer ? "រង់ចាំ · មើលប៉ុណ្ណោះ" : "WAIT · ANALYSIS ONLY"} · ${candidateDirection}`
-        : `WAIT · ${data.setup_status || "NO APPROVED SETUP"}`);
+        : (scanUnavailable ? (isKhmer ? "ស្កេនបរាជ័យ" : "SCAN FAILED") : `WAIT · ${data.setup_status || "NO APPROVED SETUP"}`));
   }
 
   const scoreBadge = document.getElementById("plan-score-badge");
@@ -2938,11 +2985,13 @@ function updateCockpitPlanCard(data) {
 
   if (subDesc) {
     if (!approved || action === "WAIT") {
-      subDesc.innerText = hasCandidatePlan
+      subDesc.innerText = scanUnavailable
+        ? (isKhmer ? (data.error_message_kh || "មិនអាចទទួលលទ្ធផលពី server បានទេ។") : (data.error_message || "Analysis request failed."))
+        : (hasCandidatePlan
         ? (candidate.entry_basis === "REFERENCE_PRICE_NO_BID_ASK"
           ? (isKhmer ? "មានកម្រិត Entry/SL/TP សម្រាប់វិភាគប៉ុណ្ណោះ; តម្លៃជា reference ហើយមិនទាន់មាន bid/ask ពី broker។" : "Entry/SL/TP are analysis only; these use a reference price because no broker bid/ask is connected.")
           : (isKhmer ? "មានផែនការវិភាគប៉ុណ្ណោះ។ ការជួញដូរនៅតែត្រូវបានចាក់សោរហូតដល់អនុម័ត។" : "Analysis preview only. Trading stays locked until this setup is approved."))
-        : (isKhmer ? "មិនមាន setup ដែលបានអនុម័តទេ។" : "No approved trade setup is available.");
+        : (isKhmer ? "មិនមាន setup ដែលបានអនុម័តទេ។" : "No approved trade setup is available."));
     } else if (action === "SELL") {
       subDesc.innerText = data.smart_analysis?.synthesized_cause_en || "Approved sell setup; review reported levels and risk.";
     } else {
@@ -2975,10 +3024,10 @@ function updateCockpitPlanCard(data) {
 
   // Invalidation & Why
   if (whyText) {
-    whyText.innerText = data.smart_analysis?.synthesized_cause_en || (showPreviewLevels ? (candidate.reasons || []).join(" · ") : (approved ? "Approved setup; review the reported levels and risk before acting." : "No approved setup. Wait for a fresh market scan."));
+    whyText.innerText = data.smart_analysis?.synthesized_cause_en || (scanUnavailable ? (data.error_message || "Analysis request failed.") : (showPreviewLevels ? (candidate.reasons || []).join(" · ") : (approved ? "Approved setup; review the reported levels and risk before acting." : "No approved setup. Wait for a fresh market scan.")));
   }
   if (whyKh) {
-    whyKh.innerText = data.smart_analysis?.synthesized_cause_kh || (showPreviewLevels ? (candidate.entry_basis === "REFERENCE_PRICE_NO_BID_ASK" ? "ផែនការនេះប្រើតម្លៃយោងប៉ុណ្ណោះ ព្រោះមិនមាន Bid/Ask ពិតពី broker។ សញ្ញាមិនទាន់អនុម័តទេ។" : "ផែនការនេះសម្រាប់វិភាគប៉ុណ្ណោះ។ ត្រូវរង់ចាំការអនុម័តមុនជួញដូរ។") : (approved ? "សញ្ញានេះត្រូវបានអនុម័ត។ សូមពិនិត្យតម្លៃ និងហានិភ័យមុនធ្វើសកម្មភាព។" : "មិនមានសញ្ញាដែលបានអនុម័តទេ។ សូមរង់ចាំការស្កេនទីផ្សារថ្មី។"));
+    whyKh.innerText = data.smart_analysis?.synthesized_cause_kh || (scanUnavailable ? (data.error_message_kh || "មិនអាចទទួលលទ្ធផលពី server បានទេ។") : (showPreviewLevels ? (candidate.entry_basis === "REFERENCE_PRICE_NO_BID_ASK" ? "ផែនការនេះប្រើតម្លៃយោងប៉ុណ្ណោះ ព្រោះមិនមាន Bid/Ask ពិតពី broker។ សញ្ញាមិនទាន់អនុម័តទេ។" : "ផែនការនេះសម្រាប់វិភាគប៉ុណ្ណោះ។ ត្រូវរង់ចាំការអនុម័តមុនជួញដូរ។") : (approved ? "សញ្ញានេះត្រូវបានអនុម័ត។ សូមពិនិត្យតម្លៃ និងហានិភ័យមុនធ្វើសកម្មភាព។" : "មិនមានសញ្ញាដែលបានអនុម័តទេ។ សូមរង់ចាំការស្កេនទីផ្សារថ្មី។")));
   }
 
   // Armed alert banner
