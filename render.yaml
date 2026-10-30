@@ -30,6 +30,12 @@ services:
         value: "true"
       - key: MT5_BRIDGE_TOKEN
         sync: false
+      - key: OANDA_API_TOKEN
+        sync: false
+      - key: OANDA_ACCOUNT_ID
+        sync: false
+      - key: OANDA_ENV
+        value: auto
       - key: SAAS_ADMIN_EMAIL
         sync: false
       - key: SAAS_ADMIN_PASSWORD

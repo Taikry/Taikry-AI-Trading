@@ -577,6 +577,8 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
 
             if src == "EXNESS_MT5":
                 prov_display = "Exness MT5 (Live)"
+            elif "OANDA_V20" in src.upper():
+                prov_display = "OANDA v20 (Authenticated)"
             elif "YAHOO" in src.upper():
                 prov_display = "Yahoo Finance (Fallback)"
             elif "BINANCE" in src.upper():
@@ -586,14 +588,13 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
             else:
                 prov_display = cfg.get("provider_display", src)
 
-            from taikry.data.mt5_receiver import mt5_receiver
-            mt5_p, mt5_src, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(sym)
-            if mt5_fresh and mt5_tick:
-                bid = float(mt5_tick.get("bid", p_formatted))
-                ask = float(mt5_tick.get("ask", p_formatted))
-                spread = float(mt5_tick.get("spread", 0.0))
+            verified_quote = market_data_engine.get_verified_quote(sym)
+            if verified_quote:
+                bid = float(verified_quote["bid"])
+                ask = float(verified_quote["ask"])
+                spread = float(verified_quote["spread"])
             else:
-                # Yahoo/candle feeds provide a last price, not a broker bid/ask quote.
+                # Reference prices and candle closes are not executable bid/ask quotes.
                 bid = ask = spread = None
 
             session_open = cached[1].get("session_open") if cached else None

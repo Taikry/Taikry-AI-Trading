@@ -6,13 +6,20 @@ Live market data is reported unavailable when no verified provider responds.
 """
 import time
 import datetime
+import threading
 from typing import Dict, Any, Optional, Tuple
 import requests
 import pandas as pd
 import numpy as np
 
 import logging
-from taikry.config import get_symbol_config, XAUUSD_PRICE_REFERENCE
+from taikry.config import (
+    get_symbol_config,
+    XAUUSD_PRICE_REFERENCE,
+    OANDA_API_TOKEN,
+    OANDA_ACCOUNT_ID,
+    OANDA_ENV,
+)
 
 logger = logging.getLogger("taikry.providers")
 
@@ -161,6 +168,199 @@ class BaseDataProvider:
 
     def get_latest_price(self, symbol: str) -> Tuple[float, str]:
         raise NotImplementedError
+
+
+class OandaDataProvider(BaseDataProvider):
+    """Read-only OANDA v20 prices and candles with sanitized failures."""
+
+    BASE_URLS = {
+        "practice": "https://api-fxpractice.oanda.com",
+        "live": "https://api-fxtrade.oanda.com",
+    }
+    GRANULARITIES = {"M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN"}
+
+    def __init__(self, api_token: str = OANDA_API_TOKEN, account_id: str = OANDA_ACCOUNT_ID, environment: str = OANDA_ENV):
+        self.api_token = api_token.strip()
+        self.account_id = account_id.strip()
+        self.environment = environment.strip().lower()
+        self.session = requests.Session()
+        if self.api_token:
+            self.session.headers.update({
+                "Authorization": f"Bearer {self.api_token}",
+                "Accept": "application/json",
+            })
+        self._lock = threading.RLock()
+        self._resolved_base_url: Optional[str] = None
+        self._resolved_account_id: Optional[str] = None
+        self._account_check_at = 0.0
+        self._account_check_failed = False
+        self._quote_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_token)
+
+    @staticmethod
+    def instrument_for(symbol: str) -> Optional[str]:
+        """Maps canonical app symbols to OANDA instrument notation."""
+        sym = str(symbol or "").upper().replace("/", "_").replace("-", "_").strip()
+        if "_" in sym:
+            return sym
+        if sym.endswith("USDT"):
+            return f"{sym[:-4]}_USD"
+        if len(sym) == 6 and sym.isalpha():
+            return f"{sym[:3]}_{sym[3:]}"
+        return None
+
+    def _environment_candidates(self) -> list[str]:
+        if self.environment in self.BASE_URLS:
+            return [self.environment]
+        return ["practice", "live"]
+
+    def _resolve_account(self) -> Tuple[Optional[str], Optional[str]]:
+        if not self.configured:
+            return None, None
+        with self._lock:
+            if self._resolved_base_url and self._resolved_account_id:
+                return self._resolved_base_url, self._resolved_account_id
+            if self._account_check_failed and time.monotonic() - self._account_check_at < 60.0:
+                return None, None
+
+            for environment in self._environment_candidates():
+                base_url = self.BASE_URLS[environment]
+                # An explicit environment and account ID do not need a discovery call.
+                if self.account_id and self.environment in self.BASE_URLS:
+                    self._resolved_base_url = base_url
+                    self._resolved_account_id = self.account_id
+                    return base_url, self.account_id
+                try:
+                    response = self.session.get(f"{base_url}/v3/accounts", timeout=(2.0, 4.0))
+                    if response.status_code != 200:
+                        continue
+                    accounts = response.json().get("accounts", [])
+                    account_ids = [str(item.get("id", "")) for item in accounts if item.get("id")]
+                    if self.account_id and self.account_id not in account_ids:
+                        continue
+                    selected_id = self.account_id or (account_ids[0] if account_ids else "")
+                    if selected_id:
+                        self._resolved_base_url = base_url
+                        self._resolved_account_id = selected_id
+                        self._account_check_failed = False
+                        return base_url, selected_id
+                except Exception:
+                    # Do not log request details or headers, which can contain credentials.
+                    continue
+
+            self._account_check_at = time.monotonic()
+            self._account_check_failed = True
+            logger.warning("OANDA v20 account discovery failed; OANDA data is unavailable until the next retry window.")
+            return None, None
+
+    @staticmethod
+    def _parse_timestamp(value: Any) -> Optional[datetime.datetime]:
+        if not value:
+            return None
+        try:
+            result = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if result.tzinfo is None:
+                result = result.replace(tzinfo=datetime.timezone.utc)
+            return result.astimezone(datetime.timezone.utc)
+        except (TypeError, ValueError):
+            return None
+
+    def get_latest_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        instrument = self.instrument_for(symbol)
+        if not instrument:
+            return None
+        now = time.monotonic()
+        cached = self._quote_cache.get(instrument)
+        if cached and now - cached[0] < 2.0:
+            return dict(cached[1])
+
+        base_url, account_id = self._resolve_account()
+        if not base_url or not account_id:
+            return None
+        try:
+            response = self.session.get(
+                f"{base_url}/v3/accounts/{account_id}/pricing",
+                params={"instruments": instrument},
+                timeout=(2.0, 4.0),
+            )
+            if response.status_code != 200:
+                return None
+            prices = response.json().get("prices", [])
+            item = next((entry for entry in prices if entry.get("instrument") == instrument), None)
+            if not item or item.get("status") != "tradeable":
+                return None
+            bids = item.get("bids") or []
+            asks = item.get("asks") or []
+            if not bids or not asks:
+                return None
+            bid = float(bids[0].get("price", 0))
+            ask = float(asks[0].get("price", 0))
+            timestamp = self._parse_timestamp(item.get("time"))
+            if bid <= 0 or ask < bid or timestamp is None:
+                return None
+            age = (datetime.datetime.now(datetime.timezone.utc) - timestamp).total_seconds()
+            if age < -5 or age > 60:
+                return None
+            quote = {
+                "symbol": str(symbol).upper(),
+                "instrument": instrument,
+                "bid": bid,
+                "ask": ask,
+                "price": (bid + ask) / 2.0,
+                "spread": ask - bid,
+                "timestamp": timestamp,
+                "source": "OANDA_V20",
+                "provider": "OANDA",
+            }
+            self._quote_cache[instrument] = (now, quote)
+            return dict(quote)
+        except Exception:
+            logger.debug("OANDA v20 price request failed for %s.", instrument)
+            return None
+
+    def fetch_ohlcv(self, symbol: str, timeframe: str = "M15", limit: int = 200) -> pd.DataFrame:
+        instrument = self.instrument_for(symbol)
+        granularity = str(timeframe).upper()
+        if not instrument or granularity not in self.GRANULARITIES or limit <= 0:
+            return pd.DataFrame()
+        base_url, _account_id = self._resolve_account()
+        if not base_url:
+            return pd.DataFrame()
+        try:
+            response = self.session.get(
+                f"{base_url}/v3/instruments/{instrument}/candles",
+                params={"granularity": granularity, "count": min(int(limit), 5000), "price": "M"},
+                timeout=(2.0, 5.0),
+            )
+            if response.status_code != 200:
+                return pd.DataFrame()
+            candles = response.json().get("candles", [])
+            records = []
+            for candle in candles:
+                mid = candle.get("mid") or {}
+                timestamp = self._parse_timestamp(candle.get("time"))
+                if not timestamp or not all(mid.get(k) is not None for k in ("o", "h", "l", "c")):
+                    continue
+                records.append({
+                    "timestamp": timestamp,
+                    "open": float(mid["o"]),
+                    "high": float(mid["h"]),
+                    "low": float(mid["l"]),
+                    "close": float(mid["c"]),
+                    "volume": float(candle.get("volume", 0.0)),
+                    "source": f"oanda_v20:{instrument}",
+                })
+            return pd.DataFrame(records)
+        except Exception:
+            logger.debug("OANDA v20 candle request failed for %s.", instrument)
+            return pd.DataFrame()
+
+    def get_latest_price(self, symbol: str) -> Tuple[float, str]:
+        quote = self.get_latest_quote(symbol)
+        return (float(quote["price"]), "oanda_v20") if quote else (0.0, "none")
 
 
 class BinanceDataProvider(BaseDataProvider):
@@ -401,6 +601,7 @@ class MultiProviderMarketData:
     def __init__(self):
         self.yahoo = YahooFinanceDataProvider()
         self.binance = BinanceDataProvider()
+        self.oanda = OandaDataProvider()
         self._candle_cache: Dict[str, Any] = {}
         self._price_cache: Dict[str, Tuple[float, float, str, Optional[datetime.datetime]]] = {}
 
@@ -416,6 +617,15 @@ class MultiProviderMarketData:
         if not mt5_df.empty and len(mt5_df) >= min(limit, 5):
             self._candle_cache[cache_key] = (now, mt5_df)
             return mt5_df
+
+        # Prefer account-authorized OANDA midpoint candles when its v20 key is configured.
+        if self.oanda.configured:
+            oanda_df = self.oanda.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+            min_required = min(limit, 5) if limit > 0 else 1
+            if not oanda_df.empty and len(oanda_df) >= min_required:
+                self._candle_cache[cache_key] = (now, oanda_df)
+                REFERENCE_BASE_PRICES[symbol.upper()] = float(oanda_df.iloc[-1]["close"])
+                return oanda_df
 
         cfg = get_symbol_config(symbol)
         category = cfg.get("category", "")
@@ -476,6 +686,15 @@ class MultiProviderMarketData:
             REFERENCE_BASE_PRICES[sym] = mt5_p
             return mt5_p, "EXNESS_MT5", recv_at
 
+        # A current OANDA bid/ask quote is stronger than cached candle or fallback prices.
+        oanda_quote = self.oanda.get_latest_quote(sym)
+        if oanda_quote:
+            oanda_price = float(oanda_quote["price"])
+            oanda_ts = oanda_quote["timestamp"]
+            self._price_cache[sym] = (now, oanda_price, "OANDA_V20", oanda_ts)
+            REFERENCE_BASE_PRICES[sym] = oanda_price
+            return oanda_price, "OANDA_V20", oanda_ts
+
         # 1. Check verified price cache (10s TTL)
         if sym in self._price_cache:
             ts_cached, p_val, src_val, dt_val = self._price_cache[sym]
@@ -530,6 +749,33 @@ class MultiProviderMarketData:
                 return p, src_labeled, ts
 
         return 0.0, "UNAVAILABLE", None
+
+    def get_verified_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Returns a fresh bid/ask quote from MT5 or OANDA, never a candle midpoint."""
+        sym = str(symbol or "").upper()
+        mt5_price, mt5_source, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(sym)
+        if mt5_fresh and mt5_price > 0:
+            try:
+                bid = float(mt5_tick.get("bid", 0.0))
+                ask = float(mt5_tick.get("ask", 0.0))
+                if bid > 0 and ask >= bid:
+                    return {
+                        "symbol": sym,
+                        "price": (bid + ask) / 2.0,
+                        "bid": bid,
+                        "ask": ask,
+                        "spread": ask - bid,
+                        "timestamp": mt5_tick.get("received_at") or datetime.datetime.now(datetime.timezone.utc),
+                        "source": "EXNESS_MT5",
+                        "provider": mt5_tick.get("broker") or "Exness MT5",
+                    }
+            except (TypeError, ValueError):
+                pass
+
+        quote = self.oanda.get_latest_quote(sym)
+        if quote:
+            return quote
+        return None
 
 
 market_data_engine = MultiProviderMarketData()

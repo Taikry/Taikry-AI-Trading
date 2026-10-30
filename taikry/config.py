@@ -57,6 +57,11 @@ ORCAROUTER_API_KEY = _credential("ORCAROUTER_API_KEY")
 ORCAROUTER_BASE_URL = os.getenv("ORCAROUTER_BASE_URL", "https://api.orcarouter.ai/v1").rstrip("/")
 ORCAROUTER_MODEL = os.getenv("ORCAROUTER_MODEL", "deepseek/deepseek-v4-pro-0813").strip()
 
+# OANDA v20 is a read-only market-data source for this application.
+OANDA_API_TOKEN = _credential("OANDA_API_TOKEN")
+OANDA_ACCOUNT_ID = _credential("OANDA_ACCOUNT_ID")
+OANDA_ENV = os.getenv("OANDA_ENV", "auto").strip().lower()
+
 # AnyRouter Inference Integration (OpenAI-compatible)
 ANYROUTER_API_KEY = _credential("ANYROUTER_API_KEY")
 ANYROUTER_BASE_URL = os.getenv("ANYROUTER_BASE_URL", "https://anyrouter.dev/api/v1").rstrip("/")

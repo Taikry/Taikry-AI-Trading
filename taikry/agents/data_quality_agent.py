@@ -13,7 +13,6 @@ from typing import Dict, Any, List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from taikry.data.providers import market_data_engine
-from taikry.data.mt5_receiver import mt5_receiver
 from taikry.data.validator import check_data_freshness
 from taikry.config import get_symbol_config
 
@@ -70,21 +69,34 @@ class MarketDataQualityAgent:
         evidence = []
         is_gold = "XAU" in sym
 
-        # 1. Broker Feed Inspection (MT5 Windows Bridge)
-        mt5_price, mt5_src, mt5_fresh, mt5_tick = mt5_receiver.get_latest_price(sym)
-        bid = mt5_tick.get("bid")
-        ask = mt5_tick.get("ask")
-        spread = mt5_tick.get("spread")
-        broker_name = mt5_tick.get("broker") or ("Exness" if mt5_fresh else None)
-
-        if mt5_fresh and bid and ask and bid > 0 and ask > 0:
+        # 1. Inspect a fresh executable bid/ask quote from the configured broker feed.
+        quote = market_data_engine.get_verified_quote(sym)
+        if quote:
+            bid = float(quote["bid"])
+            ask = float(quote["ask"])
+            broker_name = str(quote.get("provider") or quote.get("source") or "Verified provider")
+            quote_source = str(quote.get("source") or "VERIFIED_BID_ASK")
             broker_connected = True
-            calc_spread = round(ask - bid, 2)
-            evidence.append(f"Authentic broker feed verified via Windows MT5 ({broker_name}). Bid: {bid:.2f}, Ask: {ask:.2f}, Spread: {calc_spread:.2f} pts.")
+            calc_spread = max(0.0, ask - bid)
+            decimals = 3 if is_gold or "JPY" in sym else 6
+            calc_spread = round(calc_spread, decimals)
+            if quote_source == "EXNESS_MT5":
+                evidence.append(
+                    f"Authentic broker quote verified via Windows MT5 ({broker_name}). "
+                    f"Bid: {bid:.{decimals}f}, Ask: {ask:.{decimals}f}, Spread: {calc_spread:.{decimals}f}."
+                )
+            else:
+                evidence.append(
+                    f"Authenticated OANDA v20 quote verified. Bid: {bid:.{decimals}f}, "
+                    f"Ask: {ask:.{decimals}f}, Spread: {calc_spread:.{decimals}f}."
+                )
         else:
+            bid = ask = None
+            broker_name = None
+            quote_source = None
             broker_connected = False
-            calc_spread = spread if spread is not None else 0.0
-            evidence.append("Windows MT5 broker bridge is not connected or streaming ticks.")
+            calc_spread = 0.0
+            evidence.append("No fresh authenticated broker bid/ask quote is available.")
 
         # 2. Reference & Verified Price Retrieval. A signal scan supplies its
         # already-validated snapshot so this guardian audits the same candles and
@@ -118,7 +130,12 @@ class MarketDataQualityAgent:
             evidence.append(f"Feed staleness detected: age {latency:.0f}s exceeds threshold. Status: {freshness.get('reason', 'STALE')}.")
 
         # 4. Spread Status & Volatility Thresholds
-        max_spread = 2.5 if is_gold else 0.00035
+        configured_spread = cfg.get("spread_estimate")
+        try:
+            configured_spread = float(configured_spread) if configured_spread is not None else 0.00035
+        except (TypeError, ValueError):
+            configured_spread = 0.00035
+        max_spread = 2.5 if is_gold else max(0.00035, configured_spread * 2.0)
         spread_status = "NORMAL"
         if calc_spread > (max_spread * 2.0):
             spread_status = "WIDENED_LOCKOUT"
