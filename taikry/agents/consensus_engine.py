@@ -13,7 +13,7 @@ Enforces:
 """
 import datetime
 import math
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, List
 import zoneinfo
 
 from taikry.config import INITIAL_PAPER_BALANCE, LOCAL_TIMEZONE, MIN_RISK_REWARD_RATIO, RISK_PER_TRADE_PERCENT, get_symbol_config
