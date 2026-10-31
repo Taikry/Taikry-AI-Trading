@@ -108,7 +108,7 @@ Koyeb's free instance is for previews. It scales to zero after one hour without 
 
 ## 📱 Connecting Your Cloud URL to Telegram Bot & Mini App
 
-Once your cloud service is live with an HTTPS link (e.g. `https://taikry-ai-market.onrender.com`):
+Once your cloud service is live with an HTTPS link (e.g. `https://zyroxaitrading.onrender.com`):
 
 ### 1. Add Telegram Mini App Menu Button
 
@@ -117,7 +117,7 @@ Once your cloud service is live with an HTTPS link (e.g. `https://taikry-ai-mark
 3. Enter the Web App URL:
 
    ```text
-   https://taikry-ai-market.onrender.com/dashboard/
+   https://zyroxaitrading.onrender.com/dashboard/
    ```
 
 4. Enter the button title: `📈 Trade Cockpit`

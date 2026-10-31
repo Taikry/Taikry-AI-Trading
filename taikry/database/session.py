@@ -41,29 +41,11 @@ def init_db():
     """Initializes tables idempotently and runs schema migrations."""
     Base.metadata.create_all(bind=engine)
     try:
-        from taikry.database.migrate_lifecycle_events import run_migration
-        run_migration()
+        from taikry.database.versioned_migrations import run_pending_migrations
+        run_pending_migrations(engine)
     except Exception as exc:
-        logger.exception("Lifecycle schema migration failed")
-        raise RuntimeError("Lifecycle schema migration failed") from exc
-    try:
-        from taikry.database.migrate_vip_subscriptions import run_vip_migration
-        run_vip_migration()
-    except Exception as exc:
-        logger.exception("VIP subscription schema migration failed")
-        raise RuntimeError("VIP subscription schema migration failed") from exc
-    try:
-        from taikry.database.migrate_learning_metrics import run_learning_migration
-        run_learning_migration()
-    except Exception as exc:
-        logger.exception("Agent-learning schema migration failed")
-        raise RuntimeError("Agent-learning schema migration failed") from exc
-    try:
-        from taikry.database.migrate_payment_models import run_payment_migration
-        run_payment_migration()
-    except Exception as exc:
-        logger.exception("Payment schema migration failed")
-        raise RuntimeError("Payment schema migration failed") from exc
+        logger.exception("Versioned database migrations failed")
+        raise RuntimeError("Versioned database migrations failed") from exc
 
 # Auto-initialize database schema
 init_db()

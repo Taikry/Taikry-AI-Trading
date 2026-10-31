@@ -12,10 +12,14 @@ import hmac
 import hashlib
 import secrets
 import threading
+import logging
+import os
+import hashlib
 from typing import Tuple, Dict, Any, Optional
 
 PBKDF2_ITERATIONS = 600_000
 PBKDF2_HASH_ALGO = "sha256"
+logger = logging.getLogger("taikry.saas.security")
 
 
 def hash_password(password: str) -> Tuple[str, str]:
@@ -81,12 +85,60 @@ class LoginRateLimiter:
         self.window_seconds = window_seconds
         # key -> [timestamps of failed attempts]
         self._failed_attempts: Dict[str, list] = {}
+        self._redis_client = None
+        self._redis_retry_after = 0.0
+
+    def _redis(self):
+        """Use Redis when configured and reachable; keep local fallback available."""
+        if os.getenv("AUTH_RATE_LIMIT_BACKEND", "auto").strip().lower() == "memory":
+            return None
+        if time.monotonic() < self._redis_retry_after:
+            return None
+        if self._redis_client is not None:
+            return self._redis_client
+        try:
+            from redis import Redis
+            from taikry.config import REDIS_URL
+            client = Redis.from_url(
+                REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=0.25,
+                socket_timeout=0.25,
+                health_check_interval=30,
+            )
+            client.ping()
+            self._redis_client = client
+            return client
+        except Exception as exc:
+            self._redis_retry_after = time.monotonic() + 60.0
+            logger.warning("Shared auth rate limit is unavailable; using process-local fallback (%s).", type(exc).__name__)
+            return None
+
+    @staticmethod
+    def _redis_key(key: str) -> str:
+        key_hash = hashlib.sha256(str(key).encode("utf-8")).hexdigest()
+        return f"taikry:auth:failed:{key_hash}"
 
     def is_rate_limited(self, key: str) -> Tuple[bool, int]:
         """
         Returns (is_limited, seconds_remaining).
         """
         now = time.time()
+        client = self._redis()
+        if client is not None:
+            redis_key = self._redis_key(key)
+            try:
+                client.zremrangebyscore(redis_key, "-inf", now - self.window_seconds)
+                attempts = int(client.zcard(redis_key))
+                if attempts >= self.max_attempts:
+                    oldest = client.zrange(redis_key, 0, 0, withscores=True)
+                    seconds_remaining = int(self.window_seconds - (now - oldest[0][1])) if oldest else 1
+                    return True, max(1, seconds_remaining)
+                return False, 0
+            except Exception as exc:
+                self._redis_client = None
+                self._redis_retry_after = time.monotonic() + 60.0
+                logger.warning("Shared auth rate limit failed; using process-local fallback (%s).", type(exc).__name__)
         with self._lock:
             attempts = self._failed_attempts.get(key, [])
             # prune old attempts
@@ -101,12 +153,31 @@ class LoginRateLimiter:
 
     def record_failure(self, key: str):
         now = time.time()
+        client = self._redis()
+        if client is not None:
+            try:
+                redis_key = self._redis_key(key)
+                client.zadd(redis_key, {secrets.token_urlsafe(12): now})
+                client.expire(redis_key, self.window_seconds + 60)
+                return
+            except Exception as exc:
+                self._redis_client = None
+                self._redis_retry_after = time.monotonic() + 60.0
+                logger.warning("Shared auth rate limit failed; using process-local fallback (%s).", type(exc).__name__)
         with self._lock:
             attempts = self._failed_attempts.get(key, [])
             attempts.append(now)
             self._failed_attempts[key] = attempts
 
     def reset(self, key: str):
+        client = self._redis()
+        if client is not None:
+            try:
+                client.delete(self._redis_key(key))
+            except Exception as exc:
+                self._redis_client = None
+                self._redis_retry_after = time.monotonic() + 60.0
+                logger.warning("Shared auth rate limit reset failed (%s).", type(exc).__name__)
         with self._lock:
             if key in self._failed_attempts:
                 del self._failed_attempts[key]

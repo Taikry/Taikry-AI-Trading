@@ -132,6 +132,8 @@ def list_payment_plans(db: Session = Depends(get_db)):
                 "features": {
                     "max_ai_scans_per_day": plan.max_ai_scans_per_day,
                     "max_deep_analysis_per_day": plan.max_deep_analysis_per_day,
+                    "signal_alerts_target_min_per_day": plan.signal_alerts_target_min_per_day,
+                    "max_signal_alerts_per_day": plan.max_signal_alerts_per_day,
                     "max_watchlists": plan.max_watchlists,
                     "backtesting_enabled": plan.backtesting_enabled,
                     "telegram_alerts_enabled": plan.telegram_alerts_enabled,

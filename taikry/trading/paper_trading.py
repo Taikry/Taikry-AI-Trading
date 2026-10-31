@@ -30,11 +30,20 @@ class PaperTradingEngine:
     def __init__(self):
         self.initial_balance = INITIAL_PAPER_BALANCE
 
-    def get_account_summary(self) -> Dict[str, Any]:
+    def get_account_summary(
+        self,
+        user_id: Optional[int] = None,
+        include_all: bool = False
+    ) -> Dict[str, Any]:
         """Calculates current paper balance, equity, and realized PnL."""
         db = SessionLocal()
         try:
-            trades = db.query(PaperTrade).all()
+            query = db.query(PaperTrade)
+            if user_id is not None:
+                query = query.filter(PaperTrade.user_id == user_id)
+            elif not include_all:
+                query = query.filter(PaperTrade.user_id.is_(None))
+            trades = query.all()
             realized_pnl = sum(t.pnl for t in trades if t.status == "CLOSED")
             open_trades = [t for t in trades if t.status == "OPEN"]
 
@@ -55,17 +64,22 @@ class PaperTradingEngine:
         finally:
             db.close()
 
-    def check_daily_loss_limit(self) -> bool:
+    def check_daily_loss_limit(self, user_id: Optional[int] = None) -> bool:
         """
         Circuit breaker: Checks if today's closed losses exceed MAX_DAILY_LOSS_PERCENT (2.5%).
         """
         db = SessionLocal()
         try:
             today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            today_trades = db.query(PaperTrade).filter(
+            query = db.query(PaperTrade).filter(
                 PaperTrade.status == "CLOSED",
                 PaperTrade.exit_time >= today_start
-            ).all()
+            )
+            if user_id is not None:
+                query = query.filter(PaperTrade.user_id == user_id)
+            else:
+                query = query.filter(PaperTrade.user_id.is_(None))
+            today_trades = query.all()
 
             today_loss = sum(t.pnl for t in today_trades if t.pnl < 0)
             max_allowed_loss = -(self.initial_balance * (MAX_DAILY_LOSS_PERCENT / 100.0))
@@ -84,7 +98,8 @@ class PaperTradingEngine:
         stop_loss: float,
         take_profit_1: float,
         take_profit_2: Optional[float] = None,
-        risk_percentage: Optional[float] = None
+        risk_percentage: Optional[float] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Opens a simulated paper trade with configured risk and modeled friction.
@@ -125,7 +140,7 @@ class PaperTradingEngine:
         pip_val = cfg.get("pip_value", 0.1)
 
         # 1. Circuit breaker checks
-        if not self.check_daily_loss_limit():
+        if not self.check_daily_loss_limit(user_id=user_id):
             return {
                 "success": False,
                 "reason": f"Daily loss limit ({MAX_DAILY_LOSS_PERCENT}%) breached. Trading paused for today."
@@ -133,7 +148,12 @@ class PaperTradingEngine:
 
         db = SessionLocal()
         try:
-            open_count = db.query(PaperTrade).filter(PaperTrade.status == "OPEN").count()
+            open_query = db.query(PaperTrade).filter(PaperTrade.status == "OPEN")
+            if user_id is not None:
+                open_query = open_query.filter(PaperTrade.user_id == user_id)
+            else:
+                open_query = open_query.filter(PaperTrade.user_id.is_(None))
+            open_count = open_query.count()
             if open_count >= MAX_SIMULTANEOUS_POSITIONS:
                 return {
                     "success": False,
@@ -158,7 +178,7 @@ class PaperTradingEngine:
             if risk_pts <= 0:
                 return {"success": False, "reason": "Invalid Stop Loss equal to Entry price."}
 
-            account = self.get_account_summary()
+            account = self.get_account_summary(user_id=user_id)
             current_balance = account["current_balance"]
             max_risk_dollars = current_balance * (effective_risk_pct / 100.0)
 
@@ -176,6 +196,7 @@ class PaperTradingEngine:
             est_commission = round(COMMISSION_PER_LOT * calculated_lots, 2)
 
             trade = PaperTrade(
+                user_id=user_id,
                 symbol=symbol,
                 direction=direction,
                 entry_price=actual_entry,
@@ -214,14 +235,21 @@ class PaperTradingEngine:
         finally:
             db.close()
 
-    def update_open_trades(self, current_prices: Dict[str, float]) -> List[Dict[str, Any]]:
+    def update_open_trades(
+        self,
+        current_prices: Dict[str, float],
+        user_id: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
         """
         Evaluates active trades against current prices to trigger TP/SL hits.
         """
         closed_events = []
         db = SessionLocal()
         try:
-            open_trades = db.query(PaperTrade).filter(PaperTrade.status == "OPEN").all()
+            open_query = db.query(PaperTrade).filter(PaperTrade.status == "OPEN")
+            if user_id is not None:
+                open_query = open_query.filter(PaperTrade.user_id == user_id)
+            open_trades = open_query.all()
             for t in open_trades:
                 price = current_prices.get(t.symbol)
                 if not price or price <= 0:
@@ -283,6 +311,7 @@ class PaperTradingEngine:
 
                     closed_events.append({
                         "trade_id": t.id,
+                        "user_id": t.user_id,
                         "symbol": t.symbol,
                         "direction": t.direction,
                         "exit_price": exit_price,

@@ -109,6 +109,7 @@ def sign_up_user(
         ai_analysis_completed=True,
         signal_generated=True,
         signal_invalidated=True,
+        macro_events=True,
         daily_summary=True,
         trial_expiration_reminders=True,
         subscription_status_changes=True,

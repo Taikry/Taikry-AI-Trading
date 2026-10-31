@@ -53,6 +53,75 @@ def test_technical_indicator_computation(sample_market_df):
     assert "trend" in summary
     assert 0 <= summary["rsi"] <= 100
     assert summary["atr"] > 0
+    assert 0 <= summary["adx"] <= 100
+    assert summary["atr_pct"] > 0
+    assert "market_structure" in summary
+
+
+def test_atr_uses_wilder_smoothing_seed():
+    from taikry.indicators.technical import calculate_atr
+
+    ranges = np.arange(1.0, 17.0)
+    df = pd.DataFrame({
+        "high": 100.0 + ranges,
+        "low": np.full(len(ranges), 100.0),
+        "close": 100.0 + ranges / 2.0,
+    })
+    atr = calculate_atr(df, period=14)
+
+    seeded = float(np.mean(ranges[:14]))
+    expected = ((seeded * 13.0) + ranges[14]) / 14.0
+    assert atr.iloc[13] == pytest.approx(seeded)
+    assert atr.iloc[14] == pytest.approx(expected)
+
+
+def test_vwap_does_not_invent_volume_when_feed_has_none():
+    from taikry.indicators.technical import calculate_vwap
+
+    df = pd.DataFrame({"high": [2.0, 3.0], "low": [1.0, 2.0], "close": [1.5, 2.5]})
+    assert calculate_vwap(df).isna().all()
+
+
+def test_dmi_separates_trend_direction_from_strength():
+    from taikry.indicators.technical import calculate_dmi_adx
+
+    close = np.linspace(100.0, 130.0, 80)
+    df = pd.DataFrame({"high": close + 0.4, "low": close - 0.2, "close": close})
+    dmi = calculate_dmi_adx(df, period=14)
+
+    assert dmi["plus_di"].iloc[-1] > dmi["minus_di"].iloc[-1]
+    assert dmi["adx"].iloc[-1] > 20
+
+
+@pytest.mark.parametrize(
+    "symbol,start,step,decimals,asset_class",
+    [("EURUSD", 1.05, 0.0003, 5, "FOREX"), ("BTCUSDT", 62000.0, 30.0, 2, "CRYPTO")],
+)
+def test_technical_agent_asset_context_and_risk_levels(symbol, start, step, decimals, asset_class):
+    from taikry.agents.technical_analyst import TechnicalAnalystAgent
+
+    count = 240
+    close = start + np.arange(count) * step + np.sin(np.arange(count) / 4.0) * step * 0.2
+    frame = pd.DataFrame({
+        "timestamp": pd.date_range("2026-01-01", periods=count, freq="h", tz="UTC"),
+        "open": close - step * 0.1,
+        "high": close + step * 0.35,
+        "low": close - step * 0.35,
+        "close": close,
+        "volume": np.full(count, 1000.0),
+    })
+    report = TechnicalAnalystAgent().analyze(
+        symbol,
+        {"D1": frame, "H4": frame, "H1": frame, "M15": frame, "W1": frame},
+    )
+
+    assert report["asset_class"] == asset_class
+    assert report["setup_eligible"] is True
+    levels = report["key_price_levels"]
+    assert levels["suggested_entry"] == round(levels["suggested_entry"], decimals)
+    assert levels["suggested_stop_loss"] < levels["suggested_entry"] < levels["take_profit_1"] < levels["take_profit_2"]
+    actual_rr = (levels["take_profit_1"] - levels["suggested_entry"]) / (levels["suggested_entry"] - levels["suggested_stop_loss"])
+    assert actual_rr == pytest.approx(2.0, abs=0.03)
 
 def test_candlestick_hammer_detection():
     # Construct a hammer / pin bar: small body at top, long lower wick

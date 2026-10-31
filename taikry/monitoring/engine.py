@@ -342,10 +342,16 @@ class MarketMonitor247:
                 telegram_ok, msg_id, tg_err = telegram_service.send_xauusd_signal_alert(xau_signal)
                 if not telegram_ok:
                     logger.warning("Telegram delivery failed for %s: %s", sym, tg_err)
+                elif msg_id and created_signal.get("signal_id"):
+                    signal_lifecycle_manager.attach_telegram_message(
+                        created_signal["signal_id"], msg_id, take_profit_3=xau_signal.get("take_profit_3")
+                    )
             else:
                 logger.info("XAUUSD signal suppressed: %s", xau_signal.get("error") or xau_signal.get("rejection_reason"))
         else:
-            telegram_ok = telegram_service.send_validated_signal_report(consensus_res)
+            report_payload = dict(consensus_res)
+            report_payload["signal_id"] = created_signal.get("signal_id")
+            telegram_ok = telegram_service.send_validated_signal_report(report_payload)
             if not telegram_ok:
                 logger.info("Telegram did not deliver the validated %s plan (check bot configuration and plan freshness).", sym)
 
@@ -394,6 +400,11 @@ class MarketMonitor247:
 
     def _notify_trade_closure(self, trade_event: Dict[str, Any]):
         """Dispatches trade completion notification."""
+        if trade_event.get("user_id") is not None:
+            from taikry.trading.paper_trade_alerts import dispatch_paper_trade_alert
+            dispatch_paper_trade_alert(trade_event)
+            return
+
         msg = f"""🔔 <b>PAPER TRADE CLOSED: {trade_event['direction']} {trade_event['symbol']}</b>
 
 Reason: <b>{trade_event['exit_reason']}</b>

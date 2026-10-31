@@ -163,7 +163,7 @@ const I18N = {
     autofix_sub: "Zero-Downtime Autonomous Remediation for Feeds, Real LLMs & Drawdown Thresholds",
     run_autofix_btn: "Run Diagnostic & Auto-Fix",
     autofix_stream_title: "Live Incident Stream & Auto-Remediation Log",
-    cockpit_execute: "🧾 Record Paper Trade & Send Manual Ticket"
+    cockpit_execute: "🧾 Record Paper Trade"
   },
   kh: {
     brand_title: "ZYROX AI — ប្រព័ន្ធបញ្ញាសិប្បនិម្មិតវិភាគទីផ្សារ",
@@ -1247,41 +1247,135 @@ async function fetchHealthAndPaper() {
     }
 
     // 2. Paper Trades
-    const pr = await fetch(`${API_BASE}/api/v1/paper-trades`);
+    if (paperTradeStreamConnected) return;
+    const pr = await fetch(`${API_BASE}/api/v1/me/paper-trades`);
     const pData = pr.ok ? await pr.json() : {};
-    const acct = pData.account_summary || {};
-    const balanceEl = document.getElementById("paper-balance");
-    if (balanceEl) balanceEl.innerText = acct.current_balance != null && Number.isFinite(Number(acct.current_balance))
-      ? `$${Number(acct.current_balance).toLocaleString('en-US', {minimumFractionDigits: 2})}`
-      : "Unavailable";
-    const pnl = acct.realized_pnl == null ? NaN : Number(acct.realized_pnl);
-    const pnlEl = document.getElementById("paper-pnl");
-    if (pnlEl) {
-      pnlEl.innerText = Number.isFinite(pnl) ? `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString('en-US', {minimumFractionDigits: 2})}` : "Unavailable";
-      pnlEl.className = Number.isFinite(pnl) ? (pnl >= 0 ? "metric-value val-green" : "metric-value val-red") : "metric-value";
-    }
-
-    const tbody = document.getElementById("paper-trades-body");
-    if (!pr.ok) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">Paper ledger requires administrator access.</td></tr>`;
-    } else if (tbody && pData.trades && pData.trades.length > 0) {
-      tbody.innerHTML = "";
-      pData.trades.slice(0, 5).forEach(t => {
-        const row = document.createElement("tr");
-        const pnlValue = t.pnl == null ? NaN : Number(t.pnl);
-        row.innerHTML = `
-          <td><b>${escapeHtml(String(t.symbol || "N/A"))}</b></td>
-          <td style="color: ${t.direction === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)'}">${escapeHtml(String(t.direction || "N/A"))}</td>
-          <td>${t.lot_size != null && Number.isFinite(Number(t.lot_size)) ? Number(t.lot_size) : "N/A"}</td>
-          <td style="color: ${Number.isFinite(pnlValue) && pnlValue >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${Number.isFinite(pnlValue) ? `$${pnlValue.toFixed(2)}` : "N/A"}</td>
-          <td><span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: rgba(255,255,255,0.08);">${escapeHtml(String(t.status || "N/A"))}</span></td>
-        `;
-        tbody.appendChild(row);
-      });
-    } else if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No paper trades recorded.</td></tr>`;
-    }
+    renderMyPaperLedger(pData, pr.ok);
   } catch (e) {}
+}
+
+function renderMyPaperLedger(pData, signedIn = true) {
+  if (signedIn) window.paperTradeCache = pData.trades || [];
+  const acct = pData.account_summary || {};
+  const balanceEl = document.getElementById("paper-balance");
+  if (balanceEl) balanceEl.innerText = acct.current_balance != null && Number.isFinite(Number(acct.current_balance))
+    ? `$${Number(acct.current_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+    : "Unavailable";
+  const pnl = acct.realized_pnl == null ? NaN : Number(acct.realized_pnl);
+  const pnlEl = document.getElementById("paper-pnl");
+  if (pnlEl) {
+    pnlEl.innerText = Number.isFinite(pnl) ? `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : "Unavailable";
+    pnlEl.className = Number.isFinite(pnl) ? (pnl >= 0 ? "metric-value val-green" : "metric-value val-red") : "metric-value";
+  }
+  const todayCountEl = document.getElementById("paper-today-count");
+  if (todayCountEl) todayCountEl.textContent = signedIn ? String(acct.today_trades_count ?? 0) : "Sign in";
+  const totalCountEl = document.getElementById("paper-total-count");
+  if (totalCountEl) totalCountEl.textContent = signedIn ? String(acct.total_trades ?? 0) : "Sign in";
+  const winRateEl = document.getElementById("paper-win-rate");
+  if (winRateEl) winRateEl.textContent = signedIn ? `${Number(acct.win_rate_percent || 0).toFixed(1)}%` : "Sign in";
+
+  const tbody = document.getElementById("paper-trades-body");
+  if (!signedIn) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">Sign in to view your private paper-trade ledger.</td></tr>`;
+  } else if (tbody && pData.trades && pData.trades.length > 0) {
+    tbody.innerHTML = "";
+    pData.trades.slice(0, 5).forEach(t => {
+      const row = document.createElement("tr");
+      const isOpen = String(t.status || "").toUpperCase() === "OPEN";
+      const pnlSource = isOpen ? t.unrealized_pnl : t.pnl;
+      const pnlValue = pnlSource == null ? NaN : Number(pnlSource);
+      const livePrice = t.current_price == null ? "" : `Live ${Number(t.current_price).toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
+      const levels = `SL ${Number(t.stop_loss).toLocaleString(undefined, { maximumFractionDigits: 4 })} · TP ${Number(t.take_profit_1).toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
+      row.innerHTML = `
+        <td><b>${escapeHtml(String(t.symbol || "N/A"))}</b></td>
+        <td style="color: ${t.direction === 'BUY' ? 'var(--accent-green)' : 'var(--accent-red)'}">${escapeHtml(String(t.direction || "N/A"))}</td>
+        <td>${t.lot_size != null && Number.isFinite(Number(t.lot_size)) ? Number(t.lot_size) : "N/A"}</td>
+        <td style="color: ${Number.isFinite(pnlValue) && pnlValue >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${Number.isFinite(pnlValue) ? `$${pnlValue.toFixed(2)}` : "N/A"}</td>
+        <td><span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: rgba(255,255,255,0.08);">${escapeHtml(String(t.tp_sl_state || t.status || "N/A"))}</span><small style="display:block;color:var(--text-muted);font-size:9px;margin-top:3px">${escapeHtml(livePrice || (isOpen ? "Waiting for fresh price" : "Closed"))}<br>${escapeHtml(isOpen ? levels : String(t.exit_reason || ""))}</small><button class="paper-journal-open" type="button" onclick="openPaperTradeJournal(${Number(t.id)})">Journal · កំណត់ត្រា</button></td>
+      `;
+      tbody.appendChild(row);
+    });
+  } else if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted">No paper trades recorded.</td></tr>`;
+  }
+}
+
+function openPaperTradeJournal(tradeId) {
+  const trade = (window.paperTradeCache || []).find(item => Number(item.id) === Number(tradeId));
+  if (!trade) return;
+  let modal = document.getElementById("paper-journal-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "paper-journal-modal";
+    modal.className = "paper-journal-backdrop";
+    modal.innerHTML = `
+      <section class="paper-journal-card" role="dialog" aria-modal="true" aria-labelledby="paper-journal-title">
+        <div class="paper-journal-heading">
+          <div><h2 id="paper-journal-title">Trade Journal · កំណត់ហេតុជួញដូរ</h2><p id="paper-journal-trade-label"></p></div>
+          <button type="button" class="paper-journal-close" onclick="closePaperTradeJournal()" aria-label="Close">×</button>
+        </div>
+        <label for="paper-journal-notes">Notes · កំណត់ចំណាំ</label>
+        <textarea id="paper-journal-notes" maxlength="5000" rows="5" placeholder="Why did you enter? What did you learn? · ហេតុអ្វីបានចូល? តើបានរៀនអ្វី?"></textarea>
+        <label for="paper-journal-tags">Tags · ស្លាក (comma separated)</label>
+        <input id="paper-journal-tags" maxlength="400" placeholder="breakout, patience, news" />
+        <div class="paper-journal-selects">
+          <div><label for="paper-journal-emotion">Emotion · អារម្មណ៍</label><select id="paper-journal-emotion"><option value="">Not recorded</option><option>Calm</option><option>Confident</option><option>Anxious</option><option>FOMO</option><option>Frustrated</option></select></div>
+          <div><label for="paper-journal-mistake">Mistake · កំហុស</label><select id="paper-journal-mistake"><option value="">None / not recorded</option><option>Late entry</option><option>Early exit</option><option>Oversized risk</option><option>Moved stop</option><option>Ignored plan</option><option>Revenge trade</option></select></div>
+        </div>
+        <div id="paper-journal-feedback" role="status" aria-live="polite"></div>
+        <div class="paper-journal-actions"><button type="button" class="btn btn-outline" onclick="closePaperTradeJournal()">Cancel</button><button type="button" class="btn btn-gold" id="paper-journal-save" onclick="savePaperTradeJournal(${Number(trade.id)})">Save Journal</button></div>
+      </section>`;
+    modal.addEventListener("click", event => { if (event.target === modal) closePaperTradeJournal(); });
+    document.body.appendChild(modal);
+  }
+  document.getElementById("paper-journal-trade-label").textContent = `#${trade.id} · ${trade.symbol} ${trade.direction} · ${trade.status}`;
+  document.getElementById("paper-journal-notes").value = trade.journal_notes || "";
+  document.getElementById("paper-journal-tags").value = (trade.journal_tags || []).join(", ");
+  document.getElementById("paper-journal-emotion").value = trade.emotion_tag || "";
+  document.getElementById("paper-journal-mistake").value = trade.mistake_tag || "";
+  document.getElementById("paper-journal-feedback").textContent = "";
+  modal.style.display = "flex";
+}
+
+function closePaperTradeJournal() {
+  const modal = document.getElementById("paper-journal-modal");
+  if (modal) modal.style.display = "none";
+}
+
+async function savePaperTradeJournal(tradeId) {
+  const feedback = document.getElementById("paper-journal-feedback");
+  const saveButton = document.getElementById("paper-journal-save");
+  if (saveButton) saveButton.disabled = true;
+  if (feedback) feedback.textContent = "Saving… · កំពុងរក្សាទុក…";
+  try {
+    const tags = (document.getElementById("paper-journal-tags")?.value || "")
+      .split(/[;,]/).map(value => value.trim()).filter(Boolean).slice(0, 12);
+    const response = await fetch(`${API_BASE}/api/v1/me/paper-trades/${tradeId}/journal`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notes: document.getElementById("paper-journal-notes")?.value || "",
+        tags,
+        emotion_tag: document.getElementById("paper-journal-emotion")?.value || null,
+        mistake_tag: document.getElementById("paper-journal-mistake")?.value || null
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Unable to save journal.");
+    const cached = (window.paperTradeCache || []).find(item => Number(item.id) === Number(tradeId));
+    if (cached && data.journal) {
+      cached.journal_notes = data.journal.notes;
+      cached.journal_tags = data.journal.tags;
+      cached.emotion_tag = data.journal.emotion_tag;
+      cached.mistake_tag = data.journal.mistake_tag;
+    }
+    if (feedback) feedback.textContent = "Saved · រក្សាទុករួចរាល់";
+    window.setTimeout(closePaperTradeJournal, 600);
+  } catch (error) {
+    if (feedback) feedback.textContent = error.message;
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
 }
 
 function updateMacroCatalystUI(catalyst) {
@@ -1996,7 +2090,7 @@ async function fetchCockpitBotData() {
   if (symEl) symEl.innerText = currentSymbol;
   try {
     const [res, quotaRes] = await Promise.all([
-      fetch(`${API_BASE}/api/v1/paper-trades`),
+      fetch(`${API_BASE}/api/v1/me/paper-trades`),
       fetch(`${API_BASE}/api/v1/xauusd/signals/daily-quota`)
     ]);
     const quotaEl = document.getElementById("cockpit-bot-quota");
@@ -2020,7 +2114,7 @@ async function fetchCockpitBotData() {
       }
     } else {
       const openEl = document.getElementById("cockpit-bot-open");
-      if (openEl) openEl.innerText = "Admin access required";
+      if (openEl) openEl.innerText = "Sign in to view your paper positions";
     }
   } catch (e) {
     console.warn("Bot data fetch error:", e);
@@ -2031,7 +2125,7 @@ async function fetchCockpitHistory() {
   const container = document.getElementById("cockpit-history-container");
   if (!container) return;
   try {
-    const res = await fetch(`${API_BASE}/api/v1/paper-trades`);
+    const res = await fetch(`${API_BASE}/api/v1/me/paper-trades`);
     if (res.ok) {
       const data = await res.json();
       const trades = data.trades || [];
@@ -2040,9 +2134,12 @@ async function fetchCockpitHistory() {
         return;
       }
       container.innerHTML = trades.slice(0, 10).map(t => {
-        const pnl = t.pnl == null || !Number.isFinite(Number(t.pnl)) ? null : Number(t.pnl);
+        const pnlValue = t.status === "OPEN" ? t.unrealized_pnl : t.pnl;
+        const pnl = pnlValue == null || !Number.isFinite(Number(pnlValue)) ? null : Number(pnlValue);
         const rValue = t.r_multiple == null || !Number.isFinite(Number(t.r_multiple)) ? null : Number(t.r_multiple);
-        const result = rValue != null ? `${rValue.toFixed(2)}R` : (pnl != null ? `$${pnl.toFixed(2)}` : "N/A");
+        const result = t.status === "OPEN"
+          ? (pnl != null ? `Live $${pnl.toFixed(2)} · SL ${Number(t.stop_loss).toLocaleString()} / TP ${Number(t.take_profit_1).toLocaleString()}` : "Waiting for fresh price")
+          : (rValue != null ? `${rValue.toFixed(2)}R` : (pnl != null ? `$${pnl.toFixed(2)}` : "N/A"));
         return `
         <div class="history-item-row">
           <span class="history-sym">${escapeHtml(String(t.symbol || "N/A"))}</span>
@@ -2892,7 +2989,17 @@ function updateCockpitPlanCard(data) {
   if (a1Sub) {
     const rsi = a1.key_price_levels?.rsi ?? "N/A";
     const atr = a1.key_price_levels?.atr ?? "N/A";
-    a1Sub.innerText = `RSI ${rsi} · ATR ${atr}`;
+    const tech = a1.technical_context || {};
+    const metric = (value, digits = 1) => value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "N/A";
+    const assetLabel = tech.asset_class || a1.asset_class || "MARKET";
+    const trigger = tech.entry_trigger || a1.key_price_levels?.entry_trigger || "N/A";
+    const triggerLabel = isKhmer
+      ? ({ NEAR_EMA20_PULLBACK: "Pullback ជិត EMA20", EXTENDED_FROM_EMA20: "តម្លៃឆ្ងាយពី EMA20", BREAKOUT_WITH_ACTIVITY_CONFIRMATION: "បំបែកឡើង + Activity", BREAKDOWN_WITH_ACTIVITY_CONFIRMATION: "បំបែកចុះ + Activity" }[trigger] || trigger)
+      : ({ NEAR_EMA20_PULLBACK: "EMA20 pullback", EXTENDED_FROM_EMA20: "extended from EMA20", BREAKOUT_WITH_ACTIVITY_CONFIRMATION: "breakout + activity", BREAKDOWN_WITH_ACTIVITY_CONFIRMATION: "breakdown + activity" }[trigger] || trigger);
+    const volatility = tech.volatility_regime || "N/A";
+    a1Sub.innerText = isKhmer
+      ? `${assetLabel} · RSI ${rsi} · ADX ${metric(tech.adx)} · ATR ${atr} (${metric(tech.atr_percent, 3)}%) · Vol ${volatility} · ${triggerLabel}`
+      : `${assetLabel} · RSI ${rsi} · ADX ${metric(tech.adx)} · ATR ${atr} (${metric(tech.atr_percent, 3)}%) · ${volatility} vol · ${triggerLabel}`;
   }
 
   const a2Val = document.getElementById("c-agent-2-status");
@@ -3087,8 +3194,8 @@ let currentCalculatedLots = "0.08 Lots";
 async function executePlanTradeBridge() {
   const btn = document.getElementById("btn-cockpit-execute");
   const ticketButtonLabel = () => isKhmer
-    ? "🧾 កត់ត្រាជួញដូរសាកល្បង និងផ្ញើសំបុត្រជូនដំណឹង"
-    : "🧾 Record Paper Trade & Send Manual Ticket";
+    ? "🧾 កត់ត្រាជួញដូរសាកល្បង"
+    : "🧾 Record Paper Trade";
   const restoreButton = () => {
     if (!btn) return;
     btn.disabled = false;
@@ -3116,7 +3223,7 @@ async function executePlanTradeBridge() {
     return;
   }
   if ((dir === "BUY" && !(sl < entry && entry < tp1)) || (dir === "SELL" && !(sl > entry && entry > tp1))) {
-    reportError("The approved setup has price levels that do not match its direction. No ticket was sent.");
+    reportError("The approved setup has price levels that do not match its direction. No paper trade was recorded.");
     return;
   }
   if (!Number.isFinite(riskPct) || riskPct < 0.1 || riskPct > 2 || !Number.isFinite(rrFloor) || rrFloor < 2 || rrFloor > 3) {
@@ -3125,17 +3232,17 @@ async function executePlanTradeBridge() {
   }
   const actualRR = Math.abs(tp1 - entry) / Math.abs(entry - sl);
   if (actualRR < rrFloor) {
-    reportError(`This setup's calculated R:R (1:${actualRR.toFixed(2)}) is below your saved 1:${rrFloor.toFixed(1)} paper-ticket minimum.`);
+    reportError(`This setup's calculated R:R (1:${actualRR.toFixed(2)}) is below your saved 1:${rrFloor.toFixed(1)} paper-trade minimum.`);
     return;
   }
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<span>⏳ Recording paper trade & sending manual ticket...</span>`;
+    btn.innerHTML = `<span>⏳ Recording paper trade...</span>`;
   }
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/trade/execute-bridge`, {
+    const res = await fetch(`${API_BASE}/api/v1/me/paper-trades`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -3144,22 +3251,20 @@ async function executePlanTradeBridge() {
         entry_price: entry,
         stop_loss: sl,
         take_profit_1: tp1,
-        risk_percentage: riskPct,
-        source: "Cockpit paper-trade ticket"
+        risk_percentage: riskPct
       })
     });
 
     const data = await res.json();
     if (data.success) {
-      const paperStatus = data.telegram_dispatched
-        ? (data.paper_trade?.success ? "Telegram ticket sent · paper trade recorded" : "Telegram ticket sent · no paper trade opened")
-        : (data.paper_trade?.success ? "Paper trade recorded · Telegram not sent" : "Ticket not sent");
+      const paperTrade = data.paper_trade || {};
+      const paperStatus = `Paper trade #${paperTrade.trade_id || ""} recorded`;
       const toast = document.getElementById("cockpit-status-toast");
       if (toast) {
-        toast.innerHTML = `<span class="toast-clock">⚡</span> <b>Ticket ${escapeHtml(String(data.ticket_id || ""))} sent · ${paperStatus}</b>`;
+        toast.innerHTML = `<span class="toast-clock">⚡</span> <b>${escapeHtml(paperStatus)} · ${escapeHtml(String(dir))} ${escapeHtml(String(currentSymbol))}</b>`;
       }
       if (btn) {
-        btn.innerHTML = `<span>✓ ${escapeHtml(paperStatus)} · ${escapeHtml(String(data.ticket_id || ""))}</span>`;
+        btn.innerHTML = `<span>✓ ${escapeHtml(paperStatus)}</span>`;
         setTimeout(() => {
           restoreButton();
         }, 3500);
@@ -3320,6 +3425,7 @@ function switchNavPane(paneName) {
 async function loadOverviewData() {
   const quickBody = document.getElementById("ov-markets-quick-body");
   if (quickBody && !quickBody.children.length) showTableSkeletonRows(quickBody, 5, 4);
+  loadProviderStatus();
   try {
     // 1. Bridge & feed status
     const bridgeRes = await fetch(`${API_BASE}/api/v1/bridge/status`);
@@ -3470,11 +3576,484 @@ async function loadOverviewData() {
   }
 }
 
+async function loadProviderStatus() {
+  const container = document.getElementById("ov-provider-status-list");
+  if (!container) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/data/providers/status?symbols=XAUUSD,BTCUSDT,EURUSD,GBPUSD,USDJPY,SOLUSDT`);
+    if (!response.ok) throw new Error("Provider status unavailable");
+    const data = await response.json();
+    const providers = Object.values(data.providers || {});
+    if (!providers.length) {
+      container.textContent = "No verified provider quotes · មិនមានតម្លៃដែលបានផ្ទៀងផ្ទាត់";
+      return;
+    }
+    container.innerHTML = providers.map(provider => {
+      const status = String(provider.status || "UNAVAILABLE");
+      const stateClass = provider.verified ? (provider.fallback_active ? "provider-status-warn" : "provider-status-ok") : "provider-status-down";
+      const source = provider.selected_provider || "UNAVAILABLE";
+      const fallback = provider.fallback_active ? " · fallback" : "";
+      return `<div class="provider-status-row"><span>${escapeHtml(String(provider.symbol || ""))}</span><span class="${stateClass}">${escapeHtml(source)}${escapeHtml(fallback)} · ${escapeHtml(status)}</span></div>`;
+    }).join("");
+  } catch (error) {
+    container.textContent = "Provider health unavailable · មិនអាចទាញស្ថានភាពប្រភពទិន្នន័យបាន";
+  }
+}
+
 /* ==========================================================================
    2. LIVE MARKETS DATA LOADER & TABLE
    ========================================================================== */
 let currentMarketsFilter = "ALL";
 let currentMarketsSearch = "";
+let marketExplorerCatalog = [];
+let marketExplorerFavorites = new Set();
+let marketExplorerWatchlists = [];
+let marketExplorerRecent = [];
+let marketExplorerCategory = "ALL";
+let marketExplorerSelected = null;
+let marketExplorerSearchTimer = null;
+let marketExplorerPollTimer = null;
+
+function marketExplorerSetStatus(message) {
+  const node = document.getElementById("market-explorer-status");
+  if (node) node.textContent = message;
+}
+
+function setMarketExplorerCategory(category, button) {
+  marketExplorerCategory = String(category || "ALL").toUpperCase();
+  document.querySelectorAll(".market-explorer-categories button").forEach(item => item.classList.remove("active"));
+  if (button) button.classList.add("active");
+  loadMarketExplorerData();
+}
+
+function onMarketExplorerSearch(value) {
+  if (marketExplorerSearchTimer) clearTimeout(marketExplorerSearchTimer);
+  marketExplorerSearchTimer = setTimeout(() => loadMarketExplorerData(value || ""), 300);
+}
+
+async function loadMarketExplorerData(searchValue = null) {
+  const input = document.getElementById("market-explorer-search");
+  const query = searchValue == null ? (input?.value || "") : searchValue;
+  const results = document.getElementById("market-explorer-results");
+  if (!results) return;
+  marketExplorerSetStatus(isKhmer ? "កំពុងស្វែងរកក្នុង registry របស់ provider…" : "Searching the provider-backed symbol registry…");
+  try {
+    const params = new URLSearchParams({ q: query, asset_class: marketExplorerCategory, limit: "100", discover: "true" });
+    if (marketExplorerCategory === "FAVORITES") params.set("asset_class", "ALL");
+    const response = await fetch(`${API_BASE}/api/v1/markets?${params.toString()}`);
+    if (!response.ok) throw new Error("Market registry is unavailable.");
+    const data = await response.json();
+    marketExplorerCatalog = data.symbols || [];
+    let favoriteSymbols = [];
+    try {
+      const favoriteResponse = await fetch(`${API_BASE}/api/v1/me/market-favorites`, { credentials: "include" });
+      if (favoriteResponse.ok) {
+        const favorites = await favoriteResponse.json();
+        favoriteSymbols = favorites.symbols || [];
+        marketExplorerFavorites = new Set(favoriteSymbols.map(item => item.symbol));
+      } else if (favoriteResponse.status === 401) {
+        marketExplorerFavorites = new Set();
+      }
+    } catch {}
+    await loadMarketExplorerWatchlists();
+    if (marketExplorerCategory === "FAVORITES") {
+      const normalizedQuery = String(query || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      marketExplorerCatalog = favoriteSymbols.filter(item => {
+        if (!normalizedQuery) return true;
+        return [item.symbol, item.name, ...(item.aliases || [])]
+          .some(value => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").includes(normalizedQuery));
+      });
+    }
+    marketExplorerSetStatus(isKhmer
+      ? `រកឃើញ ${data.count ?? marketExplorerCatalog.length} ទ្រព្យដែល provider គាំទ្រ · ការរកឃើញត្រូវបាន cache ៦ ម៉ោង`
+      : `${marketExplorerCatalog.length} provider-supported markets · provider discovery is cached for six hours.`);
+    renderMarketExplorer();
+    loadMarketExplorerRecent();
+  } catch (error) {
+    marketExplorerSetStatus(isKhmer
+      ? "មិនអាចទាញ registry ទីផ្សារបាន។ សូមព្យាយាមម្តងទៀត។"
+      : "Could not load the market registry. Please try again.");
+    results.replaceChildren();
+  }
+}
+
+function renderMarketExplorer() {
+  const container = document.getElementById("market-explorer-results");
+  if (!container) return;
+  const sort = document.getElementById("market-explorer-sort")?.value || "POPULAR";
+  let items = [...marketExplorerCatalog];
+  const recentIndex = new Map(marketExplorerRecent.map((row, index) => [row.symbol, index]));
+  if (sort === "ALPHA") items.sort((a, b) => String(a.symbol).localeCompare(String(b.symbol)));
+  else if (sort === "RECENT") items.sort((a, b) => (recentIndex.get(a.symbol) ?? 9999) - (recentIndex.get(b.symbol) ?? 9999));
+  else if (sort === "AI_SCORE") {
+    const scores = new Map((window.latestBestSetups || []).map(row => [row.symbol, Number(row.ai_score || row.confidence_score || 0)]));
+    items.sort((a, b) => (scores.get(b.symbol) || 0) - (scores.get(a.symbol) || 0) || (a.scanner_priority ?? 999) - (b.scanner_priority ?? 999));
+  } else items.sort((a, b) => (a.scanner_priority ?? 999) - (b.scanner_priority ?? 999) || String(a.symbol).localeCompare(String(b.symbol)));
+
+  container.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "market-explorer-status";
+    empty.textContent = marketExplorerCategory === "FAVORITES"
+      ? (isKhmer ? "មិនទាន់មាន Favorite ទេ ឬសូមចូលគណនី។" : "No favorites yet, or sign in to view your favorites.")
+      : (isKhmer ? "មិនរកឃើញទ្រព្យនេះទេ។ សាកល្បងឈ្មោះ ឬ symbol ផ្សេង។" : "No matching provider-supported symbols found.");
+    container.appendChild(empty);
+    const query = document.getElementById("market-explorer-search")?.value?.trim();
+    if (query && marketExplorerCategory !== "FAVORITES") {
+      const verify = document.createElement("button");
+      verify.type = "button";
+      verify.className = "btn btn-outline btn-sm";
+      verify.textContent = isKhmer ? `ផ្ទៀងផ្ទាត់ ${query} ជាមួយ provider` : `Verify “${query}” with a configured provider`;
+      verify.addEventListener("click", () => verifyCustomMarketSymbol(query));
+      container.appendChild(verify);
+    }
+    return;
+  }
+  items.forEach(item => {
+    const card = document.createElement("article");
+    card.className = `market-explorer-symbol${item.symbol === marketExplorerSelected ? " is-selected" : ""}`;
+    const main = document.createElement("button");
+    main.type = "button";
+    main.className = "market-explorer-symbol-main";
+    main.title = isKhmer ? "ជ្រើសទ្រព្យនេះសម្រាប់វិភាគ" : "Select this symbol for analysis";
+    const name = document.createElement("strong");
+    name.textContent = `${item.symbol} · ${item.name || item.asset_class}`;
+    const meta = document.createElement("small");
+    meta.textContent = `${item.asset_class} · ${(item.providers || []).join(", ") || "Provider mapping"} · ${isKhmer ? "គាំទ្រ; live ត្រូវផ្ទៀងផ្ទាត់ពេលវិភាគ" : "Supported; live status checked at analysis"}`;
+    main.append(name, meta);
+    main.addEventListener("click", () => selectMarketExplorerSymbol(item));
+    const actions = document.createElement("div");
+    actions.className = "market-explorer-symbol-actions";
+    const favorite = document.createElement("button");
+    favorite.type = "button";
+    favorite.className = marketExplorerFavorites.has(item.symbol) ? "is-favorite" : "";
+    favorite.textContent = marketExplorerFavorites.has(item.symbol) ? "★" : "☆";
+    favorite.title = isKhmer ? "បន្ថែម/ដកពី Favorites" : "Add or remove favorite";
+    favorite.addEventListener("click", event => { event.stopPropagation(); toggleMarketFavorite(item); });
+    const chart = document.createElement("button");
+    chart.type = "button";
+    chart.textContent = "↗";
+    chart.title = isKhmer ? "បើកក្នុង chart" : "Open chart";
+    chart.addEventListener("click", event => {
+      event.stopPropagation();
+      selectMarketExplorerSymbol(item);
+      selectSymbol(item.symbol, item.tv_symbol || `FX:${item.symbol}`, false);
+      switchNavPane("charts");
+    });
+    const addToList = document.createElement("button");
+    addToList.type = "button";
+    addToList.textContent = "+";
+    addToList.title = isKhmer ? "បន្ថែមទៅ watchlist ដែលបានជ្រើស" : "Add to selected personal watchlist";
+    addToList.addEventListener("click", event => { event.stopPropagation(); saveExplorerSymbolToWatchlist(item); });
+    actions.append(favorite, addToList, chart);
+    card.append(main, actions);
+    container.appendChild(card);
+  });
+}
+
+async function verifyCustomMarketSymbol(query) {
+  marketExplorerSetStatus(isKhmer ? "កំពុងផ្ទៀងផ្ទាត់ symbol ជាមួយ provider…" : "Verifying the exact symbol with configured providers…");
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/markets/resolve`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: query }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail?.message || data.detail?.code || data.detail || "Provider could not verify this symbol.");
+    await loadMarketExplorerData(query);
+    if (data.symbol?.symbol) selectMarketExplorerSymbol(data.symbol);
+  } catch (error) {
+    marketExplorerSetStatus(error.message);
+  }
+}
+
+function selectMarketExplorerSymbol(item) {
+  marketExplorerSelected = item.symbol;
+  const label = document.getElementById("market-explorer-selection");
+  if (label) label.textContent = `${item.symbol} · ${item.name || item.asset_class} · ${item.providers.join(", ")}`;
+  const existing = WATCHLIST.find(row => row.symbol === item.symbol);
+  if (!existing) {
+    WATCHLIST.push({
+      symbol: item.symbol,
+      name: item.name || item.symbol,
+      category: item.asset_class === "METALS" ? "COMMODITIES" : item.asset_class,
+      tv: item.tv_symbol || (item.asset_class === "CRYPTO" ? `BINANCE:${item.symbol}` : `FX:${item.symbol}`),
+      icon: "🪙",
+    });
+  }
+  const timeframeSelect = document.getElementById("market-analysis-timeframe");
+  if (timeframeSelect && ![...timeframeSelect.options].some(option => option.value === timeframeSelect.value)) timeframeSelect.value = "M15";
+  renderMarketExplorer();
+}
+
+async function toggleMarketFavorite(item) {
+  const method = marketExplorerFavorites.has(item.symbol) ? "DELETE" : "POST";
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/me/market-favorites/${encodeURIComponent(item.symbol)}`, { method, credentials: "include" });
+    if (response.status === 401) throw new Error(isKhmer ? "សូមចូលគណនីដើម្បីរក្សាទុក Favorite។" : "Sign in to save favorites.");
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail?.message || result.detail || "Unable to update favorite.");
+    if (method === "POST") marketExplorerFavorites.add(item.symbol);
+    else marketExplorerFavorites.delete(item.symbol);
+    renderMarketExplorer();
+  } catch (error) {
+    marketExplorerSetStatus(error.message);
+  }
+}
+
+async function loadMarketExplorerWatchlists() {
+  const select = document.getElementById("market-user-watchlist");
+  if (!select) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/me/watchlists`, { credentials: "include" });
+    if (!response.ok) {
+      marketExplorerWatchlists = [];
+      select.innerHTML = `<option value="">${isKhmer ? "ចូលគណនីដើម្បីប្រើ watchlist" : "Sign in to use watchlists"}</option>`;
+      return;
+    }
+    const data = await response.json();
+    marketExplorerWatchlists = data.watchlists || [];
+    const previous = localStorage.getItem("zyrox_market_watchlist") || "";
+    select.replaceChildren();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = isKhmer ? "ជ្រើស watchlist" : "Choose a watchlist";
+    select.appendChild(placeholder);
+    marketExplorerWatchlists.forEach(list => {
+      const option = document.createElement("option");
+      option.value = String(list.id);
+      option.textContent = `${list.name} (${(list.symbols || []).length})`;
+      select.appendChild(option);
+    });
+    if (marketExplorerWatchlists.some(list => String(list.id) === previous)) select.value = previous;
+    select.onchange = () => localStorage.setItem("zyrox_market_watchlist", select.value || "");
+  } catch {
+    select.innerHTML = `<option value="">${isKhmer ? "Watchlist មិនអាចប្រើបាន" : "Watchlists unavailable"}</option>`;
+  }
+}
+
+async function createMarketExplorerWatchlist() {
+  const name = window.prompt(isKhmer ? "បញ្ចូលឈ្មោះ watchlist ថ្មី៖" : "Name your new watchlist:");
+  if (!name) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/me/watchlists`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail?.message || data.detail || "Could not create watchlist.");
+    await loadMarketExplorerWatchlists();
+    const select = document.getElementById("market-user-watchlist");
+    if (select) {
+      select.value = String(data.id);
+      localStorage.setItem("zyrox_market_watchlist", String(data.id));
+    }
+  } catch (error) {
+    marketExplorerSetStatus(error.message);
+  }
+}
+
+async function saveExplorerSymbolToWatchlist(item) {
+  const watchlistId = document.getElementById("market-user-watchlist")?.value;
+  if (!watchlistId) {
+    marketExplorerSetStatus(isKhmer ? "សូមជ្រើស watchlist ឬបង្កើតថ្មី ហើយចូលគណនី។" : "Sign in and select or create a watchlist first.");
+    return;
+  }
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/me/watchlists/${encodeURIComponent(watchlistId)}/symbols`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: item.symbol }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail?.message || data.detail || "Could not save symbol.");
+    marketExplorerSetStatus(isKhmer ? `${item.symbol} បានបន្ថែមទៅ watchlist។` : `${item.symbol} added to your watchlist.`);
+    await loadMarketExplorerWatchlists();
+  } catch (error) {
+    marketExplorerSetStatus(error.message);
+  }
+}
+
+function updateMarketAnalysisMode() {
+  const mode = document.getElementById("market-analysis-mode")?.value;
+  const profile = document.getElementById("market-analysis-profile-wrap");
+  if (profile) profile.style.opacity = mode === "QUICK" ? ".55" : "1";
+  if (profile) profile.title = mode === "DEEP"
+    ? (isKhmer ? "Deep ប្រើ M5/M15/H1/H4 ដែល engine កំណត់" : "Deep uses the engine's fixed M5/M15/H1/H4 workflow")
+    : "";
+}
+
+function setMarketAnalysisStage(status, stage) {
+  const node = document.getElementById("market-analysis-stage");
+  if (!node) return;
+  const labels = {
+    QUEUED: isKhmer ? "ក្នុងជួររង់ចាំ" : "Queued",
+    VALIDATING_SYMBOL: isKhmer ? "កំពុងផ្ទៀងផ្ទាត់ symbol" : "Validating symbol",
+    FETCHING_MARKET_DATA: isKhmer ? "កំពុងទាញតម្លៃទីផ្សារ" : "Fetching market data",
+    RUNNING_MULTI_TIMEFRAME_ANALYSIS: isKhmer ? "កំពុងវិភាគ Multi-Timeframe" : "Running multi-timeframe analysis",
+    MARKET_DATA_VERIFIED: isKhmer ? "ទិន្នន័យបានផ្ទៀងផ្ទាត់" : "Market data verified",
+    AGENTS_COMPLETED: isKhmer ? "Agents បានបញ្ចប់ការវិភាគ" : "Analysis agents completed",
+    RISK_CHECKING: isKhmer ? "កំពុងពិនិត្យហានិភ័យ" : "Risk validation",
+    RISK_APPROVED: isKhmer ? "ការត្រួតពិនិត្យហានិភ័យបានបញ្ចប់" : "Risk validation completed",
+    RISK_REJECTED: isKhmer ? "មិនមាន setup ឆ្លងកាត់ Risk Manager" : "No setup passed risk validation",
+    RUNNING_DEEP_ANALYSIS: isKhmer ? "កំពុងដំណើរការ Deep Analysis" : "Running deep analysis",
+    COMPLETED: isKhmer ? "បញ្ចប់" : "Completed",
+    DATA_STALE: isKhmer ? "ទិន្នន័យចាស់—មិនបានវិភាគ" : "Data stale · analysis stopped",
+    INSUFFICIENT_DATA: isKhmer ? "ទិន្នន័យមិនគ្រប់គ្រាន់" : "Insufficient data",
+    MARKET_CLOSED: isKhmer ? "ទីផ្សារបិទ—មិនមានការវិភាគ signal ថ្មី" : "Market closed · no new actionable analysis",
+    FAILED: isKhmer ? "ការវិភាគបរាជ័យ" : "Analysis failed",
+  };
+  node.textContent = `${labels[status] || status || "Idle"}${stage && stage !== status ? ` · ${labels[stage] || stage}` : ""}`;
+}
+
+function renderMarketAnalysisResult(result) {
+  const output = document.getElementById("market-analysis-output");
+  if (!output || !result) return;
+  const chunks = [];
+  if (result.provider || result.price_source) chunks.push(`${isKhmer ? "ប្រភព" : "Provider"}: ${result.provider || result.price_source}`);
+  if (result.data_status || result.overall_status) chunks.push(`${isKhmer ? "ស្ថានភាពទិន្នន័យ" : "Data status"}: ${result.data_status || result.overall_status}`);
+  if (result.last_market_update || result.timestamp_utc) chunks.push(`${isKhmer ? "ពេលទិន្នន័យ" : "Last update"}: ${result.last_market_update || result.timestamp_utc}`);
+  const report = isKhmer
+    ? (result.report_khmer || result.final_synthesis?.thesis_kh || result.message_kh)
+    : (result.report_english || result.final_synthesis?.thesis_en || result.message_en);
+  if (report) chunks.push(report);
+  if (result.metrics) chunks.push(JSON.stringify(result.metrics, null, 2));
+  if (result.error) chunks.push(String(result.error));
+  if (result.data_provenance) chunks.push(`${isKhmer ? "ប្រភពទិន្នន័យ" : "Data provenance"}: ${JSON.stringify(result.data_provenance, null, 2)}`);
+  if (result.profile_note_kh || result.profile_note_en) chunks.push(isKhmer ? result.profile_note_kh : result.profile_note_en);
+  output.textContent = chunks.join("\n\n") || JSON.stringify(result, null, 2);
+}
+
+async function analyzeExplorerSelection() {
+  if (!marketExplorerSelected) {
+    marketExplorerSetStatus(isKhmer ? "សូមជ្រើស symbol មួយជាមុន។" : "Select a symbol before starting analysis.");
+    return;
+  }
+  const button = document.getElementById("market-analyze-button");
+  const output = document.getElementById("market-analysis-output");
+  const mode = document.getElementById("market-analysis-mode")?.value || "STANDARD";
+  const timeframe = document.getElementById("market-analysis-timeframe")?.value || "M15";
+  const profile = document.getElementById("market-analysis-profile")?.value || "INTRADAY";
+  if (button) button.disabled = true;
+  if (output) output.textContent = isKhmer ? "កំពុងបញ្ជូនការវិភាគទៅ backend…" : "Submitting analysis to the backend…";
+  setMarketAnalysisStage("QUEUED", "");
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/analysis`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: marketExplorerSelected, mode, timeframe, profile }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail?.message || data.detail?.code || data.detail || "Analysis could not be queued.");
+    await pollMarketAnalysis(data.analysis_id, data.poll_url);
+  } catch (error) {
+    setMarketAnalysisStage("FAILED", "");
+    if (output) output.textContent = error.message;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function pollMarketAnalysis(analysisId, pollUrl) {
+  if (marketExplorerPollTimer) clearInterval(marketExplorerPollTimer);
+  const url = pollUrl || `/api/v1/analysis/${encodeURIComponent(analysisId)}`;
+  let finished = false;
+  let attempts = 0;
+  const pollOnce = async () => {
+    attempts += 1;
+    try {
+      const response = await fetch(url, { credentials: "include" });
+      const job = await response.json();
+      if (!response.ok) throw new Error(job.detail?.message || job.detail || "Could not read analysis status.");
+      setMarketAnalysisStage(job.status, job.stage);
+      if (job.result) renderMarketAnalysisResult(job.result);
+      if (["COMPLETED", "FAILED"].includes(job.status)) {
+        finished = true;
+        clearInterval(marketExplorerPollTimer);
+        marketExplorerPollTimer = null;
+        if (job.error_code) {
+          const output = document.getElementById("market-analysis-output");
+          if (output) output.textContent = job.error_code === "DATA_STALE"
+            ? (isKhmer ? "តម្លៃដែលបានផ្ទៀងផ្ទាត់ចាស់ពេក។ ប្រព័ន្ធបានបញ្ឈប់ការវិភាគ ដើម្បីមិនបង្កើតលទ្ធផលពីទិន្នន័យចាស់។" : "Verified data is stale. Analysis stopped rather than using old prices.")
+            : job.error_code === "MARKET_CLOSED"
+              ? (isKhmer ? "ទីផ្សារបិទ។ ប្រើ Quick Analysis ដើម្បីមើល candle ចុងក្រោយដែលបង្ហាញជា Delayed ឬរង់ចាំទីផ្សារបើកវិញ។" : "The market is closed. Quick Analysis can review the last settlement candles as delayed data; standard/deep analysis waits for the market to reopen.")
+              : (isKhmer ? "ទិន្នន័យមិនគ្រប់គ្រាន់សម្រាប់ timeframe នេះ។" : "Not enough verified candles for this timeframe.");
+        }
+        loadMarketExplorerRecent();
+      }
+      if (attempts >= 180 && !finished) {
+        clearInterval(marketExplorerPollTimer);
+        marketExplorerPollTimer = null;
+        setMarketAnalysisStage("RUNNING", isKhmer ? "ការងារនៅដំណើរការ; អាចត្រឡប់មកមើលក្រោយ" : "Job still running; check again later");
+      }
+    } catch (error) {
+      clearInterval(marketExplorerPollTimer);
+      marketExplorerPollTimer = null;
+      setMarketAnalysisStage("FAILED", "");
+      const output = document.getElementById("market-analysis-output");
+      if (output) output.textContent = error.message;
+    }
+  };
+  await pollOnce();
+  if (!finished) marketExplorerPollTimer = setInterval(pollOnce, 1000);
+}
+
+async function loadMarketExplorerRecent() {
+  const container = document.getElementById("market-recent-list");
+  if (!container) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/me/recent-analysis?limit=20`, { credentials: "include" });
+    if (response.status === 401) {
+      marketExplorerRecent = [];
+      container.textContent = isKhmer ? "សូមចូលគណនីដើម្បីមើលប្រវត្តិឯកជន។" : "Sign in to see your private analysis history.";
+      return;
+    }
+    if (!response.ok) throw new Error("Recent-analysis history is unavailable.");
+    const data = await response.json();
+    marketExplorerRecent = data.items || [];
+    container.replaceChildren();
+    if (!marketExplorerRecent.length) {
+      container.textContent = isKhmer ? "មិនទាន់មានការវិភាគទេ។" : "No analyses yet.";
+      return;
+    }
+    const list = document.createElement("div");
+    list.className = "market-recent-items";
+    marketExplorerRecent.slice(0, 12).forEach(row => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `${row.symbol} · ${row.timeframe} · ${row.mode}`;
+      button.addEventListener("click", () => {
+        const item = marketExplorerCatalog.find(symbol => symbol.symbol === row.symbol) || {
+          symbol: row.symbol, name: row.symbol, asset_class: "FOREX", providers: [], tv_symbol: `FX:${row.symbol}`,
+        };
+        selectMarketExplorerSymbol(item);
+        const tf = document.getElementById("market-analysis-timeframe");
+        if (tf) tf.value = row.timeframe;
+        const mode = document.getElementById("market-analysis-mode");
+        if (mode) mode.value = row.mode;
+        const profile = document.getElementById("market-analysis-profile");
+        if (profile) profile.value = row.profile;
+        updateMarketAnalysisMode();
+      });
+      list.appendChild(button);
+    });
+    container.appendChild(list);
+  } catch {
+    container.textContent = isKhmer ? "មិនអាចទាញប្រវត្តិបាន។" : "Analysis history is unavailable.";
+  }
+}
+
+function refreshMarketExplorer() {
+  const input = document.getElementById("market-explorer-search");
+  if (input) input.value = "";
+  loadMarketExplorerData("");
+}
 
 function filterMarketsTable(cat, btn) {
   currentMarketsFilter = cat;
@@ -3500,6 +4079,7 @@ async function loadMarketsData() {
   } catch (e) {
     console.warn("loadMarketsData error:", e);
   }
+  await loadMarketExplorerData();
   renderMarketsTable();
 }
 
@@ -5848,6 +6428,60 @@ function initAnyRouterUI() {
 
 let currentSaasUser = null;
 let currentTelegramLink = null;
+let telegramAutoPairingUserId = null;
+let telegramPairingPollTimer = null;
+let paperTradeSocket = null;
+let paperTradeSocketRetryTimer = null;
+let paperTradeStreamConnected = false;
+
+function startPaperTradeStream() {
+  if (!currentSaasUser || paperTradeSocket?.readyState === WebSocket.OPEN || paperTradeSocket?.readyState === WebSocket.CONNECTING) return;
+  if (paperTradeSocketRetryTimer) {
+    clearTimeout(paperTradeSocketRetryTimer);
+    paperTradeSocketRetryTimer = null;
+  }
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  paperTradeSocket = new WebSocket(`${wsProtocol}//${window.location.host}/api/v1/me/trades/stream`);
+  paperTradeSocket.addEventListener("open", () => {
+    paperTradeStreamConnected = true;
+    const status = document.getElementById("paper-stream-status");
+    if (status) status.textContent = "Live stream · ផ្សាយផ្ទាល់";
+  });
+  paperTradeSocket.addEventListener("message", event => {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === "paper_trade_snapshot" && message.data) renderMyPaperLedger(message.data, true);
+    } catch (error) {
+      console.warn("Invalid paper-trade stream update.", error);
+    }
+  });
+  paperTradeSocket.addEventListener("close", event => {
+    paperTradeStreamConnected = false;
+    const status = document.getElementById("paper-stream-status");
+    if (event.code === 4401) {
+      currentSaasUser = null;
+      if (status) status.textContent = "Sign in required · សូមចូលគណនី";
+      return;
+    }
+    if (status) status.textContent = "Polling fallback · កំពុងពិនិត្យតាមចន្លោះ";
+    if (currentSaasUser) paperTradeSocketRetryTimer = setTimeout(startPaperTradeStream, 5000);
+  });
+  paperTradeSocket.addEventListener("error", () => {
+    try { paperTradeSocket?.close(); } catch {}
+  });
+}
+
+function stopPaperTradeStream() {
+  currentSaasUser = null;
+  if (paperTradeSocketRetryTimer) clearTimeout(paperTradeSocketRetryTimer);
+  paperTradeSocketRetryTimer = null;
+  paperTradeStreamConnected = false;
+  if (paperTradeSocket) {
+    paperTradeSocket.onclose = null;
+    paperTradeSocket.close();
+    paperTradeSocket = null;
+  }
+}
 
 async function checkSaasSession() {
   try {
@@ -5855,13 +6489,19 @@ async function checkSaasSession() {
     if (res.ok) {
       const data = await res.json();
       currentSaasUser = data;
+      startPaperTradeStream();
+      // Prepare a secure Telegram pairing link after a successful login. The
+      // customer still opens the bot and confirms the link from Telegram.
+      if (document.getElementById("saas-telegram-unlinked-box")) {
+        await loadTelegramLinkUI({ autoPair: true });
+      }
       const topLabel = document.getElementById("top-account-label");
       if (topLabel) {
         const roleBadge = data.role === "ADMIN" ? "👑 Admin" : (data.full_name || "Account");
         topLabel.textContent = roleBadge;
       }
     } else {
-      currentSaasUser = null;
+      stopPaperTradeStream();
       const topLabel = document.getElementById("top-account-label");
       if (topLabel) topLabel.textContent = "Sign In / Trial";
     }
@@ -5949,7 +6589,7 @@ async function loadAccountProfile() {
   }
 }
 
-async function loadTelegramLinkUI() {
+async function loadTelegramLinkUI(options = {}) {
   try {
     const res = await fetch("/api/v1/telegram-link/status", { credentials: "include" });
     if (!res.ok) return;
@@ -5961,8 +6601,32 @@ async function loadTelegramLinkUI() {
     const linkedBox = document.getElementById("saas-telegram-linked-box");
     const userDisplay = document.getElementById("saas-telegram-user-display");
     const chatDisplay = document.getElementById("saas-telegram-chatid-display");
+    const signalPlanStatus = document.getElementById("saas-signal-plan-status");
+    const signalDelivery = data.signal_delivery || {};
+    const preferences = data.preferences || {};
+    const paperAlertToggle = document.getElementById("pref-paper-trades");
+    if (paperAlertToggle) paperAlertToggle.checked = preferences.paper_trade_alerts !== false;
+    if (signalPlanStatus) {
+      const planLabel = signalDelivery.plan_id ? ` · ${signalDelivery.plan_id.toUpperCase()}` : "";
+      const isKhmer = localStorage.getItem("zyrox_lang") === "kh";
+      const dailyStatus = signalDelivery.max_per_day > 0
+        ? (isKhmer
+          ? `ថ្ងៃនេះនៅសល់ ${signalDelivery.remaining_today ?? signalDelivery.max_per_day}/${signalDelivery.max_per_day} កន្លែង; គោលដៅ ${signalDelivery.target_min_per_day || 0}–${signalDelivery.max_per_day}/ថ្ងៃ។ ចំនួនពិតប្រាកដអាស្រ័យលើ setup ដែលបានផ្ទៀងផ្ទាត់។`
+          : `${signalDelivery.remaining_today ?? signalDelivery.max_per_day}/${signalDelivery.max_per_day} daily alert slots remain; target ${signalDelivery.target_min_per_day || 0}–${signalDelivery.max_per_day}/day. Actual counts depend on validated setups.`)
+        : "";
+      const signalStatusText = {
+        READY: isKhmer ? `ការជូនដំណឹងសញ្ញាកំពុងដំណើរការ${planLabel}។ សញ្ញាថ្មីដែលបានអនុម័តនឹងផ្ញើទៅ Telegram របស់អ្នក។ ${dailyStatus}` : `Signal alerts are active${planLabel}. New approved signals will be sent to your linked Telegram account. ${dailyStatus}`,
+        SUBSCRIPTION_INACTIVE: isKhmer ? "ការជូនដំណឹងសញ្ញាត្រូវបានផ្អាក ព្រោះគណនីនេះមិនមានគម្រោង ឬ trial ដែលសកម្មទេ។" : "Signal alerts are paused because this account has no active plan or trial.",
+        PLAN_DISABLED: isKhmer ? "គម្រោងបច្ចុប្បន្នមិនរួមបញ្ចូលការជូនដំណឹងសញ្ញាតាម Telegram ទេ។" : "Telegram signal alerts are not included in the current plan.",
+        TELEGRAM_NOT_LINKED: isKhmer ? "ភ្ជាប់ Telegram ដើម្បីទទួលសញ្ញាដែលបានអនុម័តពីគម្រោងសកម្មរបស់អ្នក។" : "Connect Telegram to receive approved signals from your active plan.",
+        SIGNAL_NOTIFICATIONS_DISABLED: isKhmer ? "Telegram បានភ្ជាប់ហើយ ប៉ុន្តែការជូនដំណឹងសញ្ញាត្រូវបានបិទក្នុងការកំណត់។" : "Telegram is linked, but signal alerts are switched off in your preferences."
+      };
+      signalPlanStatus.textContent = signalStatusText[signalDelivery.reason] || "Signal delivery status is unavailable.";
+      signalPlanStatus.style.color = signalDelivery.ready ? "#00D99A" : "#94a3b8";
+    }
 
     if (data.linked) {
+      if (currentSaasUser?.id != null) telegramAutoPairingUserId = String(currentSaasUser.id);
       if (badge) {
         badge.textContent = "CONNECTED";
         badge.style.color = "#00D99A";
@@ -5980,10 +6644,10 @@ async function loadTelegramLinkUI() {
         const el = document.getElementById(id);
         if (el) el.checked = val !== false;
       };
-      setChecked("pref-signals", p.trade_signals);
-      setChecked("pref-risk", p.risk_alerts);
+      setChecked("pref-signals", p.signal_generated);
+      setChecked("pref-risk", p.signal_invalidated);
       setChecked("pref-macro", p.macro_events);
-      setChecked("pref-briefing", p.daily_briefing);
+      setChecked("pref-briefing", p.daily_summary);
       setChecked("pref-trial", p.trial_expiration_reminders);
     } else {
       if (badge) {
@@ -5994,13 +6658,18 @@ async function loadTelegramLinkUI() {
       }
       if (unlinkedBox) unlinkedBox.style.display = "block";
       if (linkedBox) linkedBox.style.display = "none";
+      const userKey = currentSaasUser?.id != null ? String(currentSaasUser.id) : null;
+      if (options.autoPair !== false && userKey && telegramAutoPairingUserId !== userKey) {
+        telegramAutoPairingUserId = userKey;
+        await startTelegramLinking({ silent: true });
+      }
     }
   } catch (err) {
     console.error("Failed to load telegram link UI:", err);
   }
 }
 
-async function startTelegramLinking() {
+async function startTelegramLinking(options = {}) {
   try {
     const res = await fetch("/api/v1/telegram-link/token", {
       method: "POST",
@@ -6008,7 +6677,7 @@ async function startTelegramLinking() {
     });
     if (!res.ok) {
       const err = await res.json();
-      alert("Failed to generate linking token: " + (err.detail || "Unknown error"));
+      if (!options.silent) alert("Failed to generate linking token: " + (err.detail || "Unknown error"));
       return;
     }
     const data = await res.json();
@@ -6019,10 +6688,24 @@ async function startTelegramLinking() {
     if (urlInput) urlInput.value = data.deep_link;
     if (linkBtn) linkBtn.href = data.deep_link;
     if (displayBox) displayBox.style.display = "block";
+    startTelegramPairingStatusPolling();
 
   } catch (err) {
-    alert("Connection error: " + err.message);
+    if (!options.silent) alert("Connection error: " + err.message);
   }
+}
+
+function startTelegramPairingStatusPolling() {
+  if (telegramPairingPollTimer) clearInterval(telegramPairingPollTimer);
+  let attempts = 0;
+  telegramPairingPollTimer = setInterval(async () => {
+    attempts += 1;
+    await loadTelegramLinkUI({ autoPair: false });
+    if (currentTelegramLink?.linked || attempts >= 24) {
+      clearInterval(telegramPairingPollTimer);
+      telegramPairingPollTimer = null;
+    }
+  }, 5000);
 }
 
 function copyTelegramLink() {
@@ -6056,11 +6739,12 @@ async function unlinkTelegramAccount() {
 
 async function saveNotificationPreferences() {
   const payload = {
-    trade_signals: document.getElementById("pref-signals")?.checked ?? true,
-    risk_alerts: document.getElementById("pref-risk")?.checked ?? true,
+    signal_generated: document.getElementById("pref-signals")?.checked ?? true,
+    signal_invalidated: document.getElementById("pref-risk")?.checked ?? true,
     macro_events: document.getElementById("pref-macro")?.checked ?? true,
-    daily_briefing: document.getElementById("pref-briefing")?.checked ?? true,
-    trial_expiration_reminders: document.getElementById("pref-trial")?.checked ?? true
+    daily_summary: document.getElementById("pref-briefing")?.checked ?? true,
+    trial_expiration_reminders: document.getElementById("pref-trial")?.checked ?? true,
+    paper_trade_alerts: document.getElementById("pref-paper-trades")?.checked ?? true
   };
   try {
     const res = await fetch("/api/v1/telegram-link/preferences", {
@@ -6154,6 +6838,7 @@ async function handleUserLogout() {
   } catch (err) {
     console.debug("Logout notice:", err);
   } finally {
+    stopPaperTradeStream();
     window.location.href = "/";
   }
 }

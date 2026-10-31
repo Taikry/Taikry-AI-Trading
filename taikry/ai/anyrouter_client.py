@@ -601,7 +601,7 @@ class AnyRouterClient:
                     headers = {
                         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                         "Content-Type": "application/json",
-                        "HTTP-Referer": "https://taikry-ai-trading.onrender.com",
+                        "HTTP-Referer": "https://zyroxaitrading.onrender.com",
                         "X-Title": "ZYROX AI Terminal"
                     }
                     payload = {"model": or_model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}

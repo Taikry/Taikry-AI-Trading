@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: taikry-ai-market-intelligence
+    name: zyroxaitrading
     runtime: docker
     region: singapore
     plan: free
@@ -18,16 +18,34 @@ services:
         generateValue: true
       - key: PUBLIC_APP_URL
         fromService:
-          name: taikry-ai-market-intelligence
+          name: zyroxaitrading
           type: web
           envVarKey: RENDER_EXTERNAL_URL
       - key: CORS_ALLOWED_ORIGINS
         fromService:
-          name: taikry-ai-market-intelligence
+          name: zyroxaitrading
           type: web
           envVarKey: RENDER_EXTERNAL_URL
       - key: AUTO_START_MONITORING
         value: "true"
+      # Keep one web instance as the sole monitor owner. Do not add a separate
+      # worker unless AUTO_START_MONITORING is disabled on this service.
+      - key: MAX_DAILY_XAUUSD_SIGNALS
+        value: "4"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ENABLED
+        value: "true"
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_ADMIN_IDS
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: TELEGRAM_SEND_LIFECYCLE_EVENTS
+        value: "true"
+      - key: TELEGRAM_MEDIA_MAX_BYTES
+        value: "10485760"
       - key: MT5_BRIDGE_TOKEN
         sync: false
       - key: OANDA_API_TOKEN

@@ -1,4 +1,5 @@
 import os
+import html
 """
 FastAPI Route Handlers for TAIKRY AI MARKET INTELLIGENCE PRO
 Implements all 9 required endpoints with Pydantic validation, structured errors,
@@ -663,6 +664,71 @@ def get_realtime_prices(symbols: Optional[str] = Query(None, description="Comma-
         "timestamp_utc": datetime.datetime.utcnow().isoformat()
     }
 
+
+@router.get("/api/v1/data/providers/status")
+def get_market_provider_status(symbols: Optional[str] = Query(None, description="Comma-separated symbols list")):
+    """Expose the selected provider, fallback order, and freshness for each requested symbol."""
+    from taikry.config import WATCHLIST, get_symbol_config
+    from taikry.data.mt5_receiver import mt5_receiver
+    from taikry.data.providers import circuit_breaker
+
+    requested = [item.strip().upper() for item in symbols.split(",") if item.strip()] if symbols else [
+        item["symbol"] for item in WATCHLIST[:8]
+    ]
+    allowed = {item["symbol"] for item in WATCHLIST}
+    target_symbols = list(dict.fromkeys(item for item in requested if item in allowed))[:12]
+    bridge_status = mt5_receiver.get_status()
+    bridge_enabled = bool(bridge_status.get("enabled") or bridge_status.get("is_active_for_signals"))
+    providers = {}
+
+    for symbol in target_symbols:
+        price, source, timestamp = market_data_engine.get_verified_price(symbol)
+        freshness = check_data_freshness(symbol, timestamp, "M1")
+        source_label = str(source or "UNAVAILABLE")
+        source_upper = source_label.upper()
+        verified = bool(
+            price and float(price) > 0 and freshness.get("fresh")
+            and not any(marker in source_upper for marker in ("DEMO", "SYNTHETIC", "UNAVAILABLE"))
+        )
+        category = get_symbol_config(symbol).get("category")
+        chain = []
+        if bridge_enabled:
+            chain.append("EXNESS_MT5")
+        if market_data_engine.oanda.configured:
+            chain.append("OANDA_V20")
+        if category == "Crypto":
+            chain.append("BINANCE_SPOT")
+        chain.append("YAHOO_REFERENCE_FALLBACK")
+        selected = (
+            "EXNESS_MT5" if "EXNESS_MT5" in source_upper else
+            "OANDA_V20" if "OANDA_V20" in source_upper else
+            "BINANCE_SPOT" if "BINANCE" in source_upper else
+            "YAHOO_REFERENCE_FALLBACK" if "YAHOO" in source_upper or "FALLBACK" in source_upper else
+            source_label
+        )
+        quote = market_data_engine.get_verified_quote(symbol)
+        providers[symbol] = {
+            "symbol": symbol,
+            "status": freshness.get("status", "UNAVAILABLE") if verified else "UNAVAILABLE",
+            "verified": verified,
+            "selected_provider": selected,
+            "source": source_label,
+            "fallback_active": selected == "YAHOO_REFERENCE_FALLBACK",
+            "provider_priority": chain,
+            "provider_circuit_breaker": circuit_breaker.get_status(),
+            "price": round(float(price), get_symbol_config(symbol).get("decimals", 2)) if verified else None,
+            "quote_timestamp": timestamp.isoformat() if hasattr(timestamp, "isoformat") else timestamp,
+            "age_minutes": freshness.get("age_minutes"),
+            "execution_quote_available": bool(quote),
+            "execution_quote_provider": quote.get("provider") if quote else None,
+        }
+
+    return {
+        "status": "SUCCESS" if any(item["verified"] for item in providers.values()) else "DEGRADED",
+        "providers": providers,
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
 # 2c-alt. GET /api/v1/market-data/alignment
 @router.get("/api/v1/market-data/alignment")
 def get_market_data_alignment_audit():
@@ -925,7 +991,7 @@ def get_paper_trades_ledger(_: bool = Depends(require_admin_access)):
     """
     Retrieves full audit ledger of simulated open and closed paper positions.
     """
-    summary = paper_trading_engine.get_account_summary()
+    summary = paper_trading_engine.get_account_summary(include_all=True)
     db = SessionLocal()
     try:
         trades = db.query(PaperTrade).order_by(PaperTrade.id.desc()).all()
@@ -1165,17 +1231,52 @@ def send_telegram_test_signal(symbol: str = "XAUUSD", _: bool = Depends(require_
     Triggers an instant market consensus scan and dispatches an interactive signal alert
     with Telegram inline buttons to the configured chat, if one is configured.
     """
-    from taikry.agents.consensus_engine import ai_consensus_engine
     from taikry.notifications.telegram_service import telegram_service
-    res = ai_consensus_engine.analyze_symbol(symbol.upper())
-    if res.get("setup_status") != "APPROVE" or res.get("proposed_direction") not in ["LONG", "SHORT", "BUY", "SELL"]:
-        raise HTTPException(status_code=409, detail="No approved directional setup is available to send.")
-    sent = telegram_service.send_bilingual_report(res, force=True, with_buttons=True)
+    from taikry.trading.xauusd_signal_engine import normalize_xauusd_symbol, xauusd_signal_engine
+    analysis_run_id = telegram_service.begin_analysis_run(symbol.upper(), timeframe="M15")
+    canonical_gold = normalize_xauusd_symbol(symbol)
+    if canonical_gold:
+        progress_callback = (
+            lambda stage, statuses: telegram_service.update_analysis_run_progress(analysis_run_id, stage, statuses)
+        ) if analysis_run_id else None
+        res = xauusd_signal_engine.generate_xauusd_signal(canonical_gold, progress_callback=progress_callback)
+        if not res.get("success"):
+            if analysis_run_id:
+                telegram_service.finish_analysis_run(
+                    analysis_run_id,
+                    "REJECTED",
+                    f"⚠️ <b>XAUUSD setup rejected.</b> {html.escape(str(res.get('error') or res.get('status') or 'Validation failed'))}",
+                    telegram_service._agent_status_snapshot(res),
+                )
+            raise HTTPException(status_code=409, detail=res.get("error") or res.get("status") or "No validated XAUUSD setup is available.")
+        sent, message_id, error = telegram_service.send_xauusd_signal_alert(res, analysis_run_id=analysis_run_id)
+    else:
+        from taikry.agents.consensus_engine import ai_consensus_engine
+        progress_callback = (
+            lambda stage, statuses: telegram_service.update_analysis_run_progress(analysis_run_id, stage, statuses)
+        ) if analysis_run_id else None
+        res = ai_consensus_engine.analyze_symbol(
+            symbol.upper(), force_refresh=True, progress_callback=progress_callback
+        )
+        if res.get("setup_status") != "APPROVE" or res.get("proposed_direction") not in ["LONG", "SHORT", "BUY", "SELL"]:
+            if analysis_run_id:
+                telegram_service.finish_analysis_run(
+                    analysis_run_id,
+                    "REJECTED",
+                    f"⚠️ <b>{html.escape(symbol.upper())} setup rejected.</b> No approved directional setup passed validation.",
+                    telegram_service._agent_status_snapshot(res),
+                )
+            raise HTTPException(status_code=409, detail="No approved directional setup is available to send.")
+        sent = telegram_service.send_validated_signal_report(res, with_buttons=True, analysis_run_id=analysis_run_id)
+        message_id = None
+        error = None if sent else "Signal failed validation, was already sent, or Telegram delivery is unavailable."
     return {
         "success": sent,
         "symbol": symbol.upper(),
         "chat_id": telegram_service.default_chat_id,
         "status": res.get("setup_status"),
+        "telegram_message_id": message_id,
+        "telegram_error": error,
         "buttons_attached": True
     }
 
@@ -1456,13 +1557,17 @@ def broadcast_signal_alert(req: Optional[AlertDispatchRequest] = None, _: bool =
     from taikry.config import WATCHLIST
 
     req_sym = (req.symbol if req and req.symbol else "BEST").upper()
+    analysis_run_id = telegram_service.begin_analysis_run(
+        "WATCHLIST" if req_sym in ["BEST", "AUTO"] else req_sym,
+        timeframe="M15",
+    )
 
     if req_sym in ["BEST", "AUTO"]:
         candidates = []
         for item in WATCHLIST:
             sym_cand = item["symbol"]
             try:
-                cand_res = ai_consensus_engine.analyze_symbol(sym_cand, preferred_llm="quant", force_refresh=False)
+                cand_res = ai_consensus_engine.analyze_symbol(sym_cand, preferred_llm="quant", force_refresh=True)
                 score = cand_res.get("ai_score") or cand_res.get("confidence_score", 0)
                 if 80 <= score <= 95 and cand_res.get("setup_status") == "APPROVE":
                     candidates.append(cand_res)
@@ -1475,20 +1580,70 @@ def broadcast_signal_alert(req: Optional[AlertDispatchRequest] = None, _: bool =
             analysis = candidates[0]
             sym = analysis.get("symbol", "XAUUSD")
         else:
-            analysis = ai_consensus_engine.analyze_symbol("XAUUSD", preferred_llm="quant", force_refresh=False)
-            sym = "XAUUSD"
+            if analysis_run_id:
+                telegram_service.finish_analysis_run(
+                    analysis_run_id,
+                    "REJECTED",
+                    "⚠️ <b>No approved setup was found in the configured watchlist.</b> No entry/SL/TP was invented.",
+                )
+            return {
+                "success": False,
+                "symbol": None,
+                "status": "SUPPRESSED",
+                "reason": "No approved validated setup is currently available.",
+                "target_chat_id": telegram_service.default_chat_id,
+            }
     else:
         sym = req_sym
-        analysis = ai_consensus_engine.analyze_symbol(sym, preferred_llm="quant", force_refresh=False)
+        progress_callback = (
+            lambda stage, statuses: telegram_service.update_analysis_run_progress(analysis_run_id, stage, statuses)
+        ) if analysis_run_id else None
+        analysis = ai_consensus_engine.analyze_symbol(
+            sym, preferred_llm="quant", force_refresh=True, progress_callback=progress_callback
+        )
 
-    score = analysis.get("ai_score") or analysis.get("confidence_score") or 88
-    score = max(80, min(95, int(score)))
-    analysis["ai_score"] = score
-    analysis["confidence_score"] = score
+    from taikry.trading.xauusd_signal_engine import normalize_xauusd_symbol, xauusd_signal_engine
+    canonical_gold = normalize_xauusd_symbol(sym)
+    if canonical_gold:
+        progress_callback = (
+            lambda stage, statuses: telegram_service.update_analysis_run_progress(analysis_run_id, stage, statuses)
+        ) if analysis_run_id else None
+        gold_signal = xauusd_signal_engine.generate_xauusd_signal(
+            canonical_gold, progress_callback=progress_callback
+        )
+        if not gold_signal.get("success"):
+            if analysis_run_id:
+                telegram_service.finish_analysis_run(
+                    analysis_run_id,
+                    "REJECTED",
+                    f"⚠️ <b>XAUUSD setup suppressed.</b> {html.escape(str(gold_signal.get('error') or gold_signal.get('status')))}",
+                    telegram_service._agent_status_snapshot(gold_signal),
+                )
+            return {
+                "success": False,
+                "symbol": canonical_gold,
+                "status": "SUPPRESSED",
+                "reason": gold_signal.get("error") or gold_signal.get("status"),
+                "target_chat_id": telegram_service.default_chat_id,
+            }
+        sent, message_id, delivery_error = telegram_service.send_xauusd_signal_alert(
+            gold_signal, analysis_run_id=analysis_run_id
+        )
+        analysis = gold_signal
+    else:
+        if analysis_run_id and req_sym in ["BEST", "AUTO"]:
+            final_stage = "RISK_APPROVED" if analysis.get("setup_status") == "APPROVE" else "RISK_REJECTED"
+            telegram_service.update_analysis_run_progress(
+                analysis_run_id,
+                final_stage,
+                {"agent_statuses": telegram_service._agent_status_snapshot(analysis)},
+            )
+        sent = telegram_service.send_validated_signal_report(analysis, analysis_run_id=analysis_run_id)
+        message_id = None
+        delivery_error = None if sent else "Signal failed validation, duplicate suppression, or delivery."
 
-    sent = telegram_service.send_bilingual_report(analysis, force=True)
-
-    direction = analysis.get("proposed_direction", "BUY")
+    score = analysis.get("ai_score") or analysis.get("confidence_score")
+    direction = analysis.get("proposed_direction") or analysis.get("direction")
     action_tag = "BUY ENTRY" if direction in ["BUY", "LONG"] else "SELL ENTRY"
 
     return {
@@ -1501,6 +1656,8 @@ def broadcast_signal_alert(req: Optional[AlertDispatchRequest] = None, _: bool =
         "take_profit_1": analysis.get("take_profit_1"),
         "take_profit_2": analysis.get("take_profit_2"),
         "risk_reward": analysis.get("risk_reward_ratio"),
+        "telegram_message_id": message_id,
+        "telegram_error": delivery_error,
         "target_chat_id": telegram_service.default_chat_id,
         "status": "DISPATCHED" if sent else "CONFIG_PENDING"
     }
@@ -2201,7 +2358,12 @@ def get_xauusd_signal_detail_endpoint(signal_id: str):
 
 
 @router.post("/api/v1/xauusd/signals/generate")
-def generate_xauusd_signal_endpoint(dispatch_telegram: bool = True, trade_style: str = "INTRADAY", _: bool = Depends(require_admin_access)):
+def generate_xauusd_signal_endpoint(
+    dispatch_telegram: bool = True,
+    trade_style: str = "INTRADAY",
+    telegram_progress: bool = True,
+    _: bool = Depends(require_admin_access),
+):
     """
     Executes a real-time multi-agent scan on XAUUSD, synthesizes consensus,
     enforces atomic daily quota, and optionally dispatches to Telegram if approved.
@@ -2209,8 +2371,21 @@ def generate_xauusd_signal_endpoint(dispatch_telegram: bool = True, trade_style:
     from taikry.trading.xauusd_signal_engine import xauusd_signal_engine
     from taikry.notifications.telegram_service import telegram_service
 
-    result = xauusd_signal_engine.generate_xauusd_signal("XAUUSD", trade_style=trade_style)
+    analysis_run_id = telegram_service.begin_analysis_run("XAUUSD", timeframe="H1") if dispatch_telegram and telegram_progress else None
+    progress_callback = (
+        lambda stage, statuses: telegram_service.update_analysis_run_progress(analysis_run_id, stage, statuses)
+    ) if analysis_run_id else None
+    result = xauusd_signal_engine.generate_xauusd_signal(
+        "XAUUSD", trade_style=trade_style, progress_callback=progress_callback
+    )
     if not result.get("success"):
+        if analysis_run_id:
+            telegram_service.finish_analysis_run(
+                analysis_run_id,
+                "REJECTED",
+                f"⚠️ <b>XAUUSD signal rejected.</b> {html.escape(str(result.get('error') or result.get('rejection_reason') or result.get('status')))}",
+                telegram_service._agent_status_snapshot(result),
+            )
         return {
             "status": "SUPPRESSED",
             "reason": result.get("error") or result.get("rejection_reason"),
@@ -2221,7 +2396,7 @@ def generate_xauusd_signal_endpoint(dispatch_telegram: bool = True, trade_style:
     msg_id = None
     tg_err = None
     if dispatch_telegram:
-        tg_ok, msg_id, tg_err = telegram_service.send_xauusd_signal_alert(result)
+        tg_ok, msg_id, tg_err = telegram_service.send_xauusd_signal_alert(result, analysis_run_id=analysis_run_id)
 
     return {
         "status": "APPROVED",
@@ -2610,12 +2785,9 @@ def send_telegram_test_notification_endpoint(
 
     now_utc = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     msg_text = payload.message or (
-        f"⚡ <b>ZYROX AI — DIAGNOSTIC HEALTH PING</b>\n\n"
-        f"<b>Status:</b> All Systems Operational\n"
-        f"<b>Platform:</b> ZYROX AI Market Intelligence\n"
-        f"<b>Tagline:</b> Read the Market. Own Your Edge.\n"
+        f"⚡ <b>ZYROX AI — TELEGRAM TEST MESSAGE</b>\n\n"
         f"<b>Timestamp:</b> <code>{now_utc}</code>\n"
-        f"<b>Telegram Relay:</b> Verified 200 OK"
+        f"If this message arrived, the Telegram bot reached this chat. This test does not verify market data, AI agents, risk checks, or signal delivery."
     )
 
     success, msg_id, err = telegram_service.send_text(msg_text, chat_id=target_chat)

@@ -10,10 +10,14 @@ from taikry.api.app import app
 client = TestClient(app)
 
 def test_telegram_bilingual_report_score_threshold_enforced():
-    """Verifies Telegram alert strictly suppresses setups with score < 80% and allows 80%-95%."""
+    """Only complete, fresh and approved non-gold setups may use the generic sender."""
     svc = TelegramService()
+    svc.token = "unit-test-token"
+    svc.default_chat_id = "-1001234567890"
 
-    with patch.object(svc, "send_message", return_value=True) as mock_send:
+    with patch.object(svc, "_dispatch_persistent_message", return_value=(True, "777", None, "SENT")) as mock_send, \
+         patch.object(svc, "_fanout_plan_signal", return_value=(0, 0)), \
+         patch("taikry.data.validator.check_data_freshness", return_value={"fresh": True, "status": "LIVE_FRESH"}):
         # 1. Setup with low score (75%) -> Must be suppressed
         low_score_setup = {
             "symbol": "BTCUSDT",
@@ -31,32 +35,37 @@ def test_telegram_bilingual_report_score_threshold_enforced():
         assert sent is False, "Setups with score < 80% must not be sent to Telegram"
         mock_send.assert_not_called()
 
-        # 2. Setup with high score in 80%-95% range (88%) -> Must be sent
+        # 2. A complete, fresh non-XAU setup uses the persistent dispatcher.
         high_score_setup = {
-            "symbol": "XAUUSD",
+            "symbol": "EURUSD",
             "market_bias": "BULLISH",
             "setup_status": "APPROVE",
             "ai_score": 88,
             "confidence_score": 88,
             "proposed_direction": "BUY",
-            "entry_price": 2740.50,
-            "stop_loss": 2730.00,
-            "take_profit_1": 2765.00,
-            "take_profit_2": 2785.00,
-            "risk_reward_ratio": "1:2.4"
+            "entry_price": 1.10000,
+            "stop_loss": 1.09500,
+            "take_profit_1": 1.11000,
+            "take_profit_2": 1.11500,
+            "risk_reward_ratio": "1:2.0",
+            "price_source": "OANDA_V20",
+            "timestamp_utc": "2026-10-31T00:00:00+00:00",
+            "timeframe": "M15",
         }
-        sent2 = svc.send_bilingual_report(high_score_setup, force=False)
-        assert sent2 is True, "High conviction setups with score 80%-95% must be dispatched to Telegram"
+        sent2 = svc.send_bilingual_report(high_score_setup, force=True)
+        assert sent2 is True, "Legacy force=True must not bypass validation but valid setups still dispatch"
         assert mock_send.called
-        call_text = mock_send.call_args[0][0]
-        assert "⭐ <b>AI CONFLUENCE SCORE:</b> <b>88%</b>" in call_text
-        assert "🎯 <b>ACTION:</b> <b>🟢 BUY ENTRY</b>" in call_text
-        assert "💵 <b>BUY ENTRY:</b> <code>2740.5</code>" in call_text
-        assert "🛑 <b>STOP LOSS (SL):</b> <code>2730.0</code>" in call_text
-        assert "🎯 <b>TAKE PROFIT 1 (TP 1):</b> <code>2765.0</code>" in call_text
-        assert "🚀 <b>TAKE PROFIT 2 (TP 2):</b> <code>2785.0</code>" in call_text
-        assert "⚖️ <b>RISK / REWARD:</b> 1:2.4" in call_text
-        assert "🛡️ <b>RISK GUARD:</b> 0.5% Institutional Cap" in call_text
+        call_text = mock_send.call_args.args[0]
+        assert "AI SCORE:</b> 88%" in call_text
+        assert "ACTION:</b> BUY" in call_text
+        assert "<code>1.1000</code>" in call_text
+        assert "<code>1.0950</code>" in call_text
+        assert "<code>1.1100</code>" in call_text
+
+        # 3. A forced incomplete setup and XAUUSD generic dispatch are still rejected.
+        assert svc.send_bilingual_report({"symbol": "EURUSD", "setup_status": "WAIT"}, force=True) is False
+        gold = dict(high_score_setup, symbol="XAUUSD")
+        assert svc.send_bilingual_report(gold, force=True) is False
 
 def test_market_monitor_dispatches_only_single_best_setup():
     """Verifies MarketMonitor247 scans universe and dispatches ONLY the #1 highest scoring setup in 80%-95%."""
@@ -123,7 +132,8 @@ def test_market_monitor_dispatches_only_single_best_setup():
 
 def test_broadcast_alert_api_endpoint():
     """Tests POST /api/v1/telegram/broadcast-alert returns ai_score in 80%-95% range."""
-    resp = client.post("/api/v1/telegram/broadcast-alert", json={"symbol": "BEST"})
+    with patch("taikry.notifications.telegram_service.TelegramService._fanout_plan_signal", return_value=(0, 0)):
+        resp = client.post("/api/v1/telegram/broadcast-alert", json={"symbol": "BEST"})
     assert resp.status_code == 200
     data = resp.json()
     assert "ai_score" in data

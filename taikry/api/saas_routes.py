@@ -12,18 +12,20 @@ Provides:
 
 import os
 import datetime
+import asyncio
 import smtplib
 import logging
 import hmac
 from email.message import EmailMessage
 from typing import Dict, Any, List, Optional
 from urllib.parse import quote
-from fastapi import APIRouter, HTTPException, Depends, Header, Cookie, Request, Response, status
+from fastapi import APIRouter, HTTPException, Depends, Header, Cookie, Request, Response, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from taikry.database.session import get_db, SessionLocal
-from taikry.database.models import User
+from taikry.database.models import PaperTrade, User
+from taikry.config import MAX_RISK_PER_TRADE_PERCENT, get_symbol_config
 from taikry.saas import (
     sign_up_user,
     login_user,
@@ -178,10 +180,12 @@ class NotificationPrefsUpdateRequest(BaseModel):
     ai_analysis_completed: Optional[bool] = None
     signal_generated: Optional[bool] = None
     signal_invalidated: Optional[bool] = None
+    macro_events: Optional[bool] = None
     daily_summary: Optional[bool] = None
     trial_expiration_reminders: Optional[bool] = None
     subscription_status_changes: Optional[bool] = None
     system_announcements: Optional[bool] = None
+    paper_trade_alerts: Optional[bool] = None
 
 
 class SupportTicketCreateRequest(BaseModel):
@@ -213,6 +217,307 @@ class AdminSubscriptionOverrideRequest(BaseModel):
 class CheckoutRequest(BaseModel):
     plan_id: str
     return_url: Optional[str] = "/dashboard/"
+
+
+class UserPaperTradeCreateRequest(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=20)
+    direction: str = Field(..., pattern="^(BUY|SELL|buy|sell)$")
+    entry_price: float = Field(..., gt=0)
+    stop_loss: float = Field(..., gt=0)
+    take_profit_1: float = Field(..., gt=0)
+    take_profit_2: Optional[float] = Field(default=None, gt=0)
+    risk_percentage: Optional[float] = Field(default=None, gt=0, le=MAX_RISK_PER_TRADE_PERCENT)
+
+
+class UserPaperTradeJournalUpdate(BaseModel):
+    notes: str = Field(default="", max_length=5000)
+    tags: List[str] = Field(default_factory=list, max_length=12)
+    emotion_tag: Optional[str] = Field(default=None, max_length=40)
+    mistake_tag: Optional[str] = Field(default=None, max_length=40)
+
+
+def _user_day_start_utc(user: User) -> datetime.datetime:
+    """Return the start of today in the user's configured timezone as naive UTC."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        tz = ZoneInfo(user.timezone or "Asia/Phnom_Penh")
+    except (ZoneInfoNotFoundError, ValueError):
+        tz = datetime.timezone.utc
+    local_now = datetime.datetime.now(datetime.timezone.utc).astimezone(tz)
+    local_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return local_start.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
+
+@saas_router.get("/api/v1/me/paper-trades")
+def get_my_paper_trades(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return only this signed-in user's paper ledger, counts, and fresh quote state."""
+    from taikry.data.providers import market_data_engine
+    from taikry.data.validator import check_data_freshness
+    from taikry.trading.paper_trading import paper_trading_engine
+
+    owned_open = db.query(PaperTrade).filter(
+        PaperTrade.user_id == user.id,
+        PaperTrade.status == "OPEN",
+    ).all()
+    quote_by_symbol: Dict[str, Dict[str, Any]] = {}
+    fresh_prices: Dict[str, float] = {}
+
+    for symbol in sorted({trade.symbol for trade in owned_open}):
+        try:
+            price, source, timestamp = market_data_engine.get_verified_price(symbol)
+            freshness = check_data_freshness(symbol, timestamp, "M1")
+            source_label = str(source or "UNKNOWN")
+            source_is_synthetic = any(
+                marker in source_label.upper()
+                for marker in ("DEMO", "SYNTHETIC", "UNAVAILABLE")
+            )
+            is_fresh = bool(
+                price and float(price) > 0 and freshness.get("fresh") and not source_is_synthetic
+            )
+            quote_by_symbol[symbol] = {
+                "price": round(float(price), 8) if is_fresh else None,
+                "source": source_label,
+                "timestamp": timestamp.isoformat() if hasattr(timestamp, "isoformat") else timestamp,
+                "status": "UNAVAILABLE" if source_is_synthetic else freshness.get("status", "UNAVAILABLE"),
+                "fresh": is_fresh,
+            }
+            if is_fresh:
+                fresh_prices[symbol] = float(price)
+        except Exception:
+            logger.exception("Failed to refresh a user's paper-trade quote for %s", symbol)
+            quote_by_symbol[symbol] = {
+                "price": None,
+                "source": None,
+                "timestamp": None,
+                "status": "UNAVAILABLE",
+                "fresh": False,
+            }
+
+    # Evaluate only this user's open trades. Stale or synthetic quotes never close a trade.
+    closed_events = paper_trading_engine.update_open_trades(fresh_prices, user_id=user.id)
+    if closed_events:
+        from taikry.trading.paper_trade_alerts import dispatch_paper_trade_alert
+        for event in closed_events:
+            dispatch_paper_trade_alert(event)
+    db.expire_all()
+
+    trades = db.query(PaperTrade).filter(
+        PaperTrade.user_id == user.id,
+    ).order_by(PaperTrade.id.desc()).all()
+    open_trades = [trade for trade in trades if trade.status == "OPEN"]
+    closed_trades = [trade for trade in trades if trade.status == "CLOSED"]
+    today_start = _user_day_start_utc(user)
+    today_trades = [trade for trade in trades if trade.created_at and trade.created_at >= today_start]
+    today_closed = [
+        trade for trade in closed_trades
+        if trade.exit_time and trade.exit_time >= today_start
+    ]
+
+    realized_pnl = sum(float(trade.pnl or 0) for trade in closed_trades)
+    today_realized_pnl = sum(float(trade.pnl or 0) for trade in today_closed)
+    wins = sum(1 for trade in closed_trades if float(trade.pnl or 0) > 0)
+    losses = sum(1 for trade in closed_trades if float(trade.pnl or 0) < 0)
+    total_unrealized = 0.0
+    trade_rows = []
+
+    for trade in trades:
+        quote = quote_by_symbol.get(trade.symbol, {})
+        live_price = quote.get("price") if trade.status == "OPEN" else None
+        unrealized_pnl = None
+        tp_sl_state = "CLOSED" if trade.status == "CLOSED" else "WAITING_FOR_FRESH_PRICE"
+        if live_price is not None:
+            cfg = get_symbol_config(trade.symbol)
+            point_value = float(cfg.get("lot_size", 100))
+            price_move = float(live_price) - float(trade.entry_price)
+            if trade.direction == "SELL":
+                price_move *= -1
+            commission = float((trade.trade_log or {}).get("commission_usd", 0) or 0)
+            unrealized_pnl = round(price_move * point_value * float(trade.lot_size) - commission, 2)
+            total_unrealized += unrealized_pnl
+            if trade.direction == "BUY":
+                tp_sl_state = "STOP_LOSS_HIT" if live_price <= trade.stop_loss else (
+                    "TAKE_PROFIT_HIT" if live_price >= trade.take_profit_1 else "ACTIVE"
+                )
+            else:
+                tp_sl_state = "STOP_LOSS_HIT" if live_price >= trade.stop_loss else (
+                    "TAKE_PROFIT_HIT" if live_price <= trade.take_profit_1 else "ACTIVE"
+                )
+
+        trade_rows.append({
+            "id": trade.id,
+            "symbol": trade.symbol,
+            "direction": trade.direction,
+            "entry_price": trade.entry_price,
+            "current_price": live_price,
+            "quote_source": quote.get("source"),
+            "quote_timestamp": quote.get("timestamp"),
+            "quote_status": quote.get("status", "UNAVAILABLE"),
+            "stop_loss": trade.stop_loss,
+            "take_profit_1": trade.take_profit_1,
+            "take_profit_2": trade.take_profit_2,
+            "lot_size": trade.lot_size,
+            "risk_amount": trade.risk_amount,
+            "status": trade.status,
+            "tp_sl_state": tp_sl_state,
+            "exit_price": trade.exit_price,
+            "exit_time": trade.exit_time.isoformat() if trade.exit_time else None,
+            "pnl": trade.pnl,
+            "unrealized_pnl": unrealized_pnl,
+            "r_multiple": trade.r_multiple,
+            "exit_reason": trade.exit_reason,
+            "journal_notes": trade.journal_notes or "",
+            "journal_tags": trade.journal_tags or [],
+            "emotion_tag": trade.emotion_tag,
+            "mistake_tag": trade.mistake_tag,
+            "created_at": trade.created_at.isoformat() if trade.created_at else None,
+        })
+
+    account = paper_trading_engine.get_account_summary(user_id=user.id)
+    account.update({
+        "today_trades_count": len(today_trades),
+        "today_closed_trades_count": len(today_closed),
+        "today_realized_pnl": round(today_realized_pnl, 2),
+        "wins": wins,
+        "losses": losses,
+        "win_rate_percent": round((wins / len(closed_trades)) * 100, 1) if closed_trades else 0.0,
+        "unrealized_pnl": round(total_unrealized, 2),
+        "current_equity": round(float(account["current_balance"]) + total_unrealized, 2),
+        "timezone": user.timezone or "Asia/Phnom_Penh",
+    })
+    return {
+        "account_summary": account,
+        "trades": trade_rows,
+        "quotes": quote_by_symbol,
+        "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
+
+@saas_router.post("/api/v1/me/paper-trades")
+def open_my_paper_trade(
+    payload: UserPaperTradeCreateRequest,
+    user: User = Depends(get_current_user),
+):
+    """Open an authenticated user's own simulated paper position."""
+    from taikry.trading.paper_trading import paper_trading_engine
+
+    result = paper_trading_engine.open_trade(
+        symbol=payload.symbol.strip().upper(),
+        direction=payload.direction.upper(),
+        entry_price=payload.entry_price,
+        stop_loss=payload.stop_loss,
+        take_profit_1=payload.take_profit_1,
+        take_profit_2=payload.take_profit_2,
+        risk_percentage=payload.risk_percentage,
+        user_id=user.id,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("reason", "Paper trade could not be opened."))
+    return {"success": True, "paper_trade": result}
+
+
+@saas_router.put("/api/v1/me/paper-trades/{trade_id}/journal")
+def update_my_paper_trade_journal(
+    trade_id: int,
+    payload: UserPaperTradeJournalUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save notes and review tags only on a trade owned by the signed-in user."""
+    trade = db.query(PaperTrade).filter(
+        PaperTrade.id == trade_id,
+        PaperTrade.user_id == user.id,
+    ).first()
+    if not trade:
+        raise HTTPException(status_code=404, detail="Paper trade was not found in your account.")
+
+    cleaned_tags = []
+    for tag in payload.tags:
+        cleaned = " ".join(str(tag).split())[:32]
+        if cleaned and cleaned.casefold() not in {item.casefold() for item in cleaned_tags}:
+            cleaned_tags.append(cleaned)
+        if len(cleaned_tags) >= 12:
+            break
+
+    trade.journal_notes = payload.notes.strip()
+    trade.journal_tags = cleaned_tags
+    trade.emotion_tag = payload.emotion_tag.strip()[:40] if payload.emotion_tag else None
+    trade.mistake_tag = payload.mistake_tag.strip()[:40] if payload.mistake_tag else None
+    db.commit()
+    return {
+        "success": True,
+        "trade_id": trade.id,
+        "journal": {
+            "notes": trade.journal_notes,
+            "tags": trade.journal_tags,
+            "emotion_tag": trade.emotion_tag,
+            "mistake_tag": trade.mistake_tag,
+        },
+    }
+
+
+def _paper_trade_stream_snapshot(user_id: int) -> Optional[Dict[str, Any]]:
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+        if not user:
+            return None
+        return get_my_paper_trades(user=user, db=db)
+    finally:
+        db.close()
+
+
+@saas_router.websocket("/api/v1/me/trades/stream")
+async def stream_my_paper_trades(websocket: WebSocket):
+    """Push account-scoped paper trade and fresh TP/SL state over WebSocket."""
+    token = websocket.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        await websocket.close(code=4401, reason="Sign in required")
+        return
+
+    auth_db = SessionLocal()
+    try:
+        user = authenticate_session(auth_db, token)
+        if not user:
+            await websocket.close(code=4401, reason="Session expired")
+            return
+        user_id = user.id
+    finally:
+        auth_db.close()
+
+    await websocket.accept()
+    last_auth_check = asyncio.get_running_loop().time()
+    try:
+        while True:
+            now = asyncio.get_running_loop().time()
+            if now - last_auth_check >= 30:
+                auth_db = SessionLocal()
+                try:
+                    user = authenticate_session(auth_db, token)
+                    if not user or user.id != user_id:
+                        await websocket.close(code=4401, reason="Session expired")
+                        return
+                finally:
+                    auth_db.close()
+                last_auth_check = now
+
+            snapshot = await asyncio.to_thread(_paper_trade_stream_snapshot, user_id)
+            if snapshot is None:
+                await websocket.close(code=4401, reason="Account unavailable")
+                return
+            await websocket.send_json({"type": "paper_trade_snapshot", "data": snapshot})
+            await asyncio.sleep(5)
+    except WebSocketDisconnect:
+        return
+    except Exception:
+        logger.exception("User paper-trade WebSocket failed for account %s", user_id)
+        try:
+            await websocket.close(code=1011, reason="Stream unavailable")
+        except Exception:
+            pass
 
 
 # =============================================================================
@@ -568,6 +873,10 @@ async def telegram_bot_linking_webhook(request: Request):
     user_from = msg.get("from", {})
 
     if text.startswith("/start link_") and chat_id:
+        # Subscriber signal alerts contain private account notifications. Bind
+        # only a one-to-one Telegram chat owned by the user who sent the command.
+        if chat.get("type") != "private" or str(chat_id) != str(user_from.get("id") or ""):
+            return {"ok": True, "linked": False, "reason": "PRIVATE_CHAT_REQUIRED"}
         token = text.replace("/start link_", "").strip()
         db = SessionLocal()
         try:
@@ -583,8 +892,7 @@ async def telegram_bot_linking_webhook(request: Request):
             welcome_text = (
                 f"✅ <b>ZYROX AI — TELEGRAM ACCOUNT CONNECTED</b>\n\n"
                 f"Your Telegram account has been securely linked to your ZYROX AI SaaS account.\n"
-                f"<b>Status:</b> Active\n"
-                f"<b>Notifications:</b> Verified Institutional Signals & AI Analysis Completed\n\n"
+                f"<b>Signal alerts:</b> Sent only while your subscription or trial is active, your plan includes Telegram alerts, and signal notifications are enabled.\n\n"
                 f"<i>Read the Market. Own Your Edge.</i>"
             ) if ok else f"⚠️ <b>ZYROX AI Linking Error</b>\n\n{link_msg}"
 

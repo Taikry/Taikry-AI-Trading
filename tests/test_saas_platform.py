@@ -155,7 +155,7 @@ def test_telegram_linking_lifecycle(client):
     r_hook = client.post("/api/v1/telegram-link/webhook", json={
         "message": {
             "text": f"/start link_{linking_token}",
-            "chat": {"id": fake_chat_id},
+            "chat": {"id": fake_chat_id, "type": "private"},
             "from": {"id": fake_tg_id, "username": "zyrox_trader", "first_name": "Trader"}
         }
     })
@@ -168,16 +168,19 @@ def test_telegram_linking_lifecycle(client):
     st_data = r_st.json()
     assert st_data["linked"] is True
     assert st_data["telegram_username"] == "zyrox_trader"
+    assert st_data["signal_delivery"]["ready"] is True
 
     # 4. Update notification preferences
     r_pref = client.put("/api/v1/telegram-link/preferences", headers=headers, json={
         "signal_generated": True,
         "signal_invalidated": True,
+        "macro_events": False,
         "trial_expiration_reminders": True,
         "daily_summary": False
     })
     assert r_pref.status_code == 200
     assert r_pref.json()["preferences"]["daily_summary"] is False
+    assert r_pref.json()["preferences"]["macro_events"] is False
 
     # 5. Unlink account
     r_un = client.post("/api/v1/telegram-link/unlink", headers=headers)
@@ -187,6 +190,28 @@ def test_telegram_linking_lifecycle(client):
     # Verify status is now unlinked
     r_st2 = client.get("/api/v1/telegram-link/status", headers=headers)
     assert r_st2.json()["linked"] is False
+    assert r_st2.json()["signal_delivery"]["reason"] == "TELEGRAM_NOT_LINKED"
+
+
+def test_telegram_linking_rejects_group_chat(client):
+    email = f"tg_group_{uuid.uuid4().hex[:8]}@zyrox.ai"
+    signup = client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123#"})
+    headers = {"Authorization": f"Bearer {signup.json()['data']['session_token']}"}
+    token_response = client.post("/api/v1/telegram-link/token", headers=headers)
+    linking_token = token_response.json()["token"]
+
+    response = client.post("/api/v1/telegram-link/webhook", json={
+        "message": {
+            "text": f"/start link_{linking_token}",
+            "chat": {"id": -1009988776655, "type": "supergroup"},
+            "from": {"id": 987654321, "username": "group_member"},
+        }
+    })
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "linked": False, "reason": "PRIVATE_CHAT_REQUIRED"}
+    status = client.get("/api/v1/telegram-link/status", headers=headers).json()
+    assert status["linked"] is False
 
 def test_support_ticket_submission_and_admin_reply(client):
     """Verifies ticket creation with TICK-YYYYMMDD-XXXX format and admin resolution."""

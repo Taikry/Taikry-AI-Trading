@@ -144,22 +144,54 @@ def get_telegram_link_status(db: Session, user_id: int) -> Dict[str, Any]:
     """Returns current Telegram connection status and preferences."""
     link_rec = db.query(TelegramLink).filter(TelegramLink.user_id == user_id).first()
     prefs = db.query(NotificationPreferences).filter(NotificationPreferences.user_id == user_id).first()
+    from taikry.saas.entitlement_service import get_user_entitlement
+    entitlement = get_user_entitlement(db, user_id)
 
-    is_linked = bool(link_rec and link_rec.is_linked and link_rec.telegram_chat_id)
+    try:
+        is_private_chat_id = int(str(link_rec.telegram_chat_id)) > 0 if link_rec and link_rec.telegram_chat_id else False
+    except (TypeError, ValueError):
+        is_private_chat_id = False
+    is_linked = bool(link_rec and link_rec.is_linked and link_rec.telegram_chat_id and is_private_chat_id)
+    signal_alerts_enabled = prefs.signal_generated if prefs else True
+    plan_allows_signals = bool(entitlement.get("quotas", {}).get("telegram_alerts_enabled"))
+    signal_delivery_ready = bool(
+        entitlement.get("is_active") and plan_allows_signals and is_linked and signal_alerts_enabled
+    )
+    signal_delivery_reason = (
+        "READY" if signal_delivery_ready else
+        "SUBSCRIPTION_INACTIVE" if not entitlement.get("is_active") else
+        "PLAN_DISABLED" if not plan_allows_signals else
+        "TELEGRAM_NOT_LINKED" if not is_linked else
+        "SIGNAL_NOTIFICATIONS_DISABLED"
+    )
     return {
         "linked": is_linked,
         "is_linked": is_linked,
         "telegram_username": link_rec.telegram_username if is_linked else None,
         "telegram_first_name": link_rec.telegram_first_name if is_linked else None,
         "linked_at_utc": link_rec.linked_at.isoformat() if (is_linked and link_rec.linked_at) else None,
+        "signal_delivery": {
+            "ready": signal_delivery_ready,
+            "reason": signal_delivery_reason,
+            "plan_id": entitlement.get("plan", {}).get("id"),
+            "subscription_active": bool(entitlement.get("is_active")),
+            "plan_allows_signals": plan_allows_signals,
+            "signal_notifications_enabled": bool(signal_alerts_enabled),
+            "target_min_per_day": entitlement.get("quotas", {}).get("signal_alerts_target_min_per_day", 0),
+            "max_per_day": entitlement.get("quotas", {}).get("max_signal_alerts_per_day", 0),
+            "reserved_today": entitlement.get("quotas", {}).get("signal_alerts_reserved_today", 0),
+            "remaining_today": entitlement.get("quotas", {}).get("signal_alerts_remaining_today", 0),
+        },
         "preferences": {
             "ai_analysis_completed": prefs.ai_analysis_completed if prefs else True,
             "signal_generated": prefs.signal_generated if prefs else True,
             "signal_invalidated": prefs.signal_invalidated if prefs else True,
+            "macro_events": prefs.macro_events if prefs else True,
             "daily_summary": prefs.daily_summary if prefs else True,
             "trial_expiration_reminders": prefs.trial_expiration_reminders if prefs else True,
             "subscription_status_changes": prefs.subscription_status_changes if prefs else True,
-            "system_announcements": prefs.system_announcements if prefs else True
+            "system_announcements": prefs.system_announcements if prefs else True,
+            "paper_trade_alerts": prefs.paper_trade_alerts if prefs else True
         }
     }
 
@@ -172,9 +204,9 @@ def update_notification_preferences(db: Session, user_id: int, updates: Dict[str
         db.add(prefs)
 
     for field in [
-        "ai_analysis_completed", "signal_generated", "signal_invalidated",
+        "ai_analysis_completed", "signal_generated", "signal_invalidated", "macro_events",
         "daily_summary", "trial_expiration_reminders",
-        "subscription_status_changes", "system_announcements"
+        "subscription_status_changes", "system_announcements", "paper_trade_alerts"
     ]:
         if field in updates:
             setattr(prefs, field, bool(updates[field]))
@@ -183,8 +215,8 @@ def update_notification_preferences(db: Session, user_id: int, updates: Dict[str
     db.commit()
     return {
         field: getattr(prefs, field) for field in [
-            "ai_analysis_completed", "signal_generated", "signal_invalidated",
+            "ai_analysis_completed", "signal_generated", "signal_invalidated", "macro_events",
             "daily_summary", "trial_expiration_reminders",
-            "subscription_status_changes", "system_announcements"
+            "subscription_status_changes", "system_announcements", "paper_trade_alerts"
         ]
     }

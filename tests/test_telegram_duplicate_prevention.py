@@ -47,7 +47,10 @@ def isolate_test_environment():
     finally:
         db.close()
 
+    fanout_patcher = patch.object(TelegramService, "_fanout_plan_signal", return_value=(0, 0))
+    fanout_patcher.start()
     yield
+    fanout_patcher.stop()
 
     db = SessionLocal()
     try:
@@ -75,7 +78,7 @@ def count_telegram_api_calls(mock_post) -> int:
     return count
 
 
-def create_test_signal_in_db(symbol="XAUUSD", direction="SELL", entry=4060.0, sl=4075.0, tp1=4030.0, tp2=4010.0, state=SignalState.WAITING_CONFIRMATION):
+def create_test_signal_in_db(symbol="XAUUSD", direction="SELL", entry=4060.0, sl=4075.0, tp1=4030.0, tp2=4010.0, state=SignalState.WAITING_CONFIRMATION, tp3=None):
     """Helper to insert an isolated test signal."""
     sig_id = f"SIG-TEST-{uuid.uuid4().hex[:8].upper()}"
     now_dt = datetime.datetime.now(datetime.timezone.utc)
@@ -90,6 +93,7 @@ def create_test_signal_in_db(symbol="XAUUSD", direction="SELL", entry=4060.0, sl
             stop_loss=sl,
             take_profit_1=tp1,
             take_profit_2=tp2,
+            take_profit_3=tp3,
             risk_reward="1:2.0",
             ai_score=88,
             current_state=state.value,
@@ -316,13 +320,35 @@ def test_genuine_tp1_sl_cancellation_events_notified_once():
         assert events[0]["current_state"] == SignalState.TARGET_HIT.value
         assert count_telegram_api_calls(mock_post) == 1
 
-        # Evaluate repeatedly at same TP price
+        # Evaluate repeatedly at the same TP price; do not send duplicates.
         for _ in range(10):
             signal_lifecycle_manager.evaluate_signals({"XAUUSD": 4028.0})
 
-        # Still only 1 call
         assert count_telegram_api_calls(mock_post) == 1
 
+
+def test_lifecycle_keeps_monitoring_after_tp1_and_tracks_tp2_tp3():
+    sig_id = create_test_signal_in_db(
+        symbol="XAUUSD", direction="SELL", entry=4060.0, sl=4075.0,
+        tp1=4030.0, tp2=4010.0, tp3=3990.0, state=SignalState.ACTIVE,
+    )
+
+    first = signal_lifecycle_manager.evaluate_signals({"XAUUSD": 4028.0})
+    assert len(first) == 1
+    assert first[0]["current_state"] == SignalState.TARGET_HIT.value
+    assert first[0]["state_history"][-1]["event_type"] == "TP1_HIT"
+    assert signal_lifecycle_manager.evaluate_signals({"XAUUSD": 4028.0}) == []
+
+    second = signal_lifecycle_manager.evaluate_signals({"XAUUSD": 4008.0})
+    assert len(second) == 1
+    assert second[0]["current_state"] == SignalState.TARGET_HIT.value
+    assert second[0]["state_history"][-1]["event_type"] == "TP2_HIT"
+
+    third = signal_lifecycle_manager.evaluate_signals({"XAUUSD": 3988.0})
+    assert len(third) == 1
+    assert third[0]["current_state"] == SignalState.CLOSED.value
+    assert third[0]["state_history"][-1]["event_type"] == "TP3_HIT"
+    assert signal_lifecycle_manager.evaluate_signals({"XAUUSD": 3988.0}) == []
 
 # -------------------------------------------------------------------------
 # Requirement 6: A distinct new signal can still be sent

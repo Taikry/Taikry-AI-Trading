@@ -103,8 +103,18 @@ def main():
         print(f"[*] Bias: {res.get('market_bias')} | Setup Status: {res.get('setup_status')}")
         print(f"[*] Target Telegram Bot Chat ID: {TELEGRAM_CHAT_ID}")
 
-        # 1. Dispatch directly via Telegram Bot Service
-        tg_ok = telegram_service.send_bilingual_report(res, force=True)
+        # 1. Route gold through the strict quota-checked engine; other markets
+        # must use the validated persistent generic signal dispatcher.
+        from taikry.trading.xauusd_signal_engine import normalize_xauusd_symbol, xauusd_signal_engine
+        if normalize_xauusd_symbol(target_sym):
+            xau_signal = xauusd_signal_engine.generate_xauusd_signal(target_sym)
+            if xau_signal.get("success"):
+                tg_ok, _, _ = telegram_service.send_xauusd_signal_alert(xau_signal)
+            else:
+                tg_ok = False
+                print(f"[*] XAUUSD signal suppressed: {xau_signal.get('error') or xau_signal.get('status')}")
+        else:
+            tg_ok = telegram_service.send_validated_signal_report(res)
         print(f"[*] Telegram Direct API: {'DELIVERED' if tg_ok else 'NOT SENT (no approved signal or delivery unavailable)'}")
 
         # 2. Dispatch to Make Webhook with chat_id

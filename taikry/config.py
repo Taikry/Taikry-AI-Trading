@@ -112,6 +112,7 @@ def get_configured_llms() -> List[str]:
     return active
 
 # Telegram Configuration
+TELEGRAM_ENABLED: bool = os.getenv("TELEGRAM_ENABLED", "true").strip().lower() in ("true", "1", "yes")
 TELEGRAM_BOT_TOKEN = _credential("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_ADMIN_IDS: List[int] = [

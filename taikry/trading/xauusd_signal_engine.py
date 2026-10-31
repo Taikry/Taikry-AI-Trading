@@ -18,14 +18,17 @@ import datetime
 import zoneinfo
 import logging
 import math
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Callable
 import threading
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from taikry.config import (
     DEFAULT_STRATEGY_VERSION, COMMISSION_PER_LOT, MIN_RISK_REWARD_RATIO,
-    get_symbol_config,
+    get_symbol_config, MAX_DAILY_XAUUSD_SIGNALS,
 )
 from taikry.database.session import SessionLocal
-from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel
+from taikry.database.models import XAUUSDTelegramSignalModel, AgentLearningModel, XAUUSDDailyQuotaReservation
 from taikry.data.providers import market_data_engine
 from taikry.data.validator import validate_dataframe, is_market_open, check_data_freshness
 from taikry.agents.registry import agent_registry
@@ -186,7 +189,7 @@ class XAUUSDSignalEngine:
     """
 
     def __init__(self):
-        self.daily_limit = DEFAULT_DAILY_LIMIT
+        self.daily_limit = min(DEFAULT_DAILY_LIMIT, max(1, int(MAX_DAILY_XAUUSD_SIGNALS)))
         self.min_rr = DEFAULT_MIN_RR
         self.min_score = DEFAULT_MIN_SCORE
         self.max_score = DEFAULT_MAX_SCORE
@@ -212,7 +215,10 @@ class XAUUSDSignalEngine:
                 XAUUSDTelegramSignalModel.cambodia_date == date_str,
                 XAUUSDTelegramSignalModel.telegram_delivery_status == "SENT"
             ).count()
-            used_count = db.query(XAUUSDTelegramSignalModel).filter(
+            quota_record = db.query(XAUUSDDailyQuotaReservation).filter(
+                XAUUSDDailyQuotaReservation.cambodia_date == date_str
+            ).first()
+            used_count = quota_record.reserved_count if quota_record else db.query(XAUUSDTelegramSignalModel).filter(
                 XAUUSDTelegramSignalModel.cambodia_date == date_str,
                 XAUUSDTelegramSignalModel.telegram_delivery_status.in_(["PENDING", "SENDING", "SENT", "DELIVERY_UNKNOWN"])
             ).count()
@@ -220,13 +226,11 @@ class XAUUSDSignalEngine:
             remaining = max(0, self.daily_limit - used_count)
             is_limit_reached = used_count >= self.daily_limit
 
-            target_status = "0/4 — Awaiting High Quality Setups"
-            if used_count == 1:
-                target_status = "1/4 — Signal Reserved or Sent"
-            elif used_count in [2, 3]:
-                target_status = f"{used_count}/4 — Reserved or Sent"
-            elif used_count >= 4:
-                target_status = "4/4 — Daily Hard Cap Reached (Protected)"
+            target_status = f"0/{self.daily_limit} — Awaiting High Quality Setups"
+            if used_count > 0 and used_count < self.daily_limit:
+                target_status = f"{used_count}/{self.daily_limit} — Reserved or Sent"
+            elif used_count >= self.daily_limit:
+                target_status = f"{self.daily_limit}/{self.daily_limit} — Daily Hard Cap Reached (Protected)"
 
             return {
                 "cambodia_date": date_str,
@@ -239,6 +243,36 @@ class XAUUSDSignalEngine:
             }
         finally:
             db.close()
+
+    def _reserve_daily_quota_slot(self, db, date_str: str) -> bool:
+        """Atomically reserve one XAUUSD slot in PostgreSQL/SQLite before signal insert."""
+        used_states = ["PENDING", "SENDING", "SENT", "DELIVERY_UNKNOWN"]
+        existing_count = db.query(XAUUSDTelegramSignalModel).filter(
+            XAUUSDTelegramSignalModel.cambodia_date == date_str,
+            XAUUSDTelegramSignalModel.telegram_delivery_status.in_(used_states),
+        ).count()
+        now = datetime.datetime.utcnow()
+        dialect = db.bind.dialect.name
+        values = {"cambodia_date": date_str, "reserved_count": existing_count, "updated_at": now}
+        if dialect == "postgresql":
+            stmt = postgresql_insert(XAUUSDDailyQuotaReservation).values(**values).on_conflict_do_nothing(
+                index_elements=[XAUUSDDailyQuotaReservation.cambodia_date]
+            )
+        elif dialect == "sqlite":
+            stmt = sqlite_insert(XAUUSDDailyQuotaReservation).values(**values).on_conflict_do_nothing(
+                index_elements=[XAUUSDDailyQuotaReservation.cambodia_date]
+            )
+        else:
+            raise RuntimeError(f"Atomic XAUUSD quota reservation is unsupported for database dialect: {dialect}")
+        db.execute(stmt)
+        reserved = db.query(XAUUSDDailyQuotaReservation).filter(
+            XAUUSDDailyQuotaReservation.cambodia_date == date_str,
+            XAUUSDDailyQuotaReservation.reserved_count < self.daily_limit,
+        ).update({
+            "reserved_count": XAUUSDDailyQuotaReservation.reserved_count + 1,
+            "updated_at": now,
+        }, synchronize_session=False)
+        return reserved == 1
 
     def check_duplicate_signal(self, direction: str, entry_price: float, stop_loss: float) -> Tuple[bool, Optional[str]]:
         """
@@ -861,7 +895,12 @@ class XAUUSDSignalEngine:
     # 4. END-TO-END XAUUSD SIGNAL GENERATION & PERSISTENCE
     # -------------------------------------------------------------------------
 
-    def generate_xauusd_signal(self, raw_symbol: str = "XAUUSD", trade_style: str = "INTRADAY") -> Dict[str, Any]:
+    def generate_xauusd_signal(
+        self,
+        raw_symbol: str = "XAUUSD",
+        trade_style: str = "INTRADAY",
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+    ) -> Dict[str, Any]:
         """Serialize signal generation within this application process."""
         if not self._generation_lock.acquire(blocking=False):
             return {
@@ -870,11 +909,18 @@ class XAUUSDSignalEngine:
                 "status": "GENERATION_IN_PROGRESS"
             }
         try:
-            return self._generate_xauusd_signal_locked(raw_symbol, trade_style=trade_style)
+            return self._generate_xauusd_signal_locked(
+                raw_symbol, trade_style=trade_style, progress_callback=progress_callback
+            )
         finally:
             self._generation_lock.release()
 
-    def _generate_xauusd_signal_locked(self, raw_symbol: str = "XAUUSD", trade_style: str = "INTRADAY") -> Dict[str, Any]:
+    def _generate_xauusd_signal_locked(
+        self,
+        raw_symbol: str = "XAUUSD",
+        trade_style: str = "INTRADAY",
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+    ) -> Dict[str, Any]:
         """
         Main pipeline entry point.
         Enforces strict XAUUSD-only validation, runs eligible agents by role, checks quota,
@@ -992,12 +1038,36 @@ class XAUUSDSignalEngine:
         verified_price = round(quote_price, 2)
         price_source = quote_source
         price_ts = quote_timestamp or price_ts
+        quote_dt = price_ts
+        if isinstance(quote_dt, str):
+            try:
+                quote_dt = datetime.datetime.fromisoformat(quote_dt.replace("Z", "+00:00"))
+            except ValueError:
+                quote_dt = None
+        if hasattr(quote_dt, "to_pydatetime"):
+            quote_dt = quote_dt.to_pydatetime()
+        if isinstance(quote_dt, datetime.datetime):
+            if quote_dt.tzinfo is None:
+                quote_dt = quote_dt.replace(tzinfo=datetime.timezone.utc)
+            quote_dt = quote_dt.astimezone(datetime.timezone.utc)
+        else:
+            quote_dt = None
         # XAU points convention: 0.01 price units per point.
         spread_points = round(spread_price * 100.0, 1)
         # 1 standard gold lot = 100 oz; $7 round-turn commission is $0.07/oz.
         estimated_costs = round(spread_price + (COMMISSION_PER_LOT / 100.0), 2)
 
-        # Step 4: Atomic Daily Quota Check (Cambodia Calendar Day)
+        def emit_progress(stage: str, statuses: Optional[Dict[str, Any]] = None) -> None:
+            if progress_callback:
+                try:
+                    progress_callback(stage, statuses or {})
+                except Exception as exc:
+                    logger.warning("Telegram analysis progress update failed: %s", exc)
+
+        emit_progress("MARKET_DATA_VERIFIED", {"market_data": "VERIFIED"})
+
+        # Step 4: Fast daily quota check. An atomic reservation is repeated
+        # immediately before persistence after all analysis and risk gates pass.
         cambodia_date = get_cambodia_date_str()
         quota_status = self.get_daily_quota_status(cambodia_date)
         if quota_status["is_limit_reached"]:
@@ -1018,6 +1088,7 @@ class XAUUSDSignalEngine:
             price_source=price_source,
             trade_style=trade_style,
         )
+        emit_progress("AGENTS_COMPLETED", self._summarize_agent_outputs(agent_outputs))
 
         # Reuse the quote audited by Agent 1 for entry and cost calculations so
         # every risk check sees one bid/ask snapshot.
@@ -1035,6 +1106,7 @@ class XAUUSDSignalEngine:
                 pass
 
         # Step 6: Consensus Synthesis
+        emit_progress("RISK_CHECKING", self._summarize_agent_outputs(agent_outputs))
         consensus = self.synthesize_consensus(
             canonical_symbol,
             verified_price,
@@ -1047,6 +1119,7 @@ class XAUUSDSignalEngine:
         decision = consensus.get("decision")
 
         if decision not in ["BUY", "SELL"]:
+            emit_progress("RISK_REJECTED", self._summarize_agent_outputs(consensus.get("agent_opinions", agent_outputs)))
             return {
                 "success": False,
                 "decision": decision,
@@ -1126,6 +1199,14 @@ class XAUUSDSignalEngine:
         # Step 10: Persist to Database
         db = SessionLocal()
         try:
+            if not self._reserve_daily_quota_slot(db, cambodia_date):
+                db.rollback()
+                return {
+                    "success": False,
+                    "error": f"Daily Telegram quota reached ({self.daily_limit}/{self.daily_limit}).",
+                    "canonical_symbol": canonical_symbol,
+                    "status": "BLOCKED_DAILY_QUOTA_REACHED",
+                }
             signal_model = XAUUSDTelegramSignalModel(
                 signal_id=sig_id,
                 canonical_symbol=canonical_symbol,
@@ -1144,6 +1225,10 @@ class XAUUSDSignalEngine:
                 ai_confluence_score=consensus["score"],
                 strategy_version=DEFAULT_STRATEGY_VERSION,
                 broker_source=price_source,
+                bid_price=bid,
+                ask_price=ask,
+                midpoint_price=quote_price,
+                quote_timestamp=quote_dt.replace(tzinfo=None) if quote_dt else None,
                 setup_score_label="Setup Score (out of 100, not win probability)",
                 calibrated_probability=None,
                 spread_points=spread_points,
@@ -1171,11 +1256,19 @@ class XAUUSDSignalEngine:
             db.commit()
             db.refresh(signal_model)
 
+            emit_progress("RISK_APPROVED", self._summarize_agent_outputs(consensus.get("agent_opinions", agent_outputs)))
+
             return {
                 "success": True,
                 "signal_id": sig_id,
                 "canonical_symbol": canonical_symbol,
                 "broker": price_source,
+                "price_source": price_source,
+                "bid_price": bid,
+                "ask_price": ask,
+                "midpoint_price": quote_price,
+                "quote_timestamp_utc": quote_dt.isoformat() if quote_dt else None,
+                "timeframe": setup_timeframe,
                 "trade_style": trade_style,
                 "entry_method": consensus.get("entry_method"),
                 "direction": decision,
@@ -1198,11 +1291,21 @@ class XAUUSDSignalEngine:
                 "strategy_version": DEFAULT_STRATEGY_VERSION,
                 "consensus_summary": summary_text,
                 "supporting_evidence": consensus["supporting_evidence"],
+                "invalidation_conditions_en": invalidation_en,
+                "invalidation_conditions_kh": invalidation_kh,
                 "agent_run_summary": self._summarize_agent_outputs(consensus.get("agent_opinions", agent_outputs)),
                 "cambodia_date": cambodia_date,
                 "idempotency_key": idempotency_key,
                 "expires_at": signal_model.expires_at.isoformat() if signal_model.expires_at else None,
                 "status": "VALIDATED"
+            }
+        except IntegrityError:
+            db.rollback()
+            return {
+                "success": False,
+                "error": "A matching XAUUSD setup was already recorded; duplicate signal suppressed.",
+                "canonical_symbol": canonical_symbol,
+                "status": "DUPLICATE_SIGNAL_SUPPRESSED",
             }
         finally:
             db.close()

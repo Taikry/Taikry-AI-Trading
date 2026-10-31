@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="assets/brand/zyrox-logo-icon.svg">
   <link rel="alternate icon" type="image/png" href="assets/brand/zyrox-logo-icon.png">
   <link rel="apple-touch-icon" href="assets/brand/zyrox-logo-icon.png">
-  <link rel="stylesheet" href="styles.css?v=2.6.5">
+  <link rel="stylesheet" href="styles.css?v=2.6.9">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet">
@@ -120,7 +120,7 @@
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           <span id="t-top-ask-ai">Ask AI</span>
         </button>
-        <button class="top-action-btn btn-quick-trade" onclick="executePlanTradeBridge()" title="Record a simulated paper trade and send a manual ticket">
+        <button class="top-action-btn btn-quick-trade" onclick="executePlanTradeBridge()" title="Record a simulated paper trade in your account">
           <svg class="top-btn-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           <span id="t-top-trade">Paper Trade</span>
         </button>
@@ -1082,10 +1082,10 @@
           </div>
         </div>
 
-        <!-- ================= PANE 2: PAPER TRADE TICKET ================= -->
+        <!-- ================= PANE 2: PAPER TRADE ================= -->
         <div class="ai-sidebar-pane" id="ai-pane-trade">
           <div class="fast-trade-pane">
-            <div class="pane-sec-title">Paper Trade & Manual Ticket</div>
+            <div class="pane-sec-title">Paper Trade</div>
             <div class="fast-trade-asset-card">
               <div class="fast-trade-sym" id="ft-sym-display">XAUUSD</div>
               <div class="fast-trade-price text-gold" id="ft-price-display">---</div>
@@ -1116,11 +1116,11 @@
               </div>
               <div class="ft-input-row">
                 <label>Risk Cap:</label>
-                <span class="ft-val-text text-green">Set paper-ticket risk in Preferences</span>
+                <span class="ft-val-text text-green">Set paper-trade risk in Preferences</span>
               </div>
             </div>
             <button class="btn btn-gold btn-full mt-16" id="btn-cockpit-execute" onclick="executePlanTradeBridge()">
-              <span id="t-cockpit-execute">Record Paper Trade & Send Manual Ticket</span>
+              <span id="t-cockpit-execute">Record Paper Trade</span>
             </button>
             <div class="fast-trade-meta">
               <span>Simulated only · No order is sent to MT5 or a broker</span>
@@ -1141,6 +1141,21 @@
                 <div class="metric-value val-green" id="paper-pnl">--</div>
               </div>
             </div>
+            <div class="paper-trade-stats" aria-live="polite">
+              <div class="paper-trade-stat">
+                <span class="metric-label">Trades Today</span>
+                <strong id="paper-today-count">--</strong>
+              </div>
+              <div class="paper-trade-stat">
+                <span class="metric-label">All Trades</span>
+                <strong id="paper-total-count">--</strong>
+              </div>
+              <div class="paper-trade-stat">
+                <span class="metric-label">Win Rate</span>
+                <strong id="paper-win-rate">--</strong>
+              </div>
+            </div>
+            <div id="paper-stream-status" class="paper-stream-status" aria-live="polite">Connecting · កំពុងភ្ជាប់</div>
             <div class="metric-label mt-12">Recent Executions:</div>
             <table class="ledger-table">
               <thead>
@@ -1421,6 +1436,7 @@
             <div class="section-kpi-label">Market Feed & Status</div>
             <div class="section-kpi-val" id="ov-feed-provider">--</div>
             <div class="section-kpi-sub" id="ov-feed-latency">Latency: -- · Verified</div>
+            <div class="provider-status-list" id="ov-provider-status-list" aria-live="polite">Provider health · សុខភាពប្រភពទិន្នន័យ: --</div>
           </div>
           <div class="section-kpi-card">
             <div class="section-kpi-label">Active Instrument (XAUUSD)</div>
@@ -1520,6 +1536,80 @@
             <input type="text" id="markets-table-search" class="watchlist-search-input" placeholder="Search symbol or name..." oninput="onMarketsTableSearch(this.value)">
           </div>
         </div>
+
+        <section class="market-explorer-card" aria-labelledby="market-explorer-title">
+          <div class="market-explorer-heading">
+            <div>
+              <h2 id="market-explorer-title">🔎 Market Explorer · ស្វែងរកទីផ្សារ</h2>
+              <p>Choose a provider-supported symbol for your own analysis. This does not create or send a Telegram signal. · ជ្រើសទ្រព្យដែល provider គាំទ្រ ដើម្បីវិភាគផ្ទាល់ខ្លួន។ វាមិនបង្កើត ឬផ្ញើសញ្ញា Telegram ទេ។</p>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" onclick="refreshMarketExplorer()">↻ Refresh registry</button>
+          </div>
+          <div class="market-explorer-watchlists">
+            <label>My watchlists · បញ្ជីទីផ្សាររបស់ខ្ញុំ
+              <select id="market-user-watchlist" aria-label="Choose a personal watchlist">
+                <option value="">Choose a watchlist</option>
+              </select>
+            </label>
+            <button class="btn btn-outline btn-sm" type="button" onclick="createMarketExplorerWatchlist()">＋ New watchlist</button>
+          </div>
+          <div class="market-explorer-controls">
+            <label class="market-explorer-search">🔍
+              <input id="market-explorer-search" type="search" maxlength="80" placeholder="Search symbol or name: BTC, Bitcoin, EUR/USD…" oninput="onMarketExplorerSearch(this.value)">
+            </label>
+            <label>Sort
+              <select id="market-explorer-sort" onchange="renderMarketExplorer()">
+                <option value="POPULAR">Popular</option>
+                <option value="ALPHA">Alphabetical</option>
+                <option value="AI_SCORE">AI opportunity score</option>
+                <option value="RECENT">Recently analyzed</option>
+              </select>
+            </label>
+          </div>
+          <div class="market-explorer-categories" role="group" aria-label="Market categories">
+            <button type="button" class="active" data-market-category="ALL" onclick="setMarketExplorerCategory('ALL', this)">All</button>
+            <button type="button" data-market-category="FAVORITES" onclick="setMarketExplorerCategory('FAVORITES', this)">⭐ Favorites</button>
+            <button type="button" data-market-category="AI_SCANNER" onclick="setMarketExplorerCategory('AI_SCANNER', this)">🤖 AI Scanner</button>
+            <button type="button" data-market-category="METALS" onclick="setMarketExplorerCategory('METALS', this)">🥇 Gold / Metals</button>
+            <button type="button" data-market-category="FOREX" onclick="setMarketExplorerCategory('FOREX', this)">💱 Forex</button>
+            <button type="button" data-market-category="CRYPTO" onclick="setMarketExplorerCategory('CRYPTO', this)">₿ Crypto</button>
+          </div>
+          <div class="market-explorer-analysis-controls">
+            <label>Analysis mode
+              <select id="market-analysis-mode" onchange="updateMarketAnalysisMode()">
+                <option value="QUICK">⚡ Quick</option>
+                <option value="STANDARD" selected>📊 Standard</option>
+                <option value="DEEP">🧠 Deep AI</option>
+              </select>
+            </label>
+            <label>Timeframe
+              <select id="market-analysis-timeframe">
+                <option>M1</option><option>M5</option><option selected>M15</option><option>M30</option>
+                <option>H1</option><option>H4</option><option>D1</option><option>W1</option>
+              </select>
+            </label>
+            <label id="market-analysis-profile-wrap">MTF profile
+              <select id="market-analysis-profile">
+                <option value="SCALPING">Scalping · M1/M5/M15/H1</option>
+                <option value="INTRADAY" selected>Intraday · M5/M15/H1/H4</option>
+                <option value="SWING">Swing · H1/H4/D1/W1</option>
+                <option value="FULL">Full · M1 through D1</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-gold" id="market-analyze-button" onclick="analyzeExplorerSelection()">ANALYZE NOW</button>
+          </div>
+          <p id="market-explorer-selection" class="market-explorer-selection">Select a market below · ជ្រើសទីផ្សារខាងក្រោម</p>
+          <div id="market-explorer-status" class="market-explorer-status" role="status" aria-live="polite">Loading provider-supported markets… · កំពុងទាញទីផ្សារដែល provider គាំទ្រ…</div>
+          <div id="market-explorer-results" class="market-explorer-results" aria-live="polite"></div>
+          <div class="market-explorer-output">
+            <div class="market-explorer-output-heading">Analysis status · ស្ថានភាពវិភាគ <span id="market-analysis-stage">Idle</span></div>
+            <pre id="market-analysis-output">Choose a symbol and select Analyze Now. · ជ្រើសទ្រព្យ និងចុច Analyze Now។</pre>
+          </div>
+          <div class="market-explorer-recent">
+            <strong>Recently analyzed · វិភាគថ្មីៗ</strong>
+            <div id="market-recent-list">Sign in to see your private history. · ចូលគណនីដើម្បីមើលប្រវត្តិផ្ទាល់ខ្លួន។</div>
+          </div>
+        </section>
 
         <div class="section-table-wrap">
           <table class="section-table">
@@ -1852,7 +1942,7 @@
               <li>Ensure Exness MetaTrader 5 is installed and running on your Windows PC.</li>
               <li>In MT5, enable: <code>Tools ➔ Options ➔ Expert Advisors ➔ Allow algorithmic trading</code>.</li>
               <li>In your Windows command prompt / PowerShell, launch the bridge:
-                <pre class="bridge-cmd-code"><code>python mt5_bridge/exness_mt5_bridge.py --backend-url https://taikry-ai-trading.onrender.com</code></pre>
+                <pre class="bridge-cmd-code"><code>python mt5_bridge/exness_mt5_bridge.py --backend-url https://zyroxaitrading.onrender.com</code></pre>
               </li>
               <li>The bridge will securely authenticate and stream real-time broker ticks and candles to ZYROX AI.</li>
             </ol>
@@ -2462,13 +2552,24 @@
               <span>✈️ Telegram Intelligence Webhook Linking</span>
               <span class="badge badge-telegram-unlinked" id="saas-telegram-status-badge">NOT LINKED</span>
             </div>
+            <p class="telegram-unlinked-desc mt-12" id="saas-signal-plan-status" role="status" aria-live="polite">
+              Signal delivery requires an active plan with Telegram alerts, a linked Telegram account, and signal alerts enabled.
+            </p>
+            <div class="pref-checkbox-list mt-12">
+              <label class="pref-checkbox-label">
+                <input type="checkbox" id="pref-paper-trades" checked> TP/SL paper-trade alerts by email (if configured) or linked Telegram · ការជូនដំណឹង TP/SL តាម Email ឬ Telegram ដែលបានភ្ជាប់
+              </label>
+            </div>
+            <div class="mt-8">
+              <button class="btn btn-outline btn-xs" onclick="saveNotificationPreferences()">💾 Save Alert Preferences</button>
+            </div>
 
             <div id="saas-telegram-unlinked-box" class="mt-12">
               <p class="telegram-unlinked-desc">
-                Pair your account with the configured ZYROX AI Telegram bot to receive approved BUY/SELL alerts with validated Stop Loss, Take Profit, reward-floor, and risk details.
+                A secure pairing link is prepared automatically after sign-in. Open the bot link and press Start in Telegram to confirm; the website cannot connect your Telegram account without that confirmation. / គេហទំព័របង្កើតតំណភ្ជាប់សុវត្ថិភាពដោយស្វ័យប្រវត្តិបន្ទាប់ពីចូលគណនី។ សូមបើកតំណ bot ហើយចុច Start ក្នុង Telegram ដើម្បីបញ្ជាក់។
               </p>
               <div class="mt-14">
-                <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">⚡ Connect Telegram (Instant 1-Click)</button>
+                <button class="btn btn-gold btn-sm" onclick="startTelegramLinking()">🔗 Generate a New Pairing Link</button>
               </div>
               <div id="saas-telegram-token-display" class="telegram-pairing-box hidden-initially">
                 <div class="telegram-pairing-title">Secure 15-Minute One-Time Pairing Link:</div>
@@ -2497,7 +2598,7 @@
                     <input type="checkbox" id="pref-signals" checked> Real-time Trading Signals (BUY / SELL setups)
                   </label>
                   <label class="pref-checkbox-label">
-                    <input type="checkbox" id="pref-risk" checked> Configured Risk Cap & Invalidation Warnings
+                    <input type="checkbox" id="pref-risk" checked> Stop, Expiry & Invalidation Alerts
                   </label>
                   <label class="pref-checkbox-label">
                     <input type="checkbox" id="pref-macro" checked> High-Impact Macro Economic Events (NFP, CPI, FOMC)
@@ -2733,7 +2834,7 @@
             <li>Ensure Exness MetaTrader 5 is running on your Windows PC.</li>
             <li>In MT5, enable: <code>Tools ➔ Options ➔ Expert Advisors ➔ Allow algorithmic trading</code>.</li>
             <li>Run the bridge in your Windows terminal:
-              <pre class="bridge-cmd-code"><code>python mt5_bridge/exness_mt5_bridge.py --backend-url https://taikry-ai-trading.onrender.com</code></pre>
+              <pre class="bridge-cmd-code"><code>python mt5_bridge/exness_mt5_bridge.py --backend-url https://zyroxaitrading.onrender.com</code></pre>
             </li>
           </ol>
         </div>
@@ -2937,7 +3038,7 @@
       <span class="mob-nav-icon">🤖</span>
       <span class="mob-nav-label">AI Chat</span>
     </button>
-    <button type="button" class="mob-nav-item" id="mob-nav-trade" onclick="switchMobileView('trade')" title="Paper trade and manual ticket">
+    <button type="button" class="mob-nav-item" id="mob-nav-trade" onclick="switchMobileView('trade')" title="Paper trade">
       <span class="mob-nav-icon">⚡</span>
       <span class="mob-nav-label">Fast Trade</span>
     </button>
@@ -2998,7 +3099,7 @@
   <!-- Taikry Professional Interactive Chart Workspace Controller -->
   <script src="chart.js?v=2.6.2"></script>
   <div id="schema-studio-root"></div>
-  <script src="app.js?v=2.6.5"></script>
+  <script src="app.js?v=2.6.9"></script>
   <script src="schema_designer.js?v=2.6.2"></script>
 </body>
 </html>

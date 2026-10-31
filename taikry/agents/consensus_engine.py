@@ -13,7 +13,7 @@ Enforces:
 """
 import datetime
 import math
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 import zoneinfo
 
 from taikry.config import INITIAL_PAPER_BALANCE, LOCAL_TIMEZONE, MIN_RISK_REWARD_RATIO, RISK_PER_TRADE_PERCENT, get_symbol_config
@@ -103,17 +103,32 @@ class AIConsensusEngine:
         open_positions_count: Optional[int] = None,
         preferred_llm: str = "quant",
         force_refresh: bool = False,
-        trade_style: str = "INTRADAY"
+        trade_style: str = "INTRADAY",
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        primary_timeframe: Optional[str] = None,
+        requested_timeframes: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Executes complete multi-agent workflow.
         """
         import time
         t_start = time.time()
+
+        def emit_progress(stage: str, statuses: Optional[Dict[str, Any]] = None) -> None:
+            if progress_callback:
+                try:
+                    progress_callback(stage, statuses or {})
+                except Exception:
+                    # Progress reporting must never interrupt market analysis.
+                    pass
+
         trade_style = str(trade_style or "INTRADAY").strip().upper()
         if trade_style not in {"INTRADAY", "SWING"}:
             raise ValueError("trade_style must be INTRADAY or SWING")
         cache_key = f"{symbol.upper()}:{preferred_llm or 'auto'}" + (":SWING" if trade_style == "SWING" else "")
+        if primary_timeframe or requested_timeframes:
+            tf_key = ",".join(str(tf).strip().upper() for tf in (requested_timeframes or []))
+            cache_key += f":CUSTOM:{str(primary_timeframe or '').upper()}:{tf_key}"
         now_ts = t_start
         if not force_refresh and cache_key in _ANALYSIS_CACHE:
             c_time, c_data = _ANALYSIS_CACHE[cache_key]
@@ -125,14 +140,36 @@ class AIConsensusEngine:
                     "cached": True,
                     "latency_ms": round((time.time() - t_start) * 1000, 2)
                 }
+                cached_summary = ret.get("agent_run_summary") or {}
+                cached_statuses = cached_summary.get("agent_statuses", {}) if isinstance(cached_summary, dict) else {}
+                cached_statuses = dict(cached_statuses) if isinstance(cached_statuses, dict) else {}
+                cached_statuses["market_data"] = "RECENT_ANALYSIS_CACHE"
+                emit_progress(
+                    "RISK_APPROVED" if ret.get("setup_status") == "APPROVE" else "RISK_REJECTED",
+                    {"agent_statuses": cached_statuses},
+                )
                 return ret
         # 1. Fetch & Validate Market Data
-        timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
+        allowed_timeframes = {"M1", "M5", "M15", "M30", "H1", "H4", "D1", "W1"}
+        if requested_timeframes:
+            timeframes = list(dict.fromkeys(
+                str(tf).strip().upper() for tf in requested_timeframes
+                if str(tf).strip().upper() in allowed_timeframes
+            ))
+        else:
+            timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
+        requested_primary = str(primary_timeframe or "").strip().upper()
+        if requested_primary in allowed_timeframes and requested_primary not in timeframes:
+            timeframes.append(requested_primary)
+        if not timeframes:
+            timeframes = ["W1", "D1", "H4", "H1", "M15", "M5"]
         multi_tf_data = market_data_engine.get_multi_timeframe_candles(symbol, timeframes)
 
-        setup_timeframe = "H4" if trade_style == "SWING" else "M15"
+        setup_timeframe = requested_primary if requested_primary in allowed_timeframes else (
+            "H4" if trade_style == "SWING" else "M15"
+        )
         primary_df = multi_tf_data.get(setup_timeframe)
-        if primary_df is None or primary_df.empty:
+        if (primary_df is None or primary_df.empty) and not requested_timeframes:
             primary_df = multi_tf_data.get("M5") if trade_style == "INTRADAY" else None
 
         val = validate_dataframe(primary_df, min_bars=15)
@@ -167,7 +204,9 @@ class AIConsensusEngine:
             tf for tf, frame in multi_tf_data.items()
             if frame is None or frame.empty or ("source" in frame.columns and frame["source"].astype(str).str.upper().str.contains("SYNTHETIC|DEMO").any())
         ]
-        required_timeframes = ["W1", "D1", "H4", "H1"] if trade_style == "SWING" else ["D1", "H4", "H1", "M15", "M5"]
+        required_timeframes = list(timeframes) if requested_timeframes else (
+            ["W1", "D1", "H4", "H1"] if trade_style == "SWING" else ["D1", "H4", "H1", "M15", "M5"]
+        )
         required_synthetic = [tf for tf in required_timeframes if tf in synthetic_timeframes]
         freshness = check_data_freshness(symbol, primary_df.iloc[-1].get("timestamp"), setup_timeframe)
         if required_synthetic or not freshness.get("fresh") or any(marker in str(price_source).upper() for marker in ("SYNTHETIC", "DEMO", "UNAVAILABLE")):
@@ -191,6 +230,8 @@ class AIConsensusEngine:
                 "report_english": f"TAIKRY AI MARKET INTELLIGENCE PRO\n\nSymbol: {symbol}\nStatus: NO TRADE ({reason})",
                 "report_khmer": f"TAIKRY AI MARKET INTELLIGENCE PRO\n\nគូរូបិយវត្ថុ: {symbol}\nស្ថានភាព: គ្មានការជួញដូរ (ទិន្នន័យសិប្បនិម្មិត ឬចាស់ មិនអាចប្រើសម្រាប់សញ្ញាជួញដូរបានទេ)"
             }
+
+        emit_progress("MARKET_DATA_VERIFIED", {"market_data": "VERIFIED"})
 
         # 2. Run the data guardian and all eight directional analysts on this
         # exact snapshot. Candidate-dependent specialists run after a plan exists.
@@ -386,6 +427,12 @@ class AIConsensusEngine:
             regime_out = agent_reports["regime_detection_agent"]
             quant_out = agent_reports["quantitative_research_agent"]
             ml_out = agent_reports["ml_forecast_agent"]
+            emit_progress("AGENTS_COMPLETED", {
+                "agent_statuses": {
+                    agent_id: report.get("execution_status", "UNKNOWN")
+                    for agent_id, report in agent_reports.items()
+                }
+            })
 
             # The concept recommender consumes the completed analyst reports.
             agent_registry.queue_agents(["concept_recommender"], f"{symbol} consensus concept review")
@@ -413,6 +460,16 @@ class AIConsensusEngine:
             a4_ad = agent_registry.get_adapter("risk_validator")
             agent_registry.queue_agents(["risk_validator"], f"{symbol} independent risk validation")
             risk_quote_fields = self._risk_quote_fields(data_quality_out)
+            emit_progress("RISK_CHECKING", {
+                "agent_statuses": {
+                    **{
+                        agent_id: report.get("execution_status", "UNKNOWN")
+                        for agent_id, report in agent_reports.items()
+                    },
+                    "concept_recommender": concept_out.get("execution_status", "UNKNOWN"),
+                    "risk_validator": "RUNNING",
+                }
+            })
             if a4_ad:
                 risk_out = a4_ad.execute(
                     symbol=symbol,
@@ -712,10 +769,10 @@ class AIConsensusEngine:
                 cfg = get_symbol_config(symbol)
                 m15_metrics = dict(agent1_out.get("key_price_levels", {}))
                 m15_metrics["current_price"] = verified_price
-                m15_metrics["trend"] = agent1_out.get("multi_timeframe_alignment", {}).get("M15", "NEUTRAL")
+                m15_metrics["trend"] = agent1_out.get("multi_timeframe_alignment", {}).get(setup_timeframe, "NEUTRAL")
                 m15_metrics["swing_high"] = agent2_out.get("key_price_zones", {}).get("dealing_range_high", verified_price * 1.01)
                 m15_metrics["swing_low"] = agent2_out.get("key_price_zones", {}).get("dealing_range_low", verified_price * 0.99)
-                real_ai_res = llm_orchestrator.analyze(cfg, "M15", m15_metrics, preferred_provider=preferred_llm)
+                real_ai_res = llm_orchestrator.analyze(cfg, setup_timeframe, m15_metrics, preferred_provider=preferred_llm)
                 if real_ai_res:
                     sa = real_ai_res.get("smart_analysis", {})
                     prov_tag = real_ai_res.get("_llm_meta", {}).get("provider", "LLM").upper()
@@ -769,6 +826,13 @@ class AIConsensusEngine:
             dissenting=dissenting,
             smart_analysis=smart_analysis
         )
+        technical_context = agent1_out.get("technical_context", {})
+        technical_scores = agent1_out.get("technical_scores", {})
+        volume_caveat_kh = (
+            "Volume ជា tick/activity របស់ broker មិនមែនបរិមាណ Forex សរុបទូទាំងទីផ្សារទេ។"
+            if agent1_out.get("asset_class") == "FOREX"
+            else "Volume យោងតាម data provider ដែលបានភ្ជាប់។"
+        )
 
         # Khmer Report Generation
         report_kh_data = {
@@ -790,7 +854,14 @@ class AIConsensusEngine:
             "risk_reward_ratio": rr_str,
             "invalidation_rules": agent1_out.get("invalidation_level") or agent2_out.get("invalidation_level"),
             "smart_analysis": smart_analysis,
-            "agent_1_summary": f"ទំនោរ: {agent1_out.get('bias')} ({agent1_out.get('confidence')}%) | {agent1_out.get('rationale')}",
+            "agent_1_summary": (
+                f"ទំនោរ: {agent1_out.get('bias')} ({agent1_out.get('confidence')}%) | "
+                f"{agent1_out.get('asset_class', 'MARKET')} Long/Short: {technical_scores.get('long', 'N/A')}/{technical_scores.get('short', 'N/A')} | "
+                f"ADX: {technical_context.get('adx', 'N/A')} | ATR%: {technical_context.get('atr_percent', 'N/A')} | "
+                f"រចនាសម្ព័ន្ធ: {technical_context.get('market_structure', 'N/A')} | "
+                f"Volatility: {technical_context.get('volatility_regime', 'N/A')} | "
+                f"ចំណុចចូល: {technical_context.get('entry_trigger', 'N/A')} | {volume_caveat_kh} | {agent1_out.get('rationale')}"
+            ),
             "agent_2_summary": f"ទំនោរ: {agent2_out.get('bias')} | តំបន់: {agent2_out.get('key_price_zones', {}).get('current_zone')} | {agent2_out.get('rationale')}",
             "agent_3_summary": f"ទំនោរ: {agent3_out.get('bias')} | DXY: {agent3_out.get('usd_index', {}).get('dxy_price') if agent3_out.get('usd_index', {}).get('dxy_price') is not None else 'N/A'} | {agent3_out.get('rationale')}",
             "agent_4_summary": f"ការសម្រេច: {setup_status} | ហេតុផល: {'; '.join(risk_out.get('reasons', []))}",
@@ -828,11 +899,16 @@ class AIConsensusEngine:
             "voting_agents_participated": len(participating_reports),
             "voting_coverage": round(vote_coverage, 4),
         }
+        emit_progress(
+            "RISK_APPROVED" if setup_status == "APPROVE" else "RISK_REJECTED",
+            {"agent_statuses": agent_statuses},
+        )
 
         out_dict = {
             "symbol": symbol,
             "trade_style": trade_style,
             "setup_timeframe": setup_timeframe,
+            "analysis_timeframes": list(timeframes),
             "verified_price": verified_price,
             "price_source": price_source,
             "data_quality": {
@@ -949,8 +1025,16 @@ class AIConsensusEngine:
         rr = risk.get("calculated_rr", "N/A")
 
         htf = agent1.get("multi_timeframe_alignment", {})
+        technical_context = agent1.get("technical_context", {})
+        technical_scores = agent1.get("technical_scores", {})
         htf_str = f"D1: {htf.get('D1', 'N/A')} | H4: {htf.get('H4', 'N/A')} | H1: {htf.get('H1', 'N/A')}"
         ltf_str = f"M15: {htf.get('M15', 'N/A')} | RSI: {agent1.get('key_price_levels', {}).get('rsi', 'N/A')} | ATR: {agent1.get('key_price_levels', {}).get('atr', 'N/A')}"
+        technical_str = (
+            f"{agent1.get('asset_class', 'MARKET')} | Long/Short score: {technical_scores.get('long', 'N/A')}/{technical_scores.get('short', 'N/A')} | "
+            f"ADX: {technical_context.get('adx', 'N/A')} | ATR%: {technical_context.get('atr_percent', 'N/A')} | "
+            f"Structure: {technical_context.get('market_structure', 'N/A')} | Volatility: {technical_context.get('volatility_regime', 'N/A')} | "
+            f"Entry context: {technical_context.get('entry_trigger', 'N/A')}"
+        )
 
         dissent_str = "\n".join(dissenting) if dissenting else "None. Confluence achieved across active models."
         direction_tag = "BUY BIAS" if risk.get("proposed_direction") == "LONG" else (
@@ -978,6 +1062,9 @@ D1 / H4 / H1:
 
 M15 / M5:
 {ltf_str}
+
+Technical Context:
+{technical_str}
 
 ==================================================
 SMART MULTI-AGENT CAUSE & RATIONALE ANALYSIS

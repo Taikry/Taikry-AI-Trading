@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/dashboard/styles.css?v=2.6.2">
+  <link rel="stylesheet" href="/dashboard/styles.css?v=2.6.9">
   <script src="/dashboard/ui-kit.js?v=2.6.2" defer></script>
   <style>
     :root {
@@ -672,6 +672,7 @@
           <ul class="pricing-features">
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 10 Daily AI Scans</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 3 Deep 7-Agent Analyses / Day</li>
+            <li class="pricing-feature" data-i18n="trial_signal_range"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 2–4 approved Telegram signals/day target</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 5 Active Watchlists</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Telegram Alert Integration</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Real Paper Trading Engine</li>
@@ -688,6 +689,7 @@
           <ul class="pricing-features">
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 50 Daily AI Scans</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 20 Deep 7-Agent Analyses / Day</li>
+            <li class="pricing-feature" data-i18n="pro_signal_range"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 5–10 approved Telegram signals/day target</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 25 Custom Watchlists</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Walk-Forward Backtester</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Agent Adversarial Debate View</li>
@@ -704,6 +706,7 @@
           <ul class="pricing-features">
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 200 Daily AI Scans</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 100 Deep Analyses / Day</li>
+            <li class="pricing-feature" data-i18n="premium_signal_range"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> 10–15 approved Telegram signals/day target</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Unlimited Watchlists (100)</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Dedicated Webhook Relay</li>
             <li class="pricing-feature"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> Custom Prompt Models</li>
@@ -712,6 +715,7 @@
           <a href="/dashboard/billing.html" class="btn-hero-secondary" style="width: 100%; justify-content: center;" data-i18n="billing_cta">View plans &amp; billing</a>
         </div>
       </div>
+      <p class="section-subtext" style="margin: 18px auto 0; max-width: 860px; text-align: center;" data-i18n="signal_range_note">Signal counts are daily targets and maximums, not guaranteed minimums. Alerts are sent only when a setup passes validation; some days may have fewer or no signals.</p>
     </div>
   </section>
 
@@ -1039,7 +1043,17 @@
 
         okBox.textContent = "✓ Authenticated! Opening Dashboard...";
         okBox.style.display = "block";
-        setTimeout(() => { window.location.href = "/dashboard/"; }, 800);
+        let destination = "/dashboard/";
+        const requestedReturn = new URLSearchParams(window.location.search).get("return_to");
+        if (requestedReturn) {
+          try {
+            const candidate = new URL(requestedReturn, window.location.origin);
+            if (candidate.origin === window.location.origin && candidate.pathname.startsWith("/dashboard/")) {
+              destination = `${candidate.pathname}${candidate.search}${candidate.hash}`;
+            }
+          } catch {}
+        }
+        setTimeout(() => { window.location.href = destination; }, 800);
       } catch (err) {
         errBox.textContent = err.message;
         errBox.style.display = "block";
@@ -1157,6 +1171,10 @@
       price_eyebrow: "កញ្ចប់សមាជិកភាព",
       price_heading: "តម្លៃសាមញ្ញ និងច្បាស់លាស់",
       price_subtext: "អាចប្រើការសាកល្បងឥតគិតថ្លៃឥឡូវនេះ។ តម្លៃកញ្ចប់បង់ប្រាក់ត្រូវបានបង្ហាញហើយ ប៉ុន្តែការទូទាត់អនឡាញកំពុងផ្អាក ខណៈពេលផ្ទៀងផ្ទាត់ការចុះហត្ថលេខា ABA PayWay។",
+      trial_signal_range: "គោលដៅសញ្ញា Telegram ដែលបានអនុម័ត ២–៤ ក្នុងមួយថ្ងៃ",
+      pro_signal_range: "គោលដៅសញ្ញា Telegram ដែលបានអនុម័ត ៥–១០ ក្នុងមួយថ្ងៃ",
+      premium_signal_range: "គោលដៅសញ្ញា Telegram ដែលបានអនុម័ត ១០–១៥ ក្នុងមួយថ្ងៃ",
+      signal_range_note: "ចំនួនសញ្ញាក្នុងមួយថ្ងៃជាគោលដៅ និងជាចំនួនអតិបរមា មិនមែនជាចំនួនអប្បបរមាដែលធានាទេ។ ផ្ញើសញ្ញាតែនៅពេល setup ឆ្លងការផ្ទៀងផ្ទាត់។ ថ្ងៃខ្លះអាចមានសញ្ញាតិចជាងនេះ ឬគ្មានសញ្ញា។",
       billing_cta: "មើលគម្រោង និងការទូទាត់",
       faq_eyebrow: "មានចម្ងល់ដែរឬទេ?",
       faq_heading: "សំណួរដែលសួរញឹកញាប់"

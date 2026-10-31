@@ -74,12 +74,14 @@ class PaperTrade(Base):
     __tablename__ = "paper_trades"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     symbol = Column(String(20), index=True, nullable=False)
     direction = Column(String(10), nullable=False) # BUY, SELL
     entry_price = Column(Float, nullable=False)
     stop_loss = Column(Float, nullable=False)
     take_profit_1 = Column(Float, nullable=False)
     take_profit_2 = Column(Float, nullable=True)
+    take_profit_3 = Column(Float, nullable=True)
     lot_size = Column(Float, nullable=False)
     risk_amount = Column(Float, nullable=False)
     balance_before = Column(Float, nullable=False)
@@ -90,7 +92,27 @@ class PaperTrade(Base):
     r_multiple = Column(Float, default=0.0)
     exit_reason = Column(String(50), nullable=True) # TP1, TP2, SL, TIMEOUT, MANUAL
     trade_log = Column(JSON, nullable=True)
+    journal_notes = Column(Text, nullable=True)
+    journal_tags = Column(JSON, nullable=True)
+    emotion_tag = Column(String(40), nullable=True)
+    mistake_tag = Column(String(40), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class PaperTradeAlert(Base):
+    """Idempotency ledger for per-user TP/SL notifications."""
+    __tablename__ = "paper_trade_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_key = Column(String(120), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    paper_trade_id = Column(Integer, ForeignKey("paper_trades.id"), nullable=False, index=True)
+    event_type = Column(String(40), nullable=False)
+    status = Column(String(24), nullable=False, default="PENDING", index=True)
+    channels = Column(JSON, nullable=True)
+    error_summary = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
 class BacktestJob(Base):
     __tablename__ = "backtest_jobs"
@@ -122,6 +144,93 @@ class NotificationAudit(Base):
     response_code = Column(Integer, nullable=True)
     error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class TelegramNotification(Base):
+    """Persistent delivery ledger for signal notifications sent through Telegram."""
+    __tablename__ = "telegram_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    signal_id = Column(String(64), nullable=True, index=True)
+    notification_type = Column(String(40), nullable=False, index=True)
+    event_state = Column(String(40), nullable=True)
+    idempotency_key = Column(String(160), nullable=False, unique=True, index=True)
+    telegram_chat_id = Column(String(64), nullable=False, index=True)
+    delivery_status = Column(String(30), nullable=False, default="PENDING", index=True)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    claimed_at = Column(DateTime, nullable=True)
+    next_attempt_at = Column(DateTime, nullable=True, index=True)
+    telegram_message_id = Column(String(64), nullable=True)
+    telegram_error = Column(Text, nullable=True)
+    payload_summary = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    delivered_at = Column(DateTime, nullable=True)
+
+class TelegramAnalysisRun(Base):
+    """Audit record for one user-requested Telegram analysis progress message."""
+    __tablename__ = "telegram_analysis_runs"
+
+    run_id = Column(String(64), primary_key=True)
+    symbol = Column(String(20), nullable=False, index=True)
+    timeframe = Column(String(10), nullable=False, default="M15")
+    signal_candidate_id = Column(String(64), nullable=True, index=True)
+    telegram_chat_id = Column(String(64), nullable=False, index=True)
+    telegram_message_id = Column(String(64), nullable=True)
+    message_type = Column(String(20), nullable=False, default="text")
+    status = Column(String(30), nullable=False, default="RUNNING", index=True)
+    agent_statuses = Column(JSON, nullable=True)
+    signal_id = Column(String(64), nullable=True, index=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+class TelegramMediaAsset(Base):
+    """Telegram media registry; stores reusable bot file IDs and source checksums."""
+    __tablename__ = "telegram_media_assets"
+
+    asset_id = Column(String(160), primary_key=True)
+    asset_name = Column(String(100), nullable=False, index=True)
+    asset_type = Column(String(20), nullable=False)  # photo, animation, sticker
+    source_file = Column(Text, nullable=False)
+    telegram_file_id = Column(Text, nullable=True)
+    format = Column(String(20), nullable=False)
+    version = Column(String(40), nullable=False, default="1")
+    checksum = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+class XAUUSDDailyQuotaReservation(Base):
+    """Cross-process daily XAUUSD signal quota reservations (Cambodia date)."""
+    __tablename__ = "xauusd_daily_quota_reservations"
+
+    cambodia_date = Column(String(10), primary_key=True)
+    reserved_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class TelegramSignalDailyQuotaModel(Base):
+    """Atomic per-user daily cap for new plan signal notifications."""
+    __tablename__ = "telegram_signal_daily_quotas"
+    __table_args__ = (
+        UniqueConstraint("user_id", "cambodia_date", name="uq_telegram_signal_user_day"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    cambodia_date = Column(String(10), index=True, nullable=False)
+    reserved_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class TelegramSignalQuotaReservationModel(Base):
+    """Idempotent claim so retrying one signal does not consume a second slot."""
+    __tablename__ = "telegram_signal_quota_reservations"
+
+    idempotency_key = Column(String(160), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    cambodia_date = Column(String(10), index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
 class SystemHealthAudit(Base):
     __tablename__ = "system_health_audits"
@@ -199,6 +308,7 @@ class EventDeliveryStatus(str, Enum):
     SENT = "SENT"
     FAILED = "FAILED"
     UNCERTAIN_TIMEOUT = "UNCERTAIN_TIMEOUT"
+    SUPPRESSED = "SUPPRESSED"
 
 
 def _utc_now():
@@ -222,6 +332,7 @@ class SignalLifecycleModel(Base):
     stop_loss = Column(Float, nullable=False)
     take_profit_1 = Column(Float, nullable=False)
     take_profit_2 = Column(Float, nullable=True)
+    take_profit_3 = Column(Float, nullable=True)
     risk_reward = Column(String(20), default="N/A")
     ai_score = Column(Integer, nullable=True)
     invalidation_reason_en = Column(Text, nullable=True)
@@ -301,6 +412,10 @@ class XAUUSDTelegramSignalModel(Base):
     ai_confluence_score = Column(Integer, default=85)
     strategy_version = Column(String(50), default="ZYROX-SMC-V2.1")
     broker_source = Column(String(50), default="EXNESS_MT5")
+    bid_price = Column(Float, nullable=True)
+    ask_price = Column(Float, nullable=True)
+    midpoint_price = Column(Float, nullable=True)
+    quote_timestamp = Column(DateTime, nullable=True)
     setup_score_label = Column(String(100), default="Setup Score (out of 100, not win probability)")
     calibrated_probability = Column(Float, nullable=True)  # Distinct from setup score; only populated when statistically justified
     spread_points = Column(Float, nullable=True)  # Observed broker spread at inception; None when unverified
@@ -506,6 +621,8 @@ class SubscriptionPlan(Base):
     trial_days = Column(Integer, nullable=False, default=0)
     max_ai_scans_per_day = Column(Integer, default=10)
     max_deep_analysis_per_day = Column(Integer, default=3)
+    signal_alerts_target_min_per_day = Column(Integer, default=0)
+    max_signal_alerts_per_day = Column(Integer, default=0)
     max_watchlists = Column(Integer, default=5)
     backtesting_enabled = Column(Boolean, default=False)
     telegram_alerts_enabled = Column(Boolean, default=True)
@@ -682,12 +799,88 @@ class NotificationPreferences(Base):
     ai_analysis_completed = Column(Boolean, default=True)
     signal_generated = Column(Boolean, default=True)
     signal_invalidated = Column(Boolean, default=True)
+    macro_events = Column(Boolean, default=True)
     daily_summary = Column(Boolean, default=True)
     trial_expiration_reminders = Column(Boolean, default=True)
     subscription_status_changes = Column(Boolean, default=True)
     system_announcements = Column(Boolean, default=True)
+    paper_trade_alerts = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=_utc_now)
     updated_at = Column(DateTime, default=_utc_now)
+
+
+class MarketSymbolRegistry(Base):
+    """Cached provider-discovered instruments available to the Market Explorer."""
+    __tablename__ = "market_symbol_registry"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_symbol", name="uq_market_symbol_provider_symbol"),
+        Index("ix_market_symbol_search", "symbol", "asset_class", "enabled"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(32), nullable=False, index=True)
+    display_name = Column(String(128), nullable=False)
+    asset_class = Column(String(20), nullable=False, index=True)
+    provider = Column(String(40), nullable=False)
+    provider_symbol = Column(String(64), nullable=False)
+    aliases = Column(JSON, nullable=True)
+    tv_symbol = Column(String(80), nullable=True)
+    enabled = Column(Boolean, default=True, nullable=False, index=True)
+    last_verified_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=_utc_now, nullable=False)
+
+
+class UserWatchlist(Base):
+    """A named personal market list owned by one SaaS user."""
+    __tablename__ = "user_watchlists"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_watchlist_name"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
+
+
+class UserWatchlistItem(Base):
+    """Canonical symbols in a user's watchlist; provider mappings stay in the registry."""
+    __tablename__ = "user_watchlist_items"
+    __table_args__ = (UniqueConstraint("watchlist_id", "symbol", name="uq_watchlist_symbol"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    watchlist_id = Column(Integer, ForeignKey("user_watchlists.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol = Column(String(32), nullable=False, index=True)
+    created_at = Column(DateTime, default=_utc_now, nullable=False)
+
+
+class UserRecentAnalysis(Base):
+    """Small, non-sensitive history of a user's selected analysis inputs."""
+    __tablename__ = "user_recent_analysis"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol = Column(String(32), nullable=False, index=True)
+    timeframe = Column(String(8), nullable=False)
+    mode = Column(String(16), nullable=False)
+    profile = Column(String(16), nullable=False)
+    created_at = Column(DateTime, default=_utc_now, nullable=False, index=True)
+
+
+class MarketAnalysisJob(Base):
+    """Persisted job and real backend progress for user-requested market analysis."""
+    __tablename__ = "market_analysis_jobs"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol = Column(String(32), nullable=False, index=True)
+    timeframe = Column(String(8), nullable=False)
+    mode = Column(String(16), nullable=False)
+    profile = Column(String(16), nullable=False)
+    status = Column(String(20), nullable=False, default="QUEUED", index=True)
+    stage = Column(String(40), nullable=False, default="QUEUED")
+    result = Column(JSON, nullable=True)
+    error_code = Column(String(40), nullable=True)
+    created_at = Column(DateTime, default=_utc_now, nullable=False, index=True)
+    updated_at = Column(DateTime, default=_utc_now, nullable=False)
 
 
 class SupportTicket(Base):

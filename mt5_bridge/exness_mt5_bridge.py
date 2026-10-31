@@ -365,8 +365,8 @@ class ExnessMT5BridgeClient:
 
 def main():
     parser = argparse.ArgumentParser(description="ZYROX AI — Exness MT5 Windows Bridge Client")
-    parser.add_argument("--backend-url", default=os.getenv("ZYROX_BACKEND_URL", "https://taikry-ai-trading.onrender.com"),
-                        help="ZYROX AI Backend URL (e.g. https://taikry-ai-trading.onrender.com or http://localhost:8000)")
+    parser.add_argument("--backend-url", default=os.getenv("ZYROX_BACKEND_URL", "https://zyroxaitrading.onrender.com"),
+                        help="ZYROX AI Backend URL (e.g. https://zyroxaitrading.onrender.com or http://localhost:8000)")
     parser.add_argument("--token", default=os.getenv("MT5_BRIDGE_TOKEN", "").strip(),
                         help="Shared authentication token matching server MT5_BRIDGE_TOKEN")
     parser.add_argument("--login", type=int, default=None, help="Optional MT5 account number")

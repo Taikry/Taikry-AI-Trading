@@ -61,6 +61,9 @@
     .status { display:inline-flex; align-items:center; gap:7px; border-radius:999px; padding:4px 9px; font-size:11px; font-weight:800; letter-spacing:.04em; background:#14241b; color:#c5ddcf; }
     .status.PAID { background:#0f3929; color:#8cffc9; } .status.FAILED,.status.REVIEW { background:#3a1c1e; color:#ffaaaa; } .status.PENDING { background:#392d16; color:#ffdf9b; }
     .small { color:var(--muted); font-size:12px; }
+    .provider-status { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:999px; padding:6px 10px; white-space:nowrap; }
+    .provider-status:before { content:""; width:7px; height:7px; border-radius:50%; background:var(--amber); box-shadow:0 0 10px currentColor; }
+    .provider-status.is-configured:before { background:var(--green2); }
     .right { text-align:right; }
     .admin-card { border-color:#376048; }
     .admin-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:14px; }
@@ -108,7 +111,7 @@
 
     <div class="notice" id="provider-notice">
       <span>◇</span>
-      <div><strong data-i18n="provider_title">ABA PayWay sandbox setup is pending</strong><span data-i18n="provider_body">Checkout will open only after provider signing and merchant settings are verified. No invoice or subscription is created by this notice.</span></div>
+      <div><strong id="provider-title" data-i18n="provider_title">ABA PayWay status</strong><span id="provider-detail" data-i18n="provider_body">Checkout is disabled until the server confirms required provider settings. No invoice or subscription is created while checkout is unavailable.</span></div>
     </div>
     <div class="notice" id="expiration-notice" hidden>
       <span>◷</span><div><strong data-i18n="expiration_title">Your access period is ending soon</strong><span id="expiration-copy"></span></div>
@@ -117,8 +120,9 @@
     <div id="payment-processing-host" aria-live="assertive"></div>
 
     <section class="section" id="pricing">
-      <div class="section-head"><div><h2 data-i18n="plans_title">Subscription plans</h2><p data-i18n="plans_subtitle">One-time checkout. No automatic recurring card charges.</p></div><span class="small" id="plan-load-state"></span></div>
+      <div class="section-head"><div><h2 data-i18n="plans_title">Subscription plans</h2><p data-i18n="plans_subtitle">One-time checkout. No automatic recurring card charges.</p></div><div><span class="small provider-status" id="payment-provider-status" role="status" aria-live="polite">Checking ABA PayWay…</span> <span class="small" id="plan-load-state"></span></div></div>
       <div class="grid" id="plan-grid"><div class="empty" data-i18n="loading">Loading plans…</div></div>
+      <p class="small" style="margin-top:12px">Signal flow: your active plan must include Telegram alerts, your Telegram account must be linked, and “Real-time Trading Signals” must be enabled in your account preferences. Alerts are sent only for validated setups; XAUUSD has a global limit of 4 signals per day and some days may have none. / លំហូរសញ្ញា៖ ត្រូវមានគម្រោងសកម្មដែលអនុញ្ញាត Telegram alerts ភ្ជាប់គណនី Telegram និងបើក “Real-time Trading Signals” ក្នុងចំណូលចិត្តគណនី។ ផ្ញើតែ setup ដែលបានផ្ទៀងផ្ទាត់ប៉ុណ្ណោះ។ XAUUSD កំណត់សរុបអតិបរមា ៤ សញ្ញាក្នុងមួយថ្ងៃ ហើយថ្ងៃខ្លះអាចគ្មានសញ្ញា។</p>
     </section>
 
     <section class="section">
@@ -146,17 +150,50 @@
       en: { terminal:"Terminal", eyebrow:"Plans & billing", hero_title:"Choose your trading edge.", hero_lead:"Compare ZYROX AI plans, review your subscription, and manage invoices in one secure place.", provider_title:"ABA PayWay sandbox setup is pending", provider_body:"Checkout will open only after provider signing and merchant settings are verified. No invoice or subscription is created by this notice.", expiration_title:"Your access period is ending soon", plans_title:"Subscription plans", plans_subtitle:"One-time checkout. No automatic recurring card charges.", loading:"Loading plans…", compare_title:"Plan comparison", compare_subtitle:"Feature limits are enforced by ZYROX AI on the server.", account_title:"My subscription", account_subtitle:"Your access state comes from the server-side entitlement record.", current_access:"Current access", signin:"Sign in", signin_prompt:"Sign in to view your subscription and invoices.", invoice_history:"Invoice history", cancel:"Cancel at period end", cancel_note:"Access remains available until the current paid period expires. No payment provider cancellation is reported.", admin_title:"Payment administration", admin_subtitle:"Visible to authorized administrators only.", transactions:"Recent payment transactions", footer_note:"Payments are verified server-side. A browser redirect alone never activates access.", back:"Back to dashboard", month:"month", year:"year", checkout:"Continue to secure checkout", unavailable:"Checkout is not ready", ai_scans:"Daily AI scans", deep_analysis:"Deep analyses / day", watchlists:"Watchlists", backtesting:"Backtesting", telegram:"Telegram alerts", debate:"Agent debate", yes:"Included", no:"Not included", no_plans:"No paid plans are currently available.", plan_error:"Plans could not be loaded.", subscription_error:"Subscription status could not be loaded.", access_status:"Status", expires:"Access ends", auto_renew:"Automatic renewal", off:"Off", trial:"Trial", none:"None", verify:"Check status", cancel_done:"Cancellation scheduled through period end.", cancel_error:"Cancellation could not be scheduled.", pending:"Payment pending verification", paid:"Payment verified", failed:"Payment failed", review:"Payment needs review", revenue:"Verified revenue", pending_invoices:"Pending invoices", successful:"Successful payments", failed_payments:"Failed payments", active_subs:"Active subscriptions", expiring:"Expiring in 7 days", not_supported:"Refund API not enabled", reference:"Reference", amount:"Amount", status:"Status", date:"Date", invoice:"Invoice", empty_invoices:"No invoices yet.", signin_required:"Please sign in to continue.", checkout_error:"Secure checkout is not ready. No invoice was created.", copied:"Reference copied" },
       kh: { terminal:"ផ្ទាំងជួញដូរ", eyebrow:"គម្រោង និងការទូទាត់", hero_title:"ជ្រើសរើសអត្ថប្រយោជន៍សម្រាប់ការជួញដូរ។", hero_lead:"ប្រៀបធៀបគម្រោង ZYROX AI ពិនិត្យស្ថានភាពជាវ និងគ្រប់គ្រងវិក្កយបត្រនៅកន្លែងតែមួយ។", provider_title:"ការរៀបចំ ABA PayWay sandbox កំពុងរង់ចាំ", provider_body:"ការទូទាត់នឹងបើកបន្ទាប់ពីផ្ទៀងផ្ទាត់ការចុះហត្ថលេខា និងការកំណត់ merchant រួច។ សារនេះមិនបង្កើតវិក្កយបត្រ ឬសមាជិកភាពទេ។", expiration_title:"សិទ្ធិប្រើប្រាស់របស់អ្នកជិតផុតកំណត់", plans_title:"គម្រោងជាវ", plans_subtitle:"ទូទាត់ម្តង។ មិនមានការដកប្រាក់កាតដោយស្វ័យប្រវត្តិទេ។", loading:"កំពុងផ្ទុកគម្រោង…", compare_title:"ប្រៀបធៀបគម្រោង", compare_subtitle:"កម្រិតមុខងារត្រូវបានត្រួតពិនិត្យដោយ server របស់ ZYROX AI។", account_title:"សមាជិកភាពរបស់ខ្ញុំ", account_subtitle:"ស្ថានភាពសិទ្ធិប្រើប្រាស់មកពីកំណត់ត្រាសមាជិកភាពនៅ server។", current_access:"សិទ្ធិបច្ចុប្បន្ន", signin:"ចូលគណនី", signin_prompt:"ចូលគណនីដើម្បីមើលសមាជិកភាព និងវិក្កយបត្រ។", invoice_history:"ប្រវត្តិវិក្កយបត្រ", cancel:"បញ្ឈប់នៅចុងរយៈពេល", cancel_note:"សិទ្ធិប្រើប្រាស់នៅតែមានរហូតដល់ផុតរយៈពេលដែលបានបង់។ មិនមានការអះអាងថាបានបញ្ឈប់ការទូទាត់នៅ provider ទេ។", admin_title:"ការគ្រប់គ្រងការទូទាត់", admin_subtitle:"បង្ហាញតែអ្នកគ្រប់គ្រងដែលមានសិទ្ធិ។", transactions:"ប្រតិបត្តិការទូទាត់ថ្មីៗ", footer_note:"ការទូទាត់ត្រូវបានផ្ទៀងផ្ទាត់នៅ server។ ការបញ្ជូនត្រឡប់តាម browser មិនបើកសិទ្ធិដោយខ្លួនឯងទេ។", back:"ត្រឡប់ទៅផ្ទាំង", month:"ខែ", year:"ឆ្នាំ", checkout:"បន្តទៅការទូទាត់សុវត្ថិភាព", unavailable:"ការទូទាត់មិនទាន់រួចរាល់", ai_scans:"ការវិភាគ AI ប្រចាំថ្ងៃ", deep_analysis:"ការវិភាគស៊ីជម្រៅ / ថ្ងៃ", watchlists:"បញ្ជីតាមដាន", backtesting:"សាកល្បងយុទ្ធសាស្ត្រ", telegram:"ការជូនដំណឹង Telegram", debate:"ការពិភាក្សារបស់ agent", yes:"មាន", no:"មិនមាន", no_plans:"មិនមានគម្រោងបង់ប្រាក់នៅពេលនេះទេ។", plan_error:"មិនអាចផ្ទុកគម្រោងបានទេ។", subscription_error:"មិនអាចផ្ទុកស្ថានភាពសមាជិកភាពបានទេ។", access_status:"ស្ថានភាព", expires:"សិទ្ធិផុតកំណត់", auto_renew:"បន្តដោយស្វ័យប្រវត្តិ", off:"បិទ", trial:"សាកល្បង", none:"គ្មាន", verify:"ពិនិត្យស្ថានភាព", cancel_done:"បានកំណត់ឱ្យបញ្ឈប់នៅចុងរយៈពេល។", cancel_error:"មិនអាចកំណត់ការបញ្ឈប់បានទេ។", pending:"កំពុងផ្ទៀងផ្ទាត់ការទូទាត់", paid:"បានផ្ទៀងផ្ទាត់ការទូទាត់", failed:"ការទូទាត់បរាជ័យ", review:"ការទូទាត់ត្រូវការពិនិត្យ", revenue:"ចំណូលដែលបានផ្ទៀងផ្ទាត់", pending_invoices:"វិក្កយបត្ររង់ចាំ", successful:"ការទូទាត់ជោគជ័យ", failed_payments:"ការទូទាត់បរាជ័យ", active_subs:"សមាជិកភាពសកម្ម", expiring:"ផុតកំណត់ក្នុង ៧ ថ្ងៃ", not_supported:"មិនទាន់បើក API សងប្រាក់ទេ", reference:"លេខយោង", amount:"ចំនួនទឹកប្រាក់", status:"ស្ថានភាព", date:"កាលបរិច្ឆេទ", invoice:"វិក្កយបត្រ", empty_invoices:"មិនទាន់មានវិក្កយបត្រទេ។", signin_required:"សូមចូលគណនីដើម្បីបន្ត។", checkout_error:"ការទូទាត់សុវត្ថិភាពមិនទាន់រួចរាល់ទេ។ មិនបានបង្កើតវិក្កយបត្រទេ.", copied:"បានចម្លងលេខយោង" }
     };
+    const providerCopy = {
+      en: {
+        unverified: "ABA PayWay · status could not be checked",
+        setupSandbox: "ABA PayWay · SANDBOX · setup required",
+        setupProduction: "ABA PayWay · PRODUCTION · setup required",
+        configuredSandbox: "ABA PayWay · SANDBOX · credentials configured",
+        configuredProduction: "ABA PayWay · PRODUCTION · credentials configured",
+        missingDetail: "Plans are available to review, but checkout is disabled until required ABA merchant settings are configured on the server.",
+        unavailableDetail: "The payment status endpoint could not be reached. Plans remain visible and checkout is disabled.",
+        readyDetail: "Required ABA settings are present for this environment. Provider payment approval is still verified server-side.",
+        title: "ABA PayWay status"
+      },
+      kh: {
+        unverified: "ABA PayWay · មិនអាចពិនិត្យស្ថានភាពបាន",
+        setupSandbox: "ABA PayWay · SANDBOX · ត្រូវការកំណត់បន្ថែម",
+        setupProduction: "ABA PayWay · PRODUCTION · ត្រូវការកំណត់បន្ថែម",
+        configuredSandbox: "ABA PayWay · SANDBOX · បានកំណត់ credential",
+        configuredProduction: "ABA PayWay · PRODUCTION · បានកំណត់ credential",
+        missingDetail: "អ្នកអាចមើលគម្រោងបាន ប៉ុន្តែ checkout ត្រូវបានបិទ រហូតដល់ការកំណត់ ABA ចាំបាច់ត្រូវបានបន្ថែមនៅ server។",
+        unavailableDetail: "មិនអាចភ្ជាប់ទៅ API ពិនិត្យការទូទាត់បានទេ។ គម្រោងនៅតែអាចមើលបាន ហើយ checkout ត្រូវបានបិទ។",
+        readyDetail: "មានការកំណត់ ABA ចាំបាច់សម្រាប់ environment នេះ។ Server នៅតែផ្ទៀងផ្ទាត់ការអនុម័តទូទាត់ដោយឡែក។",
+        title: "ស្ថានភាព ABA PayWay"
+      }
+    };
+    const checkoutCopy = {
+      en: { signIn: "Sign in to subscribe" },
+      kh: { signIn: "ចូលគណនីដើម្បីជាវ" }
+    };
     let language = localStorage.getItem("zyrox-billing-lang") || "en";
     let currentPlans = [];
     let checkoutAvailable = false;
+    let isAuthenticated = false;
+    let authChecked = false;
+    let paymentStatus = null;
+    let paymentStatusChecked = false;
     let isCheckoutPending = false;
     const verifyingInvoices = new Set();
     const t = key => (copy[language] && copy[language][key]) || copy.en[key] || key;
     function toast(message, error=false) { const node=document.getElementById("toast"); node.textContent=message; node.className=error?"error":""; node.style.display="block"; clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>node.style.display="none",4200); }
-    function setLanguage(next) { language=next; localStorage.setItem("zyrox-billing-lang",language); document.documentElement.lang=language==="kh"?"km":"en"; document.querySelectorAll("[data-i18n]").forEach(n=>{const value=copy[language][n.dataset.i18n]; if(value)n.textContent=value;}); document.getElementById("lang-toggle").textContent=language==="en"?"ភាសាខ្មែរ":"English"; if(currentPlans.length){renderPlans(currentPlans);renderComparison(currentPlans);} }
+    function setLanguage(next) { language=next; localStorage.setItem("zyrox-billing-lang",language); document.documentElement.lang=language==="kh"?"km":"en"; document.querySelectorAll("[data-i18n]").forEach(n=>{const value=copy[language][n.dataset.i18n]; if(value)n.textContent=value;}); document.getElementById("lang-toggle").textContent=language==="en"?"ភាសាខ្មែរ":"English"; if(paymentStatusChecked)renderPaymentStatus(); renderPlanCount(); if(currentPlans.length){renderPlans(currentPlans);renderComparison(currentPlans);} }
     document.getElementById("lang-toggle").addEventListener("click",()=>setLanguage(language==="en"?"kh":"en"));
     function node(tag, cls, text) { const el=document.createElement(tag); if(cls)el.className=cls; if(text!==undefined)el.textContent=text; return el; }
     function intervalLabel(plan){ return plan.billing_interval==="yearly"?t("year"):t("month"); }
+    function renderPlanCount(){document.getElementById("plan-load-state").textContent=language==="kh"?`បានផ្ទុកគម្រោងបង់ប្រាក់ ${currentPlans.length}`:`${currentPlans.length} paid plans loaded`;}
     function renderPlans(plans) {
       const grid=document.getElementById("plan-grid"); grid.replaceChildren();
       if(!plans.length){grid.append(node("div","empty",t("no_plans")));return;}
@@ -164,18 +201,21 @@
         const card=node("article",`card plan-card ${index===0?"featured":""}`);
         const title=node("div","plan-title-row"); title.append(node("h3","",language==="kh"?plan.name_kh:plan.name_en)); if(index===0)title.append(node("span","badge","ZYROX PRO"));
         const price=node("div","price",`${plan.amount} ${plan.currency}`); price.append(node("span","",` / ${intervalLabel(plan)}`));
-        const desc=node("p","plan-desc",plan.description||"");
+        const desc=node("p","plan-desc",language==="kh"?"ជួរចំនួនសញ្ញាជាគោលដៅប៉ុណ្ណោះ។ ផ្ញើតែពេលមាន setup ដែលបានផ្ទៀងផ្ទាត់ ដូច្នេះចំនួនអាចតិចជាងនេះ ឬសូន្យ។":`${plan.description||""} Signal range is a target only. Alerts are sent only for validated setups, so the daily count may be lower or zero.`);
         const features=node("ul","features"); const f=plan.features||{};
-        [["ai_scans",f.max_ai_scans_per_day],["deep_analysis",f.max_deep_analysis_per_day],["watchlists",f.max_watchlists],["backtesting",f.backtesting_enabled?t("yes"):t("no")],["telegram",f.telegram_alerts_enabled?t("yes"):t("no")],["debate",f.agent_debate_enabled?t("yes"):t("no")]].forEach(([label,value])=>features.append(node("li","",`${t(label)}: ${value}`)));
-        const btn=node("button","button primary",checkoutAvailable?t("checkout"):t("unavailable")); btn.type="button"; btn.disabled=!checkoutAvailable; btn.addEventListener("click",event=>startCheckout(plan.id,event.currentTarget));
+        const signalRange=`${f.signal_alerts_target_min_per_day||0}–${f.max_signal_alerts_per_day||0}`;
+        const featureRows=[["ai_scans",f.max_ai_scans_per_day],["deep_analysis",f.max_deep_analysis_per_day],["watchlists",f.max_watchlists],["backtesting",f.backtesting_enabled?t("yes"):t("no")],["telegram",f.telegram_alerts_enabled?t("yes"):t("no")],["debate",f.agent_debate_enabled?t("yes"):t("no")]];
+        featureRows.forEach(([label,value])=>features.append(node("li","",`${t(label)}: ${value}`)));
+        features.append(node("li","",`${language==="kh"?"សញ្ញា Telegram ដែលបានអនុម័ត/ថ្ងៃ":"Approved Telegram signals/day"}: ${signalRange}`));
+        const btn=node("button","button primary",!checkoutAvailable?t("unavailable"):isAuthenticated?t("checkout"):checkoutCopy[language].signIn); btn.type="button"; btn.disabled=!checkoutAvailable||!authChecked; btn.addEventListener("click",event=>startCheckout(plan.id,event.currentTarget));
         card.append(title,price,desc,features,btn); grid.append(card);
       });
     }
     function renderComparison(plans){
       const head=document.querySelector("#comparison-table thead"), body=document.querySelector("#comparison-table tbody"); head.replaceChildren();body.replaceChildren();
-      const tr=node("tr");tr.append(node("th","","Feature"));plans.forEach(p=>tr.append(node("th","",language==="kh"?p.name_kh:p.name_en)));head.append(tr);
-      const rows=[["ai_scans","Daily AI scans",p=>p.features.max_ai_scans_per_day],["deep_analysis","Deep analyses / day",p=>p.features.max_deep_analysis_per_day],["watchlists","Watchlists",p=>p.features.max_watchlists],["backtesting","Backtesting",p=>p.features.backtesting_enabled?t("yes"):t("no")],["telegram","Telegram alerts",p=>p.features.telegram_alerts_enabled?t("yes"):t("no")],["debate","Agent debate",p=>p.features.agent_debate_enabled?t("yes"):t("no")]];
-      rows.forEach(([,label,value])=>{const row=node("tr");row.append(node("td","",t(label)));plans.forEach(p=>row.append(node("td","",String(value(p)))));body.append(row);});
+      const tr=node("tr");tr.append(node("th","",language==="kh"?"មុខងារ":"Feature"));plans.forEach(p=>tr.append(node("th","",language==="kh"?p.name_kh:p.name_en)));head.append(tr);
+      const rows=[["ai_scans",p=>p.features.max_ai_scans_per_day],["deep_analysis",p=>p.features.max_deep_analysis_per_day],["watchlists",p=>p.features.max_watchlists],["backtesting",p=>p.features.backtesting_enabled?t("yes"):t("no")],["telegram",p=>p.features.telegram_alerts_enabled?t("yes"):t("no")],["debate",p=>p.features.agent_debate_enabled?t("yes"):t("no")],["signal_alerts",p=>`${p.features.signal_alerts_target_min_per_day||0}–${p.features.max_signal_alerts_per_day||0}`]];
+      rows.forEach(([key,value])=>{const row=node("tr");const label=key==="signal_alerts"?(language==="kh"?"សញ្ញាដែលបានអនុម័តក្នុងមួយថ្ងៃ":"Approved signals / day"):t(key);row.append(node("td","",label));plans.forEach(p=>row.append(node("td","",String(value(p)))));body.append(row);});
     }
     function renderSubscription(data){
       const sub=data.subscription||{}; const box=document.getElementById("subscription-summary"); box.className="";box.replaceChildren();
@@ -191,10 +231,52 @@
       host.className="table-wrap";const table=node("table"),thead=node("thead"),head=node("tr");["invoice","reference","amount","status","date",""].forEach(k=>head.append(node("th","",t(k))));thead.append(head);const tbody=node("tbody");
       invoices.forEach(inv=>{const tr=node("tr");tr.append(node("td","",inv.invoice_number),node("td","",inv.checkout_reference),node("td","",`${inv.amount} ${inv.currency}`));const status=node("td");status.append(node("span",`status ${inv.status}`,inv.status));tr.append(status,node("td","",inv.created_at?new Date(inv.created_at).toLocaleDateString():""));const action=node("td","right");if(inv.status==="PENDING"){const btn=node("button","button",t("verify"));btn.addEventListener("click",event=>verifyInvoice(inv.id,event.currentTarget));action.append(btn);}tr.append(action);tbody.append(tr);});table.append(thead,tbody);host.append(table);
     }
-    async function loadPlans(){const grid=document.getElementById("plan-grid");if(window.ZyroxUI)grid.replaceChildren(...[0,1,2].map(()=>window.ZyroxUI.CardSkeleton()));try{const [r,statusResponse]=await Promise.all([fetch("/api/v1/payments/plans"),fetch("/api/v1/payments/status")]);if(!r.ok)throw new Error(`HTTP ${r.status}`);const data=await r.json();const paymentStatus=statusResponse.ok?await statusResponse.json():{};checkoutAvailable=paymentStatus.checkout_available===true;document.getElementById("provider-notice").hidden=checkoutAvailable;currentPlans=data.plans||[];renderPlans(currentPlans);renderComparison(currentPlans);}catch(error){checkoutAvailable=false;document.getElementById("provider-notice").hidden=false;if(window.ZyroxUI)grid.replaceChildren(window.ZyroxUI.ErrorState({title:t("plan_error"),message:error.message,retryLabel:language==="kh"?"ព្យាយាមម្តងទៀត":"Retry",onRetry:loadPlans}));else grid.replaceChildren(node("div","empty",t("plan_error")));}}
+    function renderPaymentStatus(){
+      const labels=providerCopy[language]||providerCopy.en;
+      const statusLabel=document.getElementById("payment-provider-status");
+      const providerTitle=document.getElementById("provider-title");
+      const providerDetail=document.getElementById("provider-detail");
+      const environment=String(paymentStatus?.environment||"sandbox").toLowerCase();
+      const configured=paymentStatus?.checkout_available===true;
+      const key=!paymentStatusChecked?"unverified":configured?(environment==="production"?"configuredProduction":"configuredSandbox"):(environment==="production"?"setupProduction":"setupSandbox");
+      statusLabel.textContent=labels[key];
+      statusLabel.classList.toggle("is-configured",configured);
+      providerTitle.textContent=labels.title;
+      providerDetail.textContent=!paymentStatusChecked?labels.unavailableDetail:(configured?labels.readyDetail:labels.missingDetail);
+      document.getElementById("provider-notice").hidden=configured;
+    }
+    async function loadPlans(){
+      const grid=document.getElementById("plan-grid");
+      if(window.ZyroxUI)grid.replaceChildren(...[0,1,2].map(()=>window.ZyroxUI.CardSkeleton()));
+      try{
+        const [plansResponse,statusResponse]=await Promise.all([fetch("/api/v1/payments/plans"),fetch("/api/v1/payments/status")]);
+        paymentStatusChecked=statusResponse.ok;
+        paymentStatus=statusResponse.ok?await statusResponse.json():null;
+        checkoutAvailable=paymentStatus?.checkout_available===true;
+        renderPaymentStatus();
+        if(!plansResponse.ok)throw new Error(`HTTP ${plansResponse.status}`);
+        const data=await plansResponse.json();
+        currentPlans=Array.isArray(data.plans)?data.plans:[];
+        renderPlanCount();
+        renderPlans(currentPlans);
+        renderComparison(currentPlans);
+      }catch(error){
+        checkoutAvailable=false;
+        paymentStatusChecked=true;
+        if(!paymentStatus)paymentStatus=null;
+        renderPaymentStatus();
+        if(window.ZyroxUI)grid.replaceChildren(window.ZyroxUI.ErrorState({title:t("plan_error"),message:error.message,retryLabel:language==="kh"?"ព្យាយាមម្តងទៀត":"Retry",onRetry:loadPlans}));
+        else grid.replaceChildren(node("div","empty",t("plan_error")));
+      }
+    }
     async function loadAccount(){
-      const auth=await fetch("/api/v1/auth/me",{credentials:"include"});
-      if(!auth.ok){document.getElementById("signin-link").hidden=false;return;}
+      let auth=null;
+      try{auth=await fetch("/api/v1/auth/me",{credentials:"include"});}catch{}
+      isAuthenticated=Boolean(auth?.ok);
+      authChecked=true;
+      document.getElementById("signin-link").hidden=isAuthenticated;
+      if(currentPlans.length)renderPlans(currentPlans);
+      if(!isAuthenticated)return;
       try{const r=await fetch("/api/v1/subscriptions/me",{credentials:"include"});if(!r.ok)throw new Error();const data=await r.json();renderSubscription(data);}
       catch{document.getElementById("subscription-summary").textContent=t("subscription_error");}
       const admin=await fetch("/api/v1/admin/payments/summary",{credentials:"include"});if(admin.ok){document.getElementById("admin-payments").hidden=false;const summary=await admin.json();renderAdmin(summary);}
@@ -202,11 +284,19 @@
     function renderAdmin(data){const host=document.getElementById("admin-metrics");host.replaceChildren();[["revenue",`${data.verified_revenue} ${data.currency}`],["pending_invoices",data.pending_invoices],["successful",data.successful_payments],["failed_payments",data.failed_payments],["active_subs",data.active_subscriptions],["expiring",data.expiring_within_7_days]].forEach(([k,v])=>{const m=node("div","metric");m.append(node("span","",t(k)),node("strong","",String(v)));host.append(m);});host.append(node("div","small",t("not_supported")));fetch("/api/v1/admin/payments/transactions?limit=20",{credentials:"include"}).then(r=>r.ok?r.json():null).then(result=>{const target=document.getElementById("admin-transactions");target.replaceChildren();if(!result||!result.transactions.length){target.append(node("div","empty",t("empty_invoices")));return;}const table=node("table"),wrap=node("div","table-wrap"),thead=node("thead"),head=node("tr");["invoice","reference","amount","status","date"].forEach(k=>head.append(node("th","",t(k))));thead.append(head);const tbody=node("tbody");result.transactions.forEach(x=>{const tr=node("tr");tr.append(node("td","",`TX-${x.id}`),node("td","",x.provider_transaction_id||"—"),node("td","",`${x.amount} ${x.currency}`));const state=x.verification_status==="VERIFIED"?x.status:"REVIEW",cell=node("td");cell.append(node("span",`status ${state}`,state));tr.append(cell,node("td","",x.created_at?new Date(x.created_at).toLocaleDateString():""));tbody.append(tr);});table.append(thead,tbody);wrap.append(table);target.append(wrap);}).catch(()=>{});}
     async function startCheckout(planId,button){
       if(!checkoutAvailable||isCheckoutPending)return;
+      if(!isAuthenticated){
+        const signInUrl=new URL("/",window.location.origin);
+        signInUrl.searchParams.set("auth","signin");
+        signInUrl.searchParams.set("return_to","/dashboard/billing.html#pricing");
+        window.location.assign(signInUrl.toString());
+        return;
+      }
       isCheckoutPending=true;
       const busyState=window.ZyroxUI?.ButtonLoader(button,{label:language==="kh"?"កំពុងបើកការទូទាត់សុវត្ថិភាព…":"Opening secure checkout…"});
       try{
         const response=await fetch("/api/v1/payments/checkout",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan_id:planId})});
         let data={};try{data=await response.json();}catch{}
+        if(response.status===401){isAuthenticated=false;authChecked=true;busyState?.restore();isCheckoutPending=false;const signInUrl=new URL("/",window.location.origin);signInUrl.searchParams.set("auth","signin");signInUrl.searchParams.set("return_to","/dashboard/billing.html#pricing");window.location.assign(signInUrl.toString());return;}
         if(!response.ok)throw new Error(data.detail||t("checkout_error"));
         if(!data.invoice?.id||!data.checkout?.url)throw new Error(t("checkout_error"));
         sessionStorage.setItem("zyroxPendingInvoiceId",String(data.invoice.id));

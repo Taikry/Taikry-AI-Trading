@@ -60,6 +60,7 @@ class SignalState(str, Enum):
     ACTIVE = "ACTIVE"
     TARGET_HIT = "TARGET_HIT"
     STOP_HIT = "STOP_HIT"
+    CLOSED = "CLOSED"
     INVALIDATED = "INVALIDATED"
     EXPIRED = "EXPIRED"
 
@@ -68,9 +69,10 @@ class SignalState(str, Enum):
 VALID_TRANSITIONS = {
     SignalState.CANDIDATE: [SignalState.WAITING_CONFIRMATION, SignalState.INVALIDATED, SignalState.EXPIRED],
     SignalState.WAITING_CONFIRMATION: [SignalState.ACTIVE, SignalState.INVALIDATED, SignalState.EXPIRED],
-    SignalState.ACTIVE: [SignalState.TARGET_HIT, SignalState.STOP_HIT, SignalState.EXPIRED, SignalState.INVALIDATED],
-    SignalState.TARGET_HIT: [SignalState.TARGET_HIT, SignalState.STOP_HIT, SignalState.EXPIRED],  # Allows secondary TP2 hit after TP1
+    SignalState.ACTIVE: [SignalState.TARGET_HIT, SignalState.STOP_HIT, SignalState.EXPIRED, SignalState.INVALIDATED, SignalState.CLOSED],
+    SignalState.TARGET_HIT: [SignalState.TARGET_HIT, SignalState.STOP_HIT, SignalState.EXPIRED, SignalState.INVALIDATED, SignalState.CLOSED],
     SignalState.STOP_HIT: [],
+    SignalState.CLOSED: [],
     SignalState.INVALIDATED: [],
     SignalState.EXPIRED: []
 }
@@ -81,6 +83,35 @@ class SignalLifecycleManager:
 
     def __init__(self):
         self.default_expiry_hours = 6
+
+    def attach_telegram_message(
+        self,
+        signal_id: str,
+        message_id: str,
+        take_profit_3: Optional[float] = None,
+    ) -> bool:
+        """Attach its Telegram message and optional third target to the lifecycle record."""
+        db = SessionLocal()
+        try:
+            update_values = {
+                "telegram_message_id": str(message_id),
+                "updated_at": datetime.datetime.now(datetime.timezone.utc),
+            }
+            if take_profit_3 is not None:
+                update_values["take_profit_3"] = float(take_profit_3)
+            updated = db.query(SignalLifecycleModel).filter(
+                SignalLifecycleModel.signal_id == signal_id
+            ).update({
+                **update_values
+            }, synchronize_session=False)
+            db.commit()
+            return updated == 1
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Could not attach Telegram message to lifecycle signal %s: %s", signal_id, str(exc))
+            return False
+        finally:
+            db.close()
 
     def generate_signal_id(self, symbol: str) -> str:
         date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
@@ -99,7 +130,8 @@ class SignalLifecycleManager:
         ai_score: Optional[int] = None,
         timeframe: str = "M15",
         initial_state: SignalState = SignalState.WAITING_CONFIRMATION,
-        trigger_cause: str = "Multi-agent institutional consensus approval"
+        trigger_cause: str = "Multi-agent institutional consensus approval",
+        take_profit_3: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Creates and persists a stateful signal record with persistent deduplication.
@@ -113,7 +145,8 @@ class SignalLifecycleManager:
                 SignalLifecycleModel.symbol == symbol.upper(),
                 SignalLifecycleModel.current_state.in_([
                     SignalState.WAITING_CONFIRMATION.value,
-                    SignalState.ACTIVE.value
+                    SignalState.ACTIVE.value,
+                    SignalState.TARGET_HIT.value,
                 ])
             ).order_by(SignalLifecycleModel.created_at.desc()).first()
 
@@ -164,6 +197,7 @@ class SignalLifecycleManager:
                 stop_loss=stop_loss,
                 take_profit_1=take_profit_1,
                 take_profit_2=take_profit_2,
+                take_profit_3=take_profit_3,
                 risk_reward=risk_reward,
                 ai_score=ai_score,
                 state_history=[history_entry],
@@ -253,6 +287,8 @@ class SignalLifecycleManager:
                     event_type = LifecycleEventType.SIGNAL_CANCELLED
                 elif to_state == SignalState.EXPIRED:
                     event_type = LifecycleEventType.SIGNAL_EXPIRED
+                elif to_state == SignalState.CLOSED:
+                    event_type = LifecycleEventType.SIGNAL_CLOSED
                 else:
                     event_type = LifecycleEventType.SIGNAL_UPDATED
 
@@ -345,7 +381,8 @@ class SignalLifecycleManager:
             active_or_waiting = db.query(SignalLifecycleModel).filter(
                 SignalLifecycleModel.current_state.in_([
                     SignalState.WAITING_CONFIRMATION.value,
-                    SignalState.ACTIVE.value
+                    SignalState.ACTIVE.value,
+                    SignalState.TARGET_HIT.value,
                 ])
             ).all()
 
@@ -421,7 +458,7 @@ class SignalLifecycleManager:
                         continue
 
                 # 3. ACTIVE Evaluation
-                elif curr_st == SignalState.ACTIVE:
+                elif curr_st in {SignalState.ACTIVE, SignalState.TARGET_HIT}:
                     # Stop Loss check
                     sl_hit = (price <= sig.stop_loss) if is_buy else (price >= sig.stop_loss)
                     if sl_hit:
@@ -438,33 +475,63 @@ class SignalLifecycleManager:
                             updated_events.append(ev)
                         continue
 
-                    # Take Profit check
-                    tp2_hit = (price >= sig.take_profit_2) if (is_buy and sig.take_profit_2) else (price <= sig.take_profit_2 if (not is_buy and sig.take_profit_2) else False)
+                    # Evaluate each target once. TP2/TP3 are no longer skipped
+                    # after the first target transition; all levels are stored
+                    # as real milestones without claiming a broker stop move.
+                    history = sig.state_history if isinstance(sig.state_history, list) else []
+                    completed_targets = {
+                        str(item.get("event_type"))
+                        for item in history
+                        if isinstance(item, dict) and item.get("event_type")
+                    }
                     tp1_hit = (price >= sig.take_profit_1) if is_buy else (price <= sig.take_profit_1)
+                    tp2_hit = bool(sig.take_profit_2 and ((price >= sig.take_profit_2) if is_buy else (price <= sig.take_profit_2)))
+                    tp3_hit = bool(sig.take_profit_3 and ((price >= sig.take_profit_3) if is_buy else (price <= sig.take_profit_3)))
 
-                    if tp2_hit:
+                    if tp3_hit and LifecycleEventType.TP3_HIT.value not in completed_targets:
                         ev = self.transition_signal(
                             sig.signal_id,
-                            SignalState.TARGET_HIT,
-                            f"Take profit 2 (Runner Target) achieved at {price:.2f}",
+                            SignalState.CLOSED,
+                            f"Take profit 3 final target achieved at {price:.2f}",
                             price,
-                            reason_en=f"Final Take Profit 2 reached at {price:.2f}. Trade fully closed.",
-                            reason_kh=f"គោលដៅប្រាក់ចំណេញទី ២ ចុងក្រោយបានសម្រេចនៅ {price:.2f}។ ការជួញដូរត្រូវបានបិទទាំងស្រុង។",
-                            event_type=LifecycleEventType.TP2_HIT
+                            reason_en=f"Take Profit 3 reached at {price:.2f}. The monitored signal is closed.",
+                            reason_kh=f"បានដល់គោលដៅប្រាក់ចំណេញទី ៣ នៅ {price:.2f}។ សញ្ញាតាមដានត្រូវបានបិទ។",
+                            event_type=LifecycleEventType.TP3_HIT,
                         )
                         if ev:
                             updated_events.append(ev)
                         continue
 
-                    elif tp1_hit:
+                    if tp2_hit and LifecycleEventType.TP2_HIT.value not in completed_targets:
+                        final_target = sig.take_profit_3 is None
+                        ev = self.transition_signal(
+                            sig.signal_id,
+                            SignalState.CLOSED if final_target else SignalState.TARGET_HIT,
+                            f"Take profit 2 target achieved at {price:.2f}",
+                            price,
+                            reason_en=(
+                                f"Take Profit 2 reached at {price:.2f}. The monitored signal is closed."
+                                if final_target else f"Take Profit 2 reached at {price:.2f}; monitoring continues for TP3."
+                            ),
+                            reason_kh=(
+                                f"បានដល់គោលដៅប្រាក់ចំណេញទី ២ នៅ {price:.2f} ហើយសញ្ញាត្រូវបានបិទ។"
+                                if final_target else f"បានដល់គោលដៅប្រាក់ចំណេញទី ២ នៅ {price:.2f}។ កំពុងបន្តតាមដាន TP3។"
+                            ),
+                            event_type=LifecycleEventType.TP2_HIT,
+                        )
+                        if ev:
+                            updated_events.append(ev)
+                        continue
+
+                    if tp1_hit and LifecycleEventType.TP1_HIT.value not in completed_targets:
                         ev = self.transition_signal(
                             sig.signal_id,
                             SignalState.TARGET_HIT,
-                            f"Take profit 1 (Primary Target) achieved at {price:.2f}",
+                            f"Take profit 1 primary target achieved at {price:.2f}",
                             price,
-                            reason_en=f"Primary Take Profit 1 reached at {price:.2f}. Securing partial profits and shifting SL to breakeven.",
-                            reason_kh=f"គោលដៅប្រាក់ចំណេញចម្បងទី ១ បានសម្រេចនៅ {price:.2f}។ ដកប្រាក់ចំណេញមួយផ្នែក និងផ្លាស់ប្តូរ SL ទៅចំណុចស្មើដើម។",
-                            event_type=LifecycleEventType.TP1_HIT
+                            reason_en=f"Take Profit 1 reached at {price:.2f}. The signal remains under lifecycle monitoring; no stop change or broker order was made.",
+                            reason_kh=f"បានដល់គោលដៅប្រាក់ចំណេញទី ១ នៅ {price:.2f}។ សញ្ញានៅតែស្ថិតក្រោមការតាមដាន ហើយមិនបានផ្លាស់ប្តូរ Stop Loss ឬដាក់បញ្ជាទៅក្រុមហ៊ុនជើងសារទេ។",
+                            event_type=LifecycleEventType.TP1_HIT,
                         )
                         if ev:
                             updated_events.append(ev)
@@ -534,6 +601,7 @@ class SignalLifecycleManager:
             "stop_loss": signal_data["stop_loss"],
             "take_profit_1": signal_data["take_profit_1"],
             "take_profit_2": signal_data.get("take_profit_2"),
+            "take_profit_3": signal_data.get("take_profit_3"),
             "original_telegram_message_id": signal_data.get("telegram_message_id")
         }
 
@@ -542,9 +610,12 @@ class SignalLifecycleManager:
         if TELEGRAM_SEND_LIFECYCLE_EVENTS:
             try:
                 from taikry.notifications.telegram_service import telegram_service
-                telegram_service.send_lifecycle_event_notification(event_dict)
+                telegram_service.send_lifecycle_event_notification(event_dict, allow_edit=True)
             except Exception as e:
-                logger.warning(f"Failed to dispatch Telegram lifecycle notification: {e}")
+                logger.warning(
+                    "Failed to dispatch Telegram lifecycle notification: %s",
+                    telegram_service._redact_secret(str(e)),
+                )
         else:
             logger.info(
                 f"Telegram lifecycle dispatch suppressed by policy (TELEGRAM_SEND_LIFECYCLE_EVENTS=False). "
@@ -584,6 +655,7 @@ class SignalLifecycleManager:
             "stop_loss": m.stop_loss,
             "take_profit_1": m.take_profit_1,
             "take_profit_2": m.take_profit_2,
+            "take_profit_3": m.take_profit_3,
             "risk_reward": m.risk_reward,
             "ai_score": m.ai_score,
             "invalidation_reason_en": m.invalidation_reason_en,

@@ -8,6 +8,7 @@ RUN groupadd --system app && useradd --system --gid app --home-dir /app app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    ffmpeg \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 

@@ -2,6 +2,7 @@ import json
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -43,6 +44,8 @@ def payment_db():
         billing_interval="monthly",
         interval_count=1,
         trial_days=0,
+        signal_alerts_target_min_per_day=5,
+        max_signal_alerts_per_day=10,
         is_active=True,
     )
     db.add_all([user, plan])
@@ -94,6 +97,32 @@ def test_checkout_returns_signed_sandbox_form(payment_db, monkeypatch):
     assert response["checkout"]["encoding"] == "multipart/form-data"
     assert response["checkout"]["fields"]["hash"]
     assert db.query(PaymentInvoice).count() == 1
+
+
+def test_subscription_plan_catalog_exposes_active_paid_plans(payment_db):
+    db, _user, _plan = payment_db
+
+    result = routes.list_payment_plans(db=db)
+
+    assert len(result["plans"]) == 1
+    pro = result["plans"][0]
+    assert pro["id"] == "pro"
+    assert pro["amount"] == "29.00"
+    assert pro["billing_interval"] == "monthly"
+    assert "max_ai_scans_per_day" in pro["features"]
+    assert pro["features"]["signal_alerts_target_min_per_day"] == 5
+    assert pro["features"]["max_signal_alerts_per_day"] == 10
+
+
+def test_checkout_requires_a_valid_session_before_creating_an_invoice():
+    from taikry.api.app import app
+
+    response = TestClient(app).post(
+        "/api/v1/payments/checkout",
+        json={"plan_id": "pro"},
+    )
+
+    assert response.status_code == 401
 
 
 def test_unsigned_callback_is_audited_and_valid_retry_is_not_poisoned(payment_db, monkeypatch):

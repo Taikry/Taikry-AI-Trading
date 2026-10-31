@@ -301,17 +301,17 @@ class AgentRegistry:
         meta1 = AgentMetadata(
             agent_id="technical_analyst",
             name="Agent 1: Quantitative Technical Analyst",
-            description="Analyzes multi-timeframe trend alignment, EMA 20/50/200, RSI 14, ATR, and candlestick patterns.",
-            specialization="Momentum, Multi-Timeframe Confluence, Support/Resistance & Volatility",
+            description="Analyzes crypto and forex with multi-timeframe EMA structure, Wilder ATR, RSI, MACD, DMI/ADX, confirmed swings, provider-aware volume, and ATR-based trade levels.",
+            specialization="Crypto/Forex Technicals, DMI/ADX Trend Strength, Structure, Momentum & Volatility",
             model_provider="python_deterministic",
             model_identifier="taikry_quant_engine_v2",
             execution_mode="local",
-            supported_tasks=["multi_timeframe_trend", "rsi_momentum", "atr_volatility", "candlestick_patterns"],
+            supported_tasks=["multi_timeframe_trend", "rsi_momentum", "atr_volatility", "dmi_adx", "swing_structure", "volume_context", "candlestick_patterns"],
             supported_instruments=["XAUUSD", "XAGUSD", "Forex", "Crypto"],
             timeout_seconds=5.0,
             concurrency_limits=10,
             health_status="NOT_RUN",
-            version="2.1.0"
+            version="2.2.0"
         )
         def fallback_tech(reason: str, symbol: str, multi_tf_data: Dict[str, Any], setup_timeframe: str = "M15") -> Dict[str, Any]:
             return {

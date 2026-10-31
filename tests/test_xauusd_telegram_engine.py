@@ -26,6 +26,7 @@ Covers all 20 required verification scenarios:
 
 import datetime
 import zoneinfo
+import uuid
 from types import SimpleNamespace
 import requests
 import pytest
@@ -34,7 +35,12 @@ from fastapi.testclient import TestClient
 
 from taikry.api.app import app
 from taikry.database.session import SessionLocal
-from taikry.database.models import XAUUSDTelegramSignalModel, XAUUSDDailyReportRecord
+from taikry.database.models import (
+    XAUUSDTelegramSignalModel,
+    XAUUSDDailyReportRecord,
+    XAUUSDDailyQuotaReservation,
+    TelegramNotification,
+)
 from taikry.trading.xauusd_signal_engine import (
     xauusd_signal_engine,
     calculate_trade_levels,
@@ -371,8 +377,13 @@ def test_telegram_delivery_success_and_token_protection(mock_post):
         "result": {"message_id": 999888}
     }
 
+    signal_id = f"SIG-XAUUSD-TEST-TG-{uuid.uuid4().hex[:8]}"
+    idempotency_key = f"IDEMP-XAUUSD-TEST-TG-{uuid.uuid4().hex}"
     signal_data = {
-        "signal_id": "SIG-XAUUSD-TEST-TG",
+        "success": True,
+        "status": "VALIDATED",
+        "signal_id": signal_id,
+        "idempotency_key": idempotency_key,
         "canonical_symbol": "XAUUSD",
         "direction": "BUY",
         "entry_price": 2720.0,
@@ -387,10 +398,48 @@ def test_telegram_delivery_success_and_token_protection(mock_post):
         "supporting_evidence": ["Bullish FVG at OTE"]
     }
 
-    ok, msg_id, err = telegram_service.send_xauusd_signal_alert(signal_data, chat_id="-1004341134868")
+    db = SessionLocal()
+    try:
+        db.add(XAUUSDTelegramSignalModel(
+            signal_id=signal_id,
+            canonical_symbol="XAUUSD",
+            direction="BUY",
+            timeframes_analyzed=["M15", "H1"],
+            entry_price=2720.0,
+            stop_loss=2710.0,
+            take_profit_1=2742.0,
+            take_profit_2=2755.0,
+            take_profit_3=2770.0,
+            risk_reward_1=2.2,
+            ai_confluence_score=88,
+            consensus_summary="Institutional Quorum",
+            signal_status="VALIDATED",
+            telegram_delivery_status="PENDING",
+            idempotency_key=idempotency_key,
+            cambodia_date=get_cambodia_date_str(),
+            outcome="PENDING",
+            audit_history=[],
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    with patch.object(telegram_service, "token", "unit-test-token"):
+        ok, msg_id, err = telegram_service.send_xauusd_signal_alert(signal_data, chat_id="-1004341134868")
     assert ok is True
     assert msg_id == "999888"
     assert err is None
+    assert mock_post.call_count == 1
+    db = SessionLocal()
+    try:
+        notification = db.query(TelegramNotification).filter(TelegramNotification.signal_id == signal_id).one()
+        assert notification.delivery_status == "SENT"
+        assert notification.telegram_message_id == "999888"
+        db.query(TelegramNotification).filter(TelegramNotification.signal_id == signal_id).delete()
+        db.query(XAUUSDTelegramSignalModel).filter(XAUUSDTelegramSignalModel.signal_id == signal_id).delete()
+        db.commit()
+    finally:
+        db.close()
 
 
 # -----------------------------------------------------------------------------
@@ -677,11 +726,16 @@ def test_fastapi_xauusd_endpoints():
 
 @patch("requests.post")
 def test_telegram_retry_and_failure_handling(mock_post):
-    # Simulate network exception on all attempts
+    # A network exception is ambiguous: suppress blind resend after one request.
     mock_post.side_effect = requests.RequestException("Connection refused to api.telegram.org")
 
+    signal_id = f"SIG-RETRY-FAIL-{uuid.uuid4().hex[:8]}"
+    idempotency_key = f"KEY-RETRY-FAIL-{uuid.uuid4().hex}"
     test_signal = {
-        "signal_id": "SIG-RETRY-FAIL-1",
+        "success": True,
+        "status": "VALIDATED",
+        "signal_id": signal_id,
+        "idempotency_key": idempotency_key,
         "canonical_symbol": "XAUUSD",
         "direction": "BUY",
         "timeframes_analyzed": ["M15"],
@@ -698,12 +752,52 @@ def test_telegram_retry_and_failure_handling(mock_post):
         "supporting_evidence": ["Evidence 1"]
     }
 
-    ok, msg_id, err = telegram_service.send_xauusd_signal_alert(test_signal, chat_id="-1004341134868")
+    db = SessionLocal()
+    try:
+        db.add(XAUUSDTelegramSignalModel(
+            signal_id=signal_id,
+            canonical_symbol="XAUUSD",
+            direction="BUY",
+            timeframes_analyzed=["M15"],
+            entry_price=2700.0,
+            stop_loss=2690.0,
+            take_profit_1=2720.0,
+            take_profit_2=2730.0,
+            take_profit_3=2745.0,
+            risk_reward_1=2.0,
+            risk_reward_2=3.0,
+            risk_reward_3=4.5,
+            ai_confluence_score=88,
+            consensus_summary="Test Retry Signal",
+            signal_status="VALIDATED",
+            telegram_delivery_status="PENDING",
+            idempotency_key=idempotency_key,
+            cambodia_date=get_cambodia_date_str(),
+            outcome="PENDING",
+            audit_history=[],
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    with patch.object(telegram_service, "token", "unit-test-token"):
+        ok, msg_id, err = telegram_service.send_xauusd_signal_alert(test_signal, chat_id="-1004341134868")
     assert ok is False
     assert msg_id is None
     assert "Connection refused" in err
     # Ensure bot token is never exposed in error string
     assert "bot" not in err.lower() or "[REDACTED_BOT_TOKEN]" in err
+    assert mock_post.call_count == 1
+    db = SessionLocal()
+    try:
+        notification = db.query(TelegramNotification).filter(TelegramNotification.signal_id == signal_id).one()
+        assert notification.delivery_status == "UNCERTAIN"
+        assert notification.attempt_count == 1
+        db.query(TelegramNotification).filter(TelegramNotification.signal_id == signal_id).delete()
+        db.query(XAUUSDTelegramSignalModel).filter(XAUUSDTelegramSignalModel.signal_id == signal_id).delete()
+        db.commit()
+    finally:
+        db.close()
 
 
 # -----------------------------------------------------------------------------
@@ -719,6 +813,45 @@ def test_restart_recovery_and_persistent_quota():
     assert isinstance(quota["signals_sent_today"], int)
     assert quota["signals_sent_today"] >= 0
     assert (quota["remaining_quota"] > 0) == (quota["signals_sent_today"] < quota["daily_hard_limit"])
+
+
+def test_daily_quota_reservation_is_atomic_and_survives_engine_restart():
+    from taikry.trading.xauusd_signal_engine import XAUUSDSignalEngine
+
+    test_date = f"2099-01-{uuid.uuid4().int % 27 + 1:02d}"
+    engine = XAUUSDSignalEngine()
+    engine.daily_limit = 2
+    db = SessionLocal()
+    try:
+        db.query(XAUUSDTelegramSignalModel).filter(
+            XAUUSDTelegramSignalModel.cambodia_date == test_date
+        ).delete()
+        db.query(XAUUSDDailyQuotaReservation).filter(
+            XAUUSDDailyQuotaReservation.cambodia_date == test_date
+        ).delete()
+        db.commit()
+
+        assert engine._reserve_daily_quota_slot(db, test_date) is True
+        db.commit()
+        assert engine._reserve_daily_quota_slot(db, test_date) is True
+        db.commit()
+        assert engine._reserve_daily_quota_slot(db, test_date) is False
+        db.rollback()
+
+        persisted = db.query(XAUUSDDailyQuotaReservation).filter(
+            XAUUSDDailyQuotaReservation.cambodia_date == test_date
+        ).one()
+        assert persisted.reserved_count == 2
+        assert XAUUSDSignalEngine().get_daily_quota_status(test_date)["is_limit_reached"] is True
+    finally:
+        db.query(XAUUSDDailyQuotaReservation).filter(
+            XAUUSDDailyQuotaReservation.cambodia_date == test_date
+        ).delete()
+        db.query(XAUUSDTelegramSignalModel).filter(
+            XAUUSDTelegramSignalModel.cambodia_date == test_date
+        ).delete()
+        db.commit()
+        db.close()
 
 
 # -----------------------------------------------------------------------------

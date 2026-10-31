@@ -99,6 +99,23 @@ class FeedCircuitBreaker:
             self.binance_failing = True
             self.last_check_binance = time.time()
 
+    def get_status(self) -> Dict[str, Any]:
+        now = time.time()
+        return {
+            "yahoo": {
+                "available_for_probe": self.can_try_yahoo(),
+                "failing": self.yahoo_failing,
+                "recent_failures": self.yahoo_failures,
+                "retry_in_seconds": max(0, int(60 - (now - self.last_check_yahoo))) if self.yahoo_failing else 0,
+            },
+            "binance": {
+                "available_for_probe": self.can_try_binance(),
+                "failing": self.binance_failing,
+                "recent_failures": self.binance_failures,
+                "retry_in_seconds": max(0, int(300 - (now - self.last_check_binance))) if self.binance_failing else 0,
+            },
+        }
+
 circuit_breaker = FeedCircuitBreaker()
 
 
@@ -196,6 +213,7 @@ class OandaDataProvider(BaseDataProvider):
         self._account_check_at = 0.0
         self._account_check_failed = False
         self._quote_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self._instrument_cache: Tuple[float, list[Dict[str, Any]]] = (0.0, [])
 
     @property
     def configured(self) -> bool:
@@ -322,6 +340,38 @@ class OandaDataProvider(BaseDataProvider):
             logger.debug("OANDA v20 price request failed for %s.", instrument)
             return None
 
+    def discover_instruments(self, cache_seconds: int = 21600) -> list[Dict[str, Any]]:
+        """Return account-supported OANDA instruments using a bounded six-hour cache."""
+        cached_at, cached_items = self._instrument_cache
+        now = time.monotonic()
+        if cached_at > 0 and now - cached_at < cache_seconds:
+            return [dict(item) for item in cached_items]
+        base_url, account_id = self._resolve_account()
+        if not base_url or not account_id:
+            return []
+        try:
+            response = self.session.get(
+                f"{base_url}/v3/accounts/{account_id}/instruments",
+                timeout=(2.0, 6.0),
+            )
+            if response.status_code != 200:
+                return []
+            items = response.json().get("instruments", [])
+            normalized = [
+                {
+                    "name": str(item.get("name") or "").upper(),
+                    "display_name": str(item.get("displayName") or item.get("name") or ""),
+                    "type": str(item.get("type") or ""),
+                }
+                for item in items
+                if item.get("name")
+            ]
+            self._instrument_cache = (now, normalized)
+            return [dict(item) for item in normalized]
+        except Exception:
+            logger.info("OANDA instrument discovery is unavailable; retaining the cached registry.")
+            return [dict(item) for item in cached_items]
+
     def fetch_ohlcv(self, symbol: str, timeframe: str = "M15", limit: int = 200) -> pd.DataFrame:
         instrument = self.instrument_for(symbol)
         granularity = str(timeframe).upper()
@@ -371,6 +421,39 @@ class BinanceDataProvider(BaseDataProvider):
     def __init__(self):
         self._quote_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
         self._quote_lock = threading.Lock()
+        self._discovery_cache: Tuple[float, list[Dict[str, Any]]] = (0.0, [])
+
+    def discover_spot_symbols(self, cache_seconds: int = 21600) -> list[Dict[str, Any]]:
+        """List tradable USDT spot pairs from Binance, cached to avoid search-time calls."""
+        cached_at, cached_items = self._discovery_cache
+        now = time.monotonic()
+        if cached_at > 0 and now - cached_at < cache_seconds:
+            return [dict(item) for item in cached_items]
+        try:
+            response = requests.get(f"{self.BASE_URL}/exchangeInfo", timeout=(2.0, 6.0))
+            if response.status_code != 200:
+                return [dict(item) for item in cached_items]
+            records = response.json().get("symbols", [])
+            normalized = []
+            for item in records:
+                symbol = str(item.get("symbol") or "").upper()
+                if (
+                    not symbol
+                    or item.get("status") != "TRADING"
+                    or item.get("quoteAsset") != "USDT"
+                    or item.get("isSpotTradingAllowed") is False
+                ):
+                    continue
+                normalized.append({
+                    "symbol": symbol,
+                    "base_asset": str(item.get("baseAsset") or "").upper(),
+                    "quote_asset": "USDT",
+                })
+            self._discovery_cache = (now, normalized)
+            return [dict(item) for item in normalized]
+        except Exception:
+            logger.info("Binance symbol discovery is unavailable; retaining the cached registry.")
+            return [dict(item) for item in cached_items]
 
     def get_latest_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Return a current public spot bid/ask quote for supported crypto pairs."""

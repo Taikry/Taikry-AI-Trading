@@ -14,7 +14,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from taikry.database.session import SessionLocal
-from taikry.database.models import User, UserSubscription, SubscriptionPlan, AIUsageRecord
+from taikry.database.models import (
+    User,
+    UserSubscription,
+    SubscriptionPlan,
+    AIUsageRecord,
+    TelegramLink,
+    NotificationPreferences,
+    TelegramSignalDailyQuotaModel,
+)
 from taikry.saas.trial_service import get_user_trial_status
 
 # Default Standard Plans Specification
@@ -27,6 +35,8 @@ DEFAULT_PLANS = [
         "billing_interval": "trial",
         "max_ai_scans_per_day": 10,
         "max_deep_analysis_per_day": 3,
+        "signal_alerts_target_min_per_day": 2,
+        "max_signal_alerts_per_day": 4,
         "max_watchlists": 5,
         "backtesting_enabled": False,
         "telegram_alerts_enabled": True,
@@ -41,6 +51,8 @@ DEFAULT_PLANS = [
         "billing_interval": "monthly",
         "max_ai_scans_per_day": 50,
         "max_deep_analysis_per_day": 20,
+        "signal_alerts_target_min_per_day": 5,
+        "max_signal_alerts_per_day": 10,
         "max_watchlists": 25,
         "backtesting_enabled": True,
         "telegram_alerts_enabled": True,
@@ -55,6 +67,8 @@ DEFAULT_PLANS = [
         "billing_interval": "monthly",
         "max_ai_scans_per_day": 200,
         "max_deep_analysis_per_day": 100,
+        "signal_alerts_target_min_per_day": 10,
+        "max_signal_alerts_per_day": 15,
         "max_watchlists": 100,
         "backtesting_enabled": True,
         "telegram_alerts_enabled": True,
@@ -89,6 +103,8 @@ def get_all_plans(db: Session) -> list:
             "billing_interval": p.billing_interval,
             "max_ai_scans_per_day": p.max_ai_scans_per_day,
             "max_deep_analysis_per_day": p.max_deep_analysis_per_day,
+            "signal_alerts_target_min_per_day": p.signal_alerts_target_min_per_day,
+            "max_signal_alerts_per_day": p.max_signal_alerts_per_day,
             "max_watchlists": p.max_watchlists,
             "backtesting_enabled": p.backtesting_enabled,
             "telegram_alerts_enabled": p.telegram_alerts_enabled,
@@ -96,6 +112,73 @@ def get_all_plans(db: Session) -> list:
         }
         for p in plans
     ]
+
+
+def get_telegram_signal_recipients(
+    db: Session,
+    notification_preference: str = "signal_generated",
+) -> list:
+    """Return linked users whose current subscription allows Telegram signals.
+
+    Entitlement expiry is evaluated with the same trial/paid-period rules used by
+    protected API routes. The applicable signal preference must also be enabled.
+    This intentionally returns only private account links, never the shared
+    Telegram broadcast chat.
+    """
+    if notification_preference not in {"signal_generated", "signal_invalidated"}:
+        raise ValueError("Unsupported Telegram signal notification preference")
+
+    rows = db.query(
+        User.id,
+        TelegramLink.telegram_chat_id,
+        SubscriptionPlan.id,
+        SubscriptionPlan.signal_alerts_target_min_per_day,
+        SubscriptionPlan.max_signal_alerts_per_day,
+        NotificationPreferences.signal_generated,
+        NotificationPreferences.signal_invalidated,
+    ).join(
+        UserSubscription, UserSubscription.user_id == User.id
+    ).join(
+        SubscriptionPlan, SubscriptionPlan.id == UserSubscription.plan_id
+    ).join(
+        TelegramLink, TelegramLink.user_id == User.id
+    ).outerjoin(
+        NotificationPreferences, NotificationPreferences.user_id == User.id
+    ).filter(
+        User.is_active.is_(True),
+        TelegramLink.is_linked.is_(True),
+        TelegramLink.telegram_chat_id.isnot(None),
+        SubscriptionPlan.telegram_alerts_enabled.is_(True),
+    ).all()
+
+    recipients = []
+    for (
+        user_id, chat_id, plan_id, target_minimum, daily_limit,
+        signal_preference, invalidation_preference,
+    ) in rows:
+        selected_preference = (
+            invalidation_preference
+            if notification_preference == "signal_invalidated"
+            else signal_preference
+        )
+        try:
+            private_chat_id = int(str(chat_id))
+        except (TypeError, ValueError):
+            continue
+        daily_limit = max(0, int(daily_limit or 0))
+        if private_chat_id <= 0 or selected_preference is False or daily_limit <= 0:
+            continue
+        entitlement = get_user_trial_status(db, user_id)
+        if not entitlement.get("is_active"):
+            continue
+        recipients.append({
+            "user_id": int(user_id),
+            "chat_id": str(private_chat_id),
+            "plan_id": str(plan_id),
+            "signal_alerts_target_min_per_day": max(0, int(target_minimum or 0)),
+            "max_signal_alerts_per_day": daily_limit,
+        })
+    return recipients
 
 
 def get_user_entitlement(db: Session, user_id: int) -> Dict[str, Any]:
@@ -126,6 +209,16 @@ def get_user_entitlement(db: Session, user_id: int) -> Dict[str, Any]:
         AIUsageRecord.request_type == "deep_analysis"
     ).scalar() or 0
 
+    cambodia_today = (
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=7)
+    ).strftime("%Y-%m-%d")
+    daily_signal_quota = db.query(TelegramSignalDailyQuotaModel).filter(
+        TelegramSignalDailyQuotaModel.user_id == user_id,
+        TelegramSignalDailyQuotaModel.cambodia_date == cambodia_today,
+    ).first()
+    signal_alerts_used = daily_signal_quota.reserved_count if daily_signal_quota else 0
+    signal_alerts_cap = max(0, int(plan.max_signal_alerts_per_day or 0))
+
     return {
         "user_id": user_id,
         "subscription_status": trial_status.get("status"),
@@ -147,6 +240,10 @@ def get_user_entitlement(db: Session, user_id: int) -> Dict[str, Any]:
             "max_deep_analysis_per_day": plan.max_deep_analysis_per_day,
             "deep_analysis_used_today": deep_scans_today,
             "deep_analysis_remaining_today": max(0, plan.max_deep_analysis_per_day - deep_scans_today),
+            "signal_alerts_target_min_per_day": max(0, int(plan.signal_alerts_target_min_per_day or 0)),
+            "max_signal_alerts_per_day": signal_alerts_cap,
+            "signal_alerts_reserved_today": signal_alerts_used,
+            "signal_alerts_remaining_today": max(0, signal_alerts_cap - signal_alerts_used),
             "max_watchlists": plan.max_watchlists,
             "backtesting_enabled": plan.backtesting_enabled,
             "telegram_alerts_enabled": plan.telegram_alerts_enabled,

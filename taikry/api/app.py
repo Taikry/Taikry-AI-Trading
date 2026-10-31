@@ -12,6 +12,7 @@ from taikry.config import APP_NAME, APP_VERSION, CORS_ALLOWED_ORIGINS, PUBLIC_AP
 from taikry.database.session import init_db, SessionLocal
 from taikry.api.routes import router as api_router
 from taikry.api.saas_routes import saas_router
+from taikry.api.market_routes import market_router
 from taikry.api.schema_routes import schema_router
 from app.payments.routes import payments_router
 from taikry.monitoring.engine import market_monitor_247
@@ -80,6 +81,7 @@ def ping():
 # Include API routes
 app.include_router(api_router)
 app.include_router(saas_router)
+app.include_router(market_router)
 app.include_router(schema_router)
 app.include_router(payments_router)
 

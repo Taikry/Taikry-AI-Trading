@@ -11,11 +11,51 @@ Covers:
 - Environment Introspection
 """
 
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 from taikry.api.app import app
+from taikry.api.saas_routes import get_current_admin
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def schema_admin_session():
+    """Run feature tests as an admin; auth-specific tests remove this override."""
+    app.dependency_overrides[get_current_admin] = lambda: SimpleNamespace(
+        id=1, email="schema-test-admin@example.test"
+    )
+    yield
+    app.dependency_overrides.pop(get_current_admin, None)
+
+
+def test_all_schema_routes_require_admin_authentication():
+    app.dependency_overrides.pop(get_current_admin, None)
+    endpoints = [
+        ("get", "/api/v1/schema/introspect", None),
+        ("get", "/api/v1/schema/ddl", None),
+        ("get", "/api/v1/schema/layout", None),
+        ("get", "/api/v1/schema/migrations/history", None),
+        ("get", "/api/v1/schema/environments", None),
+        ("post", "/api/v1/schema/layout", {"viewport": {}, "nodes": {}}),
+        ("post", "/api/v1/schema/ai/propose", {"prompt": "Create a trading journal schema"}),
+        ("post", "/api/v1/schema/sql/query", {"query": "SELECT 1"}),
+        ("post", "/api/v1/schema/migrations/diff", {"target_schema": {"tables": []}}),
+        ("post", "/api/v1/schema/migrations/apply", {
+            "migration_name": "unauthorized_change",
+            "upgrade_sql": "CREATE TABLE unauthorized_change (id INT)",
+        }),
+    ]
+    try:
+        for method, path, payload in endpoints:
+            response = getattr(client, method)(path, json=payload) if payload is not None else getattr(client, method)(path)
+            assert response.status_code == 401, f"{method.upper()} {path} should require authentication"
+    finally:
+        app.dependency_overrides[get_current_admin] = lambda: SimpleNamespace(
+            id=1, email="schema-test-admin@example.test"
+        )
 
 
 def test_schema_introspection_live():
@@ -134,6 +174,23 @@ def test_sql_studio_blocks_destructive_mutations():
         assert "Mutation statement blocked in read-only mode" in data["error"]
 
 
+def test_sql_studio_rejects_mutating_ctes_multiple_statements_and_read_write_override():
+    for query in (
+        "WITH changed AS (DELETE FROM users RETURNING id) SELECT * FROM changed",
+        "SELECT 1; DELETE FROM users",
+        "SELECT 1 -- bypass\n; DROP TABLE users",
+    ):
+        response = client.post("/api/v1/schema/sql/query", json={"query": query})
+        assert response.status_code == 200
+        assert response.json()["status"] == "FORBIDDEN"
+
+    response = client.post("/api/v1/schema/sql/query", json={
+        "query": "DELETE FROM users",
+        "read_only": False,
+    })
+    assert response.status_code == 422
+
+
 def test_migration_diff_and_destructive_detection():
     """Verifies schema diff identifies new tables and flags destructive column removals."""
     target_schema = {
@@ -159,18 +216,19 @@ def test_migration_diff_and_destructive_detection():
     assert "CREATE TABLE IF NOT EXISTS new_liquidity_pool" in diff["upgrade_sql"]
 
 
-def test_migration_production_safety_gate():
-    """Verifies migrations to production require explicit confirm_production_risk flag."""
+def test_migration_production_safety_gate(monkeypatch):
+    """The server's production config blocks DDL even when payload says local and confirms."""
+    monkeypatch.setenv("ENVIRONMENT", "production")
     resp = client.post("/api/v1/schema/migrations/apply", json={
         "migration_name": "prod_dangerous_change",
         "upgrade_sql": "CREATE TABLE IF NOT EXISTS temp_check (id INT);",
-        "environment": "production",
-        "confirm_production_risk": False
+        "environment": "local",
+        "confirm_production_risk": True
     })
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "BLOCKED"
-    assert "Production safety guard triggered" in data["error"]
+    assert "Production migrations are blocked" in data["error"]
 
 
 def test_migration_apply_local_and_history():

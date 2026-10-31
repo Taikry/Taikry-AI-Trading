@@ -22,7 +22,7 @@ def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     return rsi
 
 def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    """Computes Average True Range for volatility measurement and dynamic SL/TP."""
+    """Computes Wilder-smoothed Average True Range for volatility measurement."""
     high = df["high"]
     low = df["low"]
     close = df["close"]
@@ -33,8 +33,59 @@ def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     tr3 = (low - prev_close).abs()
 
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    atr = tr.rolling(window=period).mean()
-    return atr
+    return _wilder_smooth(tr, period)
+
+
+def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
+    """Wilder RMA seeded with the first full-period simple average."""
+    values = pd.to_numeric(series, errors="coerce").to_numpy(dtype=float)
+    smoothed = np.full(len(values), np.nan, dtype=float)
+    if period <= 0 or len(values) < period:
+        return pd.Series(smoothed, index=series.index, dtype=float)
+
+    first_window = values[:period]
+    if not np.isfinite(first_window).all():
+        valid_positions = np.flatnonzero(np.isfinite(values))
+        if len(valid_positions) < period:
+            return pd.Series(smoothed, index=series.index, dtype=float)
+        start = int(valid_positions[0])
+        seed_pos = start + period - 1
+        if seed_pos >= len(values) or not np.isfinite(values[start:seed_pos + 1]).all():
+            return pd.Series(smoothed, index=series.index, dtype=float)
+    else:
+        start = 0
+        seed_pos = period - 1
+
+    smoothed[seed_pos] = float(np.mean(values[start:seed_pos + 1]))
+    for i in range(seed_pos + 1, len(values)):
+        if np.isfinite(values[i]) and np.isfinite(smoothed[i - 1]):
+            smoothed[i] = ((smoothed[i - 1] * (period - 1)) + values[i]) / period
+    return pd.Series(smoothed, index=series.index, dtype=float)
+
+
+def calculate_dmi_adx(df: pd.DataFrame, period: int = 14) -> Dict[str, pd.Series]:
+    """Returns +DI, -DI, and ADX; ADX measures trend strength, DI its direction."""
+    high = pd.to_numeric(df["high"], errors="coerce")
+    low = pd.to_numeric(df["low"], errors="coerce")
+    up_move = high.diff()
+    down_move = -low.diff()
+
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+    atr = calculate_atr(df, period=period)
+    plus_di = (100.0 * _wilder_smooth(plus_dm, period) / atr.replace(0, np.nan)).clip(0, 100)
+    minus_di = (100.0 * _wilder_smooth(minus_dm, period) / atr.replace(0, np.nan)).clip(0, 100)
+    denominator = (plus_di + minus_di).replace(0, np.nan)
+    dx = (100.0 * (plus_di - minus_di).abs() / denominator).clip(0, 100)
+    adx = _wilder_smooth(dx, period)
+    return {"plus_di": plus_di, "minus_di": minus_di, "adx": adx}
+
+
+def calculate_relative_volume(volume: pd.Series, period: int = 20) -> pd.Series:
+    """Compares this bar's volume/activity with prior bars, excluding the current bar from baseline."""
+    values = pd.to_numeric(volume, errors="coerce")
+    baseline = values.shift(1).rolling(window=period, min_periods=period).median()
+    return (values / baseline.where(baseline > 0)).replace([np.inf, -np.inf], np.nan)
 
 def detect_candlestick_patterns(df: pd.DataFrame) -> List[str]:
     """Detects classical price action patterns on latest candles."""
@@ -158,22 +209,27 @@ def calculate_keltner_channels(
 
 def calculate_vwap(df: pd.DataFrame) -> pd.Series:
     """
-    Computes Session-Anchored Volume Weighted Average Price (VWAP).
-    Resets at start of each trading day if timestamp is available.
+    Computes date-anchored VWAP from provider-reported volume/activity.
+    Resets at the timestamp's calendar date; FX values can represent tick activity.
     """
     typical_price = (df["high"] + df["low"] + df["close"]) / 3.0
-    vol = df["volume"] if "volume" in df.columns else pd.Series(1000.0, index=df.index)
+    if "volume" not in df.columns:
+        return pd.Series(np.nan, index=df.index, dtype=float)
+    vol = pd.to_numeric(df["volume"], errors="coerce").clip(lower=0)
+    if not vol.notna().any() or float(vol.fillna(0).sum()) <= 0:
+        return pd.Series(np.nan, index=df.index, dtype=float)
     pv = typical_price * vol
 
-    if "timestamp" in df.columns and pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
-        dates = df["timestamp"].dt.date
+    timestamps = pd.to_datetime(df["timestamp"], utc=True, errors="coerce") if "timestamp" in df.columns else None
+    if timestamps is not None and timestamps.notna().any():
+        dates = timestamps.dt.date
         cum_pv = pv.groupby(dates).cumsum()
-        cum_vol = vol.groupby(dates).cumsum().replace(0, 1e-10)
-        return (cum_pv / cum_vol).round(4)
+        cum_vol = vol.groupby(dates).cumsum()
+        return (cum_pv / cum_vol.where(cum_vol > 0)).round(8)
     else:
         cum_pv = pv.cumsum()
-        cum_vol = vol.cumsum().replace(0, 1e-10)
-        return (cum_pv / cum_vol).round(4)
+        cum_vol = vol.cumsum()
+        return (cum_pv / cum_vol.where(cum_vol > 0)).round(8)
 
 def calculate_session_levels(df: pd.DataFrame) -> Dict[str, Any]:
     """
@@ -291,6 +347,16 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     # 5. ATR 14
     data["atr"] = calculate_atr(data, period=14)
+    data["atr_pct"] = (data["atr"] / close_series.replace(0, np.nan)) * 100.0
+    data["atr_percentile_100"] = data["atr_pct"].rolling(100, min_periods=30).apply(
+        lambda values: pd.Series(values).rank(pct=True).iloc[-1], raw=False
+    )
+
+    # 5b. Directional movement and trend strength
+    dmi = calculate_dmi_adx(data, period=14)
+    data["plus_di"] = dmi["plus_di"]
+    data["minus_di"] = dmi["minus_di"]
+    data["adx"] = dmi["adx"]
 
     # 6. Stochastic Oscillator (14, 3)
     stoch_dict = calculate_stochastic(data, period=14, smooth_k=3, smooth_d=3)
@@ -302,6 +368,9 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     data["bb_middle"] = bb_dict["bb_middle"]
     data["bb_upper"] = bb_dict["bb_upper"]
     data["bb_lower"] = bb_dict["bb_lower"]
+    data["bb_width_pct"] = ((data["bb_upper"] - data["bb_lower"]) / data["bb_middle"].replace(0, np.nan)) * 100.0
+    bb_span = (data["bb_upper"] - data["bb_lower"]).replace(0, np.nan)
+    data["bb_percent_b"] = (close_series - data["bb_lower"]) / bb_span
 
     # 8. Keltner Channels (20, 14, 1.5)
     kc_dict = calculate_keltner_channels(data, ema_period=20, atr_period=14, multiplier=1.5)
@@ -311,6 +380,10 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     # 9. VWAP
     data["vwap"] = calculate_vwap(data)
+
+    # 10. Momentum and volume activity context
+    data["roc_10"] = close_series.pct_change(10) * 100.0
+    data["relative_volume_20"] = calculate_relative_volume(data["volume"], 20) if "volume" in data.columns else np.nan
 
     return data
 
@@ -338,38 +411,81 @@ def extract_technical_summary(df_ind: pd.DataFrame) -> Dict[str, Any]:
     if not all(np.isfinite(value) for value in essential_values) or curr_price <= 0 or atr <= 0:
         return {}
 
-    # Trend calculation
+    adx = float(latest["adx"]) if "adx" in latest and pd.notna(latest["adx"]) else None
+    plus_di = float(latest["plus_di"]) if "plus_di" in latest and pd.notna(latest["plus_di"]) else None
+    minus_di = float(latest["minus_di"]) if "minus_di" in latest and pd.notna(latest["minus_di"]) else None
+    atr_pct = (atr / curr_price) * 100.0
+    trend_strength = "TRENDING" if adx is not None and adx >= 25 else ("WEAK_OR_RANGE" if adx is not None and adx < 20 else "TRANSITIONAL")
+
+    # EMA stack is direction; ADX qualifies strength without assigning a direction.
     if curr_price > ema_20 > ema_50 and (curr_price > ema_200 if ema_200 is not None else True):
-        trend = "STRONG BULLISH"
+        trend = "STRONG BULLISH" if adx is not None and adx >= 25 else "BULLISH"
     elif curr_price > ema_50:
         trend = "BULLISH"
     elif curr_price < ema_20 < ema_50 and (curr_price < ema_200 if ema_200 is not None else True):
-        trend = "STRONG BEARISH"
+        trend = "STRONG BEARISH" if adx is not None and adx >= 25 else "BEARISH"
     elif curr_price < ema_50:
         trend = "BEARISH"
     else:
         trend = "NEUTRAL"
 
-    # Swing levels (last 30 bars)
+    # Confirmed fractal swing points: ignore the last two bars until their right-side confirmation exists.
     recent = df_ind.tail(30)
-    swing_high = float(recent["high"].max())
-    swing_low = float(recent["low"].min())
+    recent_highs = recent["high"].astype(float).to_numpy()
+    recent_lows = recent["low"].astype(float).to_numpy()
+    swing_highs = []
+    swing_lows = []
+    for i in range(2, max(2, len(recent) - 2)):
+        window_high = recent_highs[i - 2:i + 3]
+        window_low = recent_lows[i - 2:i + 3]
+        if recent_highs[i] == np.max(window_high) and np.count_nonzero(window_high == recent_highs[i]) == 1:
+            swing_highs.append(float(recent_highs[i]))
+        if recent_lows[i] == np.min(window_low) and np.count_nonzero(window_low == recent_lows[i]) == 1:
+            swing_lows.append(float(recent_lows[i]))
+    swing_high = swing_highs[-1] if swing_highs else float(recent["high"].max())
+    swing_low = swing_lows[-1] if swing_lows else float(recent["low"].min())
+    if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+        if swing_highs[-1] > swing_highs[-2] and swing_lows[-1] > swing_lows[-2]:
+            market_structure = "BULLISH_HH_HL"
+        elif swing_highs[-1] < swing_highs[-2] and swing_lows[-1] < swing_lows[-2]:
+            market_structure = "BEARISH_LH_LL"
+        else:
+            market_structure = "MIXED_SWINGS"
+    else:
+        market_structure = "INSUFFICIENT_CONFIRMED_SWINGS"
 
     patterns = detect_candlestick_patterns(df_ind)
+    latest_open = float(latest["open"]) if "open" in latest and pd.notna(latest["open"]) else curr_price
+    latest_candle_direction = "BULLISH" if curr_price > latest_open else ("BEARISH" if curr_price < latest_open else "NEUTRAL")
+    percentile = latest.get("atr_percentile_100")
 
     return {
         "current_price": curr_price,
         "trend": trend,
-        "ema_20": round(ema_20, 4),
-        "ema_50": round(ema_50, 4),
-        "ema_200": round(ema_200, 4) if ema_200 is not None else None,
+        "ema_20": round(ema_20, 8),
+        "ema_50": round(ema_50, 8),
+        "ema_200": round(ema_200, 8) if ema_200 is not None else None,
         "rsi": round(rsi, 2),
-        "atr": round(atr, 4),
-        "macd_hist": round(macd_hist, 4),
+        "atr": round(atr, 8),
+        "atr_pct": round(atr_pct, 4),
+        "atr_percentile_100": round(float(percentile), 4) if percentile is not None and pd.notna(percentile) else None,
+        "adx": round(adx, 2) if adx is not None else None,
+        "plus_di": round(plus_di, 2) if plus_di is not None else None,
+        "minus_di": round(minus_di, 2) if minus_di is not None else None,
+        "trend_strength": trend_strength,
+        "macd_hist": round(macd_hist, 8),
+        "macd_hist_prev": round(prev_macd_hist, 8),
         "macd_expanding": abs(macd_hist) > abs(prev_macd_hist),
-        "swing_high": round(swing_high, 4),
-        "swing_low": round(swing_low, 4),
-        "bb_upper": round(float(latest["bb_upper"]), 4) if not np.isnan(latest["bb_upper"]) else curr_price,
-        "bb_lower": round(float(latest["bb_lower"]), 4) if not np.isnan(latest["bb_lower"]) else curr_price,
-        "candlestick_patterns": patterns
+        "swing_high": round(swing_high, 8),
+        "swing_low": round(swing_low, 8),
+        "market_structure": market_structure,
+        "bb_upper": round(float(latest["bb_upper"]), 8) if not np.isnan(latest["bb_upper"]) else curr_price,
+        "bb_lower": round(float(latest["bb_lower"]), 8) if not np.isnan(latest["bb_lower"]) else curr_price,
+        "bb_width_pct": round(float(latest["bb_width_pct"]), 4) if "bb_width_pct" in latest and pd.notna(latest["bb_width_pct"]) else None,
+        "bb_percent_b": round(float(latest["bb_percent_b"]), 4) if "bb_percent_b" in latest and pd.notna(latest["bb_percent_b"]) else None,
+        "roc_10": round(float(latest["roc_10"]), 4) if "roc_10" in latest and pd.notna(latest["roc_10"]) else None,
+        "relative_volume_20": round(float(latest["relative_volume_20"]), 3) if "relative_volume_20" in latest and pd.notna(latest["relative_volume_20"]) else None,
+        "vwap": round(float(latest["vwap"]), 8) if "vwap" in latest and pd.notna(latest["vwap"]) else None,
+        "latest_candle_direction": latest_candle_direction,
+        "candlestick_patterns": patterns,
     }

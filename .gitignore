@@ -57,6 +57,8 @@ htmlcov/
 
 # Logs
 *.log
+backups/
+*.migrations.lock
 
 # OS generated
 .DS_Store

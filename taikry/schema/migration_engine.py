@@ -4,12 +4,14 @@ Calculates structural diffs, generates forward/rollback PostgreSQL DDL,
 detects destructive changes, and enforces production preflight safety gates.
 """
 
+import os
 import time
 import uuid
 import datetime
 import logging
 from typing import Dict, Any, List, Optional
 from sqlalchemy import text
+from taikry.config import ENVIRONMENT as DEFAULT_ENVIRONMENT
 from taikry.database.session import engine
 
 logger = logging.getLogger("taikry.schema.migration_engine")
@@ -144,11 +146,14 @@ class MigrationEngine:
         confirm_production_risk: bool = False
     ) -> Dict[str, Any]:
         """Executes reviewed migration and records in audit history."""
-        # Safety gate for production
-        if environment.lower() == "production" and not confirm_production_risk:
+        # The active database environment is server configuration. Ignore any
+        # caller-supplied environment value, and never permit production DDL
+        # through this request-facing migration service.
+        environment = (os.getenv("ENVIRONMENT") or DEFAULT_ENVIRONMENT or "production").strip().lower()
+        if environment == "production":
             return {
                 "status": "BLOCKED",
-                "error": "Production safety guard triggered. You must review the DDL and set confirm_production_risk=True to execute on production."
+                "error": "Production migrations are blocked through Schema Studio. Use the reviewed release migration process."
             }
 
         mig_id = str(uuid.uuid4())[:8]
